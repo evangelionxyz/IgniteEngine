@@ -46,9 +46,9 @@ namespace ignite
 
             // 1. Create global descriptor pool (bindless set is allocated first at heap offset 0)
             nri::DescriptorPoolDesc poolDesc = {};
-            poolDesc.descriptorSetMaxNum = 16384;
+            poolDesc.descriptorSetMaxNum = 32768;
             poolDesc.mutableMaxNum = 16384;
-            poolDesc.samplerMaxNum = 8192;
+            poolDesc.samplerMaxNum = 32768;
             poolDesc.constantBufferMaxNum = 32768;
             poolDesc.textureMaxNum = 32768;
             poolDesc.storageTextureMaxNum = 8192;

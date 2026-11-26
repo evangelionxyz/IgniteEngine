@@ -26,6 +26,12 @@ namespace ignite
     {
         AssetHandle handle = AssetHandle(0);
         std::filesystem::path path;
+        std::filesystem::path fullPath;
+        std::filesystem::path relativePath;
+        std::string filename;
+        std::string genericId;
+        AssetType assetType = AssetType::Invalid;
+        bool isDirectory = false;
 
         // path, index
         std::map<std::filesystem::path, uint32_t> children;
@@ -53,6 +59,7 @@ namespace ignite
         virtual ~ContentBrowserPanel() override;
 
         static void ReleaseSharedResources();
+        static Ref<Texture> GetAssetThumbnail(AssetHandle handle, AssetManager *assetManager, Project *project);
 
         virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;
@@ -67,7 +74,7 @@ namespace ignite
         void RebuildSortedTreeCache();
 
         void UIRenderFileTree(FileTreeNode *node);
-        void UIRenderFileButton(const std::filesystem::path &item);
+        void UIRenderFileButton(const std::filesystem::path &item, const FileTreeNode *cachedNode = nullptr);
         void UIRenderNavigationBar();
 		void UIRenderContextMenu();
 		void UIRenderPopupModals();
@@ -106,6 +113,21 @@ namespace ignite
 
         std::vector<FileTreeNode> m_TreeNodes;
         std::vector<uint32_t> m_SortedRootNodeIndices;
+        uint64_t m_TreeCacheVersion = 1;
+
+        std::filesystem::path m_CachedNavDir;
+        std::filesystem::path m_CachedNavProjectDir;
+        uint64_t m_CachedNavTreeVersion = 0;
+        bool m_CachedIsAtProjectRoot = true;
+        std::vector<std::pair<std::string, std::filesystem::path>> m_CachedCrumbs;
+        uint32_t m_CachedCurrentNodeIndex = 0;
+
+        std::string m_CachedSearchQuery;
+        bool m_CachedSearchRecursive = true;
+        std::filesystem::path m_CachedSearchDir;
+        uint64_t m_CachedSearchTreeVersion = 0;
+        std::vector<uint32_t> m_CachedSearchNodeIndices;
+        std::vector<std::filesystem::path> m_CachedSearchRelPaths;
 
         AssetEditorPanel *m_AssetEditorPanel;
         AssetManager *m_AssetManager = nullptr;

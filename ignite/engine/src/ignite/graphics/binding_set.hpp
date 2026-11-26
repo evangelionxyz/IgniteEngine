@@ -235,6 +235,11 @@ namespace ignite
         static nri::DescriptorSet *AllocateAndUpdate(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex = 0);
         static void Update(nri::DescriptorSet *descriptorSet, const BindingSetDesc &desc);
 
+        static void AdvanceFrame(uint64_t frameCounter);
+        static void ReclaimRetiredBeforeCurrentFrame();
+        static void OnPipelineLayoutDestroyed(nri::PipelineLayout *pipelineLayout);
+        static void ShutdownPool();
+
     private:
         std::string m_Name;
         nri::DescriptorSet *m_Handle = nullptr;

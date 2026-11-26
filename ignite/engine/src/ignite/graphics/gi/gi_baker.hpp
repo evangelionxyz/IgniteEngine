@@ -74,6 +74,7 @@ namespace ignite
         void EnsureCommandResources();
         void EnsureBatchBuffers();
         void SubmitAndWaitCommandBuffer();
+        bool ComputeSceneSkySH(gi::SHL2 &outSkySH);
         bool PrepareBounce(uint32_t bounceIndex);
         void DilateInvalidProbes();
         void PackWorkingData(IrradianceVolumeData &outData, bool includeVisibilityAndOffsets) const;
@@ -114,6 +115,8 @@ namespace ignite
         glm::ivec3 m_Dims = glm::ivec3(0);
         float m_Spacing = 1.5f;
         uint32_t m_Resolution = 32;
+        uint32_t m_SHOrder = 2;
+        bool m_SkyVisibilitySplit = false;
         uint32_t m_ProbeCount = 0;
         uint32_t m_CurrentBounce = 0;
         uint32_t m_TotalBounces = 1;
@@ -123,6 +126,8 @@ namespace ignite
 
         std::vector<gi::SHL2> m_ProbeSH;
         std::vector<float> m_ProbeValidity;
+        std::vector<float> m_ProbeSkyVis;
+        std::vector<glm::vec3> m_ProbeSkyDir;
         std::vector<glm::vec3> m_ProbeOffsets;
         std::vector<float> m_ProbeState;
         std::vector<std::array<glm::vec2, 100>> m_ProbeVisTiles;
@@ -132,6 +137,9 @@ namespace ignite
         uint32_t m_RelocationCursor = 0;
 
         Ref<IrradianceVolume> m_PrevBounceVolume;
+        Ref<Texture> m_SkyBakeCube;
+        gi::SHL2 m_BakeSkySH{};
+        bool m_HasBakeSkySH = false;
         GI_GPUData m_PrevBounceGIData{};
 
         IrradianceVolumeData m_BakedData;

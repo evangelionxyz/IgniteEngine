@@ -42,13 +42,16 @@ project "BOX2D"
 
     filter { "configurations:Debug or Debug-Profiling" }
         runtime "debug"
+        optimize "off"
         symbols "on"
 
     filter { "configurations:Release or Release-Profiling" }
         runtime "Release"
-        optimize "on"
+        optimize "speed"
+        defines { "NDEBUG" }
 
     filter { "configurations:Shipping or Shipping-Profiling" }
         runtime "Release"
-        optimize "on"
+        optimize "speed"
         symbols "off"
+        defines { "NDEBUG" }

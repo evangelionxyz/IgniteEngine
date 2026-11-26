@@ -19,10 +19,24 @@ namespace ignite
             Mode2D = 2
         };
 
+        enum class EditorViewPreset : int
+        {
+            Perspective = 0,
+            Orthographic2_5D = 1,
+            Top = 2,
+            Bottom = 3,
+            Front = 4,
+            Back = 5,
+            Left = 6,
+            Right = 7,
+            Mode2D = 8
+        };
+
         EditorCamera() = default;
         explicit EditorCamera(const std::string &name);
 
         virtual void SetView(const glm::mat4 &view) override;
+        void SetOrientationFromView(const glm::mat4 &view);
 
         void UpdateMouseState();
         void UpdateSphericalPosition();
@@ -35,6 +49,10 @@ namespace ignite
 
         void SetNavigationMode(NavigationMode mode);
         NavigationMode GetNavigationMode() const { return m_NavigationMode; }
+
+        void SetViewPreset(EditorViewPreset preset);
+        EditorViewPreset GetViewPreset() const { return m_ViewPreset; }
+        bool IsCardinalView() const;
 
         void SetPanSnapValue(const float snap) { m_PanSnapValue = snap; }
         float GetPanSnapValue() const { return m_PanSnapValue; }
@@ -68,6 +86,7 @@ namespace ignite
         float m_FocusSpeed = 8.0f;
         bool m_FocusActive = false;
         NavigationMode m_NavigationMode = NavigationMode::Orbit;
+        EditorViewPreset m_ViewPreset = EditorViewPreset::Perspective;
 
         std::string m_Name;
     };

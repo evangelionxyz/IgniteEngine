@@ -10,7 +10,8 @@ struct ProbeVisibilityStats
     float backfaceFraction;
     uint hitCount;
     uint backfaceCount;
-    uint _pad;
+    float skyVisibility;
+    float4 skyDirVisibility;
 };
 
 cbuffer VisibilityParams : register(b0)
@@ -37,6 +38,8 @@ groupshared uint gs_HitCount[64];
 groupshared uint gs_BackCount[64];
 groupshared float gs_TotalOmega[64];
 groupshared float gs_BackOmega[64];
+groupshared float gs_SkyOmega[64];
+groupshared float3 gs_SkyDirOmega[64];
 
 [numthreads(8, 8, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupIndex)
@@ -59,6 +62,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupInde
     uint localBacks = 0u;
     float localTotalOmega = 0.0f;
     float localBackOmega = 0.0f;
+    float localSkyOmega = 0.0f;
+    float3 localSkyDirOmega = float3(0.0f, 0.0f, 0.0f);
 
     uint res = max(cubeRes, 1u);
     uint faceTexels = res * res;
@@ -127,6 +132,11 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupInde
         {
             localBackOmega += dOmega;
         }
+        if (d >= 0.99999f)
+        {
+            localSkyOmega += dOmega;
+            localSkyDirOmega += sampleDir * dOmega;
+        }
 
         if (d < 0.99999f)
         {
@@ -162,6 +172,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupInde
     gs_BackCount[groupIndex] = localBacks;
     gs_TotalOmega[groupIndex] = localTotalOmega;
     gs_BackOmega[groupIndex] = localBackOmega;
+    gs_SkyOmega[groupIndex] = localSkyOmega;
+    gs_SkyDirOmega[groupIndex] = localSkyDirOmega;
 
     GroupMemoryBarrierWithGroupSync();
 
@@ -197,6 +209,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupInde
             gs_BackCount[groupIndex] += gs_BackCount[groupIndex + stride];
             gs_TotalOmega[groupIndex] += gs_TotalOmega[groupIndex + stride];
             gs_BackOmega[groupIndex] += gs_BackOmega[groupIndex + stride];
+            gs_SkyOmega[groupIndex] += gs_SkyOmega[groupIndex + stride];
+            gs_SkyDirOmega[groupIndex] += gs_SkyDirOmega[groupIndex + stride];
         }
         GroupMemoryBarrierWithGroupSync();
     }
@@ -220,7 +234,10 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupInde
         stats.backfaceFraction = (gs_TotalOmega[0] > 1e-8f) ? saturate(gs_BackOmega[0] / gs_TotalOmega[0]) : 0.0f;
         stats.hitCount = gs_HitCount[0];
         stats.backfaceCount = gs_BackCount[0];
-        stats._pad = 0u;
+        stats.skyVisibility = (gs_TotalOmega[0] > 1e-8f) ? saturate(gs_SkyOmega[0] / gs_TotalOmega[0]) : 0.0f;
+        stats.skyDirVisibility = float4(
+            (gs_TotalOmega[0] > 1e-8f) ? (gs_SkyDirOmega[0] * (2.0f / gs_TotalOmega[0])) : float3(0.0f, 0.0f, 0.0f),
+            0.0f);
         outStats[probeLocalIndex] = stats;
     }
 }

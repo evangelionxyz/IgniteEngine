@@ -66,12 +66,25 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     int2 maxSrc = int2(max(int(srcSize.x) - 1, 0), max(int(srcSize.y) - 1, 0));
-    int2 basePx = int2(DTid.xy) * 2;
-
-    int2 p00 = clamp(basePx + int2(0, 0), int2(0, 0), maxSrc);
-    int2 p10 = clamp(basePx + int2(1, 0), int2(0, 0), maxSrc);
-    int2 p01 = clamp(basePx + int2(0, 1), int2(0, 0), maxSrc);
-    int2 p11 = clamp(basePx + int2(1, 1), int2(0, 0), maxSrc);
+    int2 p00, p10, p01, p11;
+    if (passMode == 0u)
+    {
+        float2 scale = float2(srcSize) / max(float2(dstSize), float2(1.0f, 1.0f));
+        int2 basePx = int2(floor(float2(DTid.xy) * scale));
+        int2 stepPx = max(int2(round(scale * 0.5f)), int2(1, 1));
+        p00 = clamp(basePx, int2(0, 0), maxSrc);
+        p10 = clamp(basePx + int2(stepPx.x, 0), int2(0, 0), maxSrc);
+        p01 = clamp(basePx + int2(0, stepPx.y), int2(0, 0), maxSrc);
+        p11 = clamp(basePx + stepPx, int2(0, 0), maxSrc);
+    }
+    else
+    {
+        int2 basePx = int2(DTid.xy) * 2;
+        p00 = clamp(basePx + int2(0, 0), int2(0, 0), maxSrc);
+        p10 = clamp(basePx + int2(1, 0), int2(0, 0), maxSrc);
+        p01 = clamp(basePx + int2(0, 1), int2(0, 0), maxSrc);
+        p11 = clamp(basePx + int2(1, 1), int2(0, 0), maxSrc);
+    }
 
     float z00 = t_SrcDepth.Load(int3(p00, 0)).r;
     float z10 = t_SrcDepth.Load(int3(p10, 0)).r;

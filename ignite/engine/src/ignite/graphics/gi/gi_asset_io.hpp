@@ -18,6 +18,7 @@ namespace ignite
         static constexpr uint32_t kFormatVersion = 1;
         static constexpr uint32_t kFlagHasVisibilityAtlas = 1u << 0u;
         static constexpr uint32_t kFlagHasProbeOffsets = 1u << 1u;
+        static constexpr uint32_t kFlagHasSkyVisibility = 1u << 2u;
 
         glm::ivec3 dims = glm::ivec3(0);
         glm::vec3 boundsMin = glm::vec3(0.0f);
@@ -36,6 +37,8 @@ namespace ignite
         std::vector<uint16_t> probeOffsetsHalfRGBA;
         // Optional Texture2D<RG16_SFLOAT> octahedral visibility atlas (meanDist, meanDistSq)
         std::vector<uint16_t> visibilityAtlasHalfRG;
+        // Optional Texture3D<RGBA16_SFLOAT> per-probe sky visibility factor (.r)
+        std::vector<uint16_t> skyVisibilityHalfRGBA;
 
         uint32_t GetProbeCount() const
         {

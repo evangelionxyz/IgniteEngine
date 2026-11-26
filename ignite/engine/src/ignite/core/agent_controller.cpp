@@ -201,6 +201,9 @@ namespace ignite
                 const auto &rc = e.GetComponent<RenderingComponent>();
                 j["Rendering"] = {
                     { "visible", rc.visible },
+                    { "mobility", rc.mobility == EntityMobility::Static ? "Static" : "Movable" },
+                    { "cast_shadow", rc.castShadow },
+                    { "receive_shadow", rc.receiveShadow },
                     { "contribute_gi", rc.contributeGI },
                     { "receive_gi", rc.receiveGI }
                 };
@@ -254,7 +257,14 @@ namespace ignite
                     { "color", Vec4ToJson(pl.color) },
                     { "intensity", pl.intensity },
                     { "range", pl.range },
-                    { "enabled", pl.enabled }
+                    { "enabled", pl.enabled },
+                    { "bake_indirect", pl.bakeIndirect },
+                    { "cast_shadow", pl.castShadow },
+                    { "bake_static_shadow", pl.bakeStaticShadow },
+                    { "soft_shadows", pl.softShadows },
+                    { "shadow_strength", pl.shadowStrength },
+                    { "shadow_bias", pl.shadowBias },
+                    { "pcf_radius", pl.pcfRadius }
                 };
             }
 
@@ -266,8 +276,15 @@ namespace ignite
                     { "intensity", sl.intensity },
                     { "range", sl.range },
                     { "enabled", sl.enabled },
+                    { "bake_indirect", sl.bakeIndirect },
                     { "inner_cone_angle", sl.innerConeAngle },
-                    { "outer_cone_angle", sl.outerConeAngle }
+                    { "outer_cone_angle", sl.outerConeAngle },
+                    { "cast_shadow", sl.castShadow },
+                    { "bake_static_shadow", sl.bakeStaticShadow },
+                    { "soft_shadows", sl.softShadows },
+                    { "shadow_strength", sl.shadowStrength },
+                    { "shadow_bias", sl.shadowBias },
+                    { "pcf_radius", sl.pcfRadius }
                 };
             }
 
@@ -378,6 +395,7 @@ namespace ignite
                     { "normalize", rp.normalize },
                     { "normalization_strength", rp.normalizationStrength },
                     { "box_projection", rp.boxProjection },
+                    { "exclude_radius", rp.excludeRadius },
                     { "baked_asset_path", rp.bakedAssetPath },
                     { "bake_hash", rp.bakeHash }
                 };
@@ -410,6 +428,21 @@ namespace ignite
             {
                 auto &rc = e.HasComponent<RenderingComponent>() ? e.GetComponent<RenderingComponent>() : e.AddComponent<RenderingComponent>();
                 if (props.contains("visible")) rc.visible = props["visible"].get<bool>();
+                if (props.contains("mobility"))
+                {
+                    if (props["mobility"].is_string())
+                    {
+                        const std::string m = props["mobility"].get<std::string>();
+                        rc.mobility = (m == "Movable" || m == "movable" || m == "Dynamic" || m == "dynamic")
+                            ? EntityMobility::Movable : EntityMobility::Static;
+                    }
+                    else if (props["mobility"].is_number_integer())
+                    {
+                        rc.mobility = static_cast<EntityMobility>(std::clamp(props["mobility"].get<int>(), 0, 1));
+                    }
+                }
+                if (props.contains("cast_shadow")) rc.castShadow = props["cast_shadow"].get<bool>();
+                if (props.contains("receive_shadow")) rc.receiveShadow = props["receive_shadow"].get<bool>();
                 if (props.contains("contribute_gi")) rc.contributeGI = props["contribute_gi"].get<bool>();
                 if (props.contains("receive_gi")) rc.receiveGI = props["receive_gi"].get<bool>();
                 return true;
@@ -426,8 +459,17 @@ namespace ignite
                 }
                 else if (props.contains("asset_handle"))
                     smc.handle = AssetHandle(props["asset_handle"].get<uint64_t>());
-                if (props.contains("material_handle"))
-                    smc.overrideMaterials[0] = AssetHandle(props["material_handle"].get<uint64_t>());
+                if (props.contains("material_handle") && smc.handle != AssetHandle(0))
+                {
+                    if (auto *am = AssetManager::GetInstance())
+                    {
+                        if (auto mesh = am->GetAsset<StaticMesh>(smc.handle))
+                        {
+                            if (!mesh->GetMeshInstances().empty() && mesh->GetMeshInstances()[0])
+                                mesh->GetMeshInstances()[0]->SetMaterial(AssetHandle(props["material_handle"].get<uint64_t>()));
+                        }
+                    }
+                }
                 return true;
             }
 
@@ -521,6 +563,12 @@ namespace ignite
                 if (props.contains("range")) pl.range = props["range"].get<float>();
                 if (props.contains("enabled")) pl.enabled = props["enabled"].get<bool>();
                 if (props.contains("bake_indirect")) pl.bakeIndirect = props["bake_indirect"].get<bool>();
+                if (props.contains("cast_shadow")) pl.castShadow = props["cast_shadow"].get<bool>();
+                if (props.contains("bake_static_shadow")) pl.bakeStaticShadow = props["bake_static_shadow"].get<bool>();
+                if (props.contains("soft_shadows")) pl.softShadows = props["soft_shadows"].get<bool>();
+                if (props.contains("shadow_strength")) pl.shadowStrength = props["shadow_strength"].get<float>();
+                if (props.contains("shadow_bias")) pl.shadowBias = props["shadow_bias"].get<float>();
+                if (props.contains("pcf_radius")) pl.pcfRadius = props["pcf_radius"].get<float>();
                 return true;
             }
 
@@ -534,6 +582,12 @@ namespace ignite
                 if (props.contains("inner_cone_angle")) sl.innerConeAngle = props["inner_cone_angle"].get<float>();
                 if (props.contains("outer_cone_angle")) sl.outerConeAngle = props["outer_cone_angle"].get<float>();
                 if (props.contains("bake_indirect")) sl.bakeIndirect = props["bake_indirect"].get<bool>();
+                if (props.contains("cast_shadow")) sl.castShadow = props["cast_shadow"].get<bool>();
+                if (props.contains("bake_static_shadow")) sl.bakeStaticShadow = props["bake_static_shadow"].get<bool>();
+                if (props.contains("soft_shadows")) sl.softShadows = props["soft_shadows"].get<bool>();
+                if (props.contains("shadow_strength")) sl.shadowStrength = props["shadow_strength"].get<float>();
+                if (props.contains("shadow_bias")) sl.shadowBias = props["shadow_bias"].get<float>();
+                if (props.contains("pcf_radius")) sl.pcfRadius = props["pcf_radius"].get<float>();
                 return true;
             }
 
@@ -870,6 +924,7 @@ namespace ignite
                 if (props.contains("normalize")) rp.normalize = props["normalize"].get<bool>();
                 if (props.contains("normalization_strength")) rp.normalizationStrength = props["normalization_strength"].get<float>();
                 if (props.contains("box_projection")) rp.boxProjection = props["box_projection"].get<bool>();
+                if (props.contains("exclude_radius")) rp.excludeRadius = props["exclude_radius"].get<float>();
                 return true;
             }
 
@@ -1294,6 +1349,28 @@ namespace ignite
             {
                 data["camera_position"] = Vec3ToJson(ctx.camera->position);
                 data["camera_fov"] = ctx.camera->fov;
+            }
+            if (auto *dm = DeviceManager::GetInstance())
+            {
+                double avgDt = dm->GetAverageFrameTimeSeconds();
+                if (avgDt <= 1e-6 && Application::GetInstance())
+                {
+                    avgDt = static_cast<double>(Application::GetAverageFrameTime());
+                }
+                data["avg_frame_time_ms"] = avgDt * 1000.0;
+                data["fps"] = (avgDt > 1e-6) ? (1.0 / avgDt) : 0.0;
+            }
+            if (ctx.sceneRenderer)
+            {
+                const auto &rs = ctx.sceneRenderer->sceneRenderSettings;
+                const auto &pktStats = ctx.sceneRenderer->GetLastFramePacket().stats;
+                data["scalability_overall"] = static_cast<int>(rs.scalability.overall);
+                data["aa_mode"] = static_cast<int>(rs.sampleMethod);
+                data["render_scale"] = rs.renderScale;
+                data["shadow_draw_calls"] = Renderer::Stats.shadowDrawCallCount;
+                data["draw_calls"] = Renderer::Stats.drawCallCount;
+                data["static_meshes_total"] = pktStats.totalStaticMeshes;
+                data["static_meshes_visible"] = pktStats.visibleStaticMeshes;
             }
             if (auto *nm = NetworkManager::GetInstance())
             {
@@ -1817,6 +1894,63 @@ namespace ignite
                 if (cmd.contains("fxaa"))
                 {
                     ctx.sceneRenderer->SetSampleMethod(cmd["fxaa"].get<bool>() ? SampleMethod::FXAA : SampleMethod::None);
+                }
+                auto parseScalability = [](const nlohmann::ordered_json &val, ScalabilityLevel &out) -> bool
+                {
+                    if (val.is_string())
+                    {
+                        const std::string s = val.get<std::string>();
+                        if (s == "low" || s == "LOW") { out = ScalabilityLevel::Low; return true; }
+                        if (s == "medium" || s == "MEDIUM" || s == "med") { out = ScalabilityLevel::Medium; return true; }
+                        if (s == "high" || s == "HIGH") { out = ScalabilityLevel::High; return true; }
+                        if (s == "ultra" || s == "ULTRA") { out = ScalabilityLevel::Ultra; return true; }
+                    }
+                    else if (val.is_number_integer())
+                    {
+                        out = static_cast<ScalabilityLevel>(std::clamp(val.get<int>(), 0, 3));
+                        return true;
+                    }
+                    return false;
+                };
+                if (cmd.contains("scalability"))
+                {
+                    ScalabilityLevel lvl = ScalabilityLevel::High;
+                    if (parseScalability(cmd["scalability"], lvl))
+                        ctx.sceneRenderer->sceneRenderSettings.ApplyOverallScalability(lvl);
+                }
+                auto applyAAKey = [&](const nlohmann::ordered_json &val)
+                {
+                    if (val.is_string())
+                    {
+                        const std::string s = val.get<std::string>();
+                        if (s == "none" || s == "NONE" || s == "off") ctx.sceneRenderer->SetSampleMethod(SampleMethod::NONE);
+                        else if (s == "taa" || s == "TAA") ctx.sceneRenderer->SetSampleMethod(SampleMethod::TAA);
+                        else if (s == "msaa" || s == "MSAA") ctx.sceneRenderer->SetSampleMethod(SampleMethod::MSAA);
+                        else if (s == "fxaa" || s == "FXAA") ctx.sceneRenderer->SetSampleMethod(SampleMethod::FXAA);
+                    }
+                    else if (val.is_number_integer())
+                    {
+                        ctx.sceneRenderer->SetSampleMethod(static_cast<SampleMethod>(std::clamp(val.get<int>(), 0, 3)));
+                    }
+                };
+                if (cmd.contains("aa_mode")) applyAAKey(cmd["aa_mode"]);
+                else if (cmd.contains("anti_aliasing")) applyAAKey(cmd["anti_aliasing"]);
+                if (cmd.contains("msaa_samples"))
+                {
+                    const int s = cmd["msaa_samples"].get<int>();
+                    ctx.sceneRenderer->sceneRenderSettings.msaaProperties.sampleCount = (s <= 2) ? 2 : (s <= 4 ? 4 : 8);
+                }
+                if (cmd.contains("taa_blend_factor"))
+                    ctx.sceneRenderer->sceneRenderSettings.taaProperties.blendFactor = std::clamp(cmd["taa_blend_factor"].get<float>(), 0.01f, 1.0f);
+                if (cmd.contains("fxaa_subpix"))
+                    ctx.sceneRenderer->sceneRenderSettings.fxaaProperties.subpixQuality = std::clamp(cmd["fxaa_subpix"].get<float>(), 0.0f, 1.0f);
+                if (cmd.contains("fxaa_edge_threshold"))
+                    ctx.sceneRenderer->sceneRenderSettings.fxaaProperties.edgeThreshold = std::clamp(cmd["fxaa_edge_threshold"].get<float>(), 0.05f, 0.5f);
+                if (cmd.contains("fxaa_edge_threshold_min"))
+                    ctx.sceneRenderer->sceneRenderSettings.fxaaProperties.edgeThresholdMin = std::clamp(cmd["fxaa_edge_threshold_min"].get<float>(), 0.01f, 0.2f);
+                if (cmd.contains("save_game_settings") && cmd["save_game_settings"].get<bool>() && ctx.project)
+                {
+                    ctx.sceneRenderer->sceneRenderSettings.SerializeToFile(ctx.project->GetDirectory() / "GameSettings.ign");
                 }
             }
             if (ctx.camera)

@@ -93,11 +93,11 @@ namespace ignite
             if (m_ProjectSHPipeline) { nri.DestroyPipeline(m_ProjectSHPipeline); m_ProjectSHPipeline = nullptr; }
             if (m_ProbeVisPipeline) { nri.DestroyPipeline(m_ProbeVisPipeline); m_ProbeVisPipeline = nullptr; }
 
-            if (m_EquirectPipelineLayout) { nri.DestroyPipelineLayout(m_EquirectPipelineLayout); m_EquirectPipelineLayout = nullptr; }
-            if (m_DownsamplePipelineLayout) { nri.DestroyPipelineLayout(m_DownsamplePipelineLayout); m_DownsamplePipelineLayout = nullptr; }
-            if (m_PrefilterPipelineLayout) { nri.DestroyPipelineLayout(m_PrefilterPipelineLayout); m_PrefilterPipelineLayout = nullptr; }
-            if (m_ProjectSHPipelineLayout) { nri.DestroyPipelineLayout(m_ProjectSHPipelineLayout); m_ProjectSHPipelineLayout = nullptr; }
-            if (m_ProbeVisPipelineLayout) { nri.DestroyPipelineLayout(m_ProbeVisPipelineLayout); m_ProbeVisPipelineLayout = nullptr; }
+            if (m_EquirectPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_EquirectPipelineLayout); nri.DestroyPipelineLayout(m_EquirectPipelineLayout); m_EquirectPipelineLayout = nullptr; }
+            if (m_DownsamplePipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_DownsamplePipelineLayout); nri.DestroyPipelineLayout(m_DownsamplePipelineLayout); m_DownsamplePipelineLayout = nullptr; }
+            if (m_PrefilterPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_PrefilterPipelineLayout); nri.DestroyPipelineLayout(m_PrefilterPipelineLayout); m_PrefilterPipelineLayout = nullptr; }
+            if (m_ProjectSHPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_ProjectSHPipelineLayout); nri.DestroyPipelineLayout(m_ProjectSHPipelineLayout); m_ProjectSHPipelineLayout = nullptr; }
+            if (m_ProbeVisPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_ProbeVisPipelineLayout); nri.DestroyPipelineLayout(m_ProbeVisPipelineLayout); m_ProbeVisPipelineLayout = nullptr; }
 
             if (m_SingleSHGpuUAV) { nri.DestroyDescriptor(m_SingleSHGpuUAV); m_SingleSHGpuUAV = nullptr; }
             if (m_SingleSHGpuBuffer) { nri.DestroyBuffer(m_SingleSHGpuBuffer); m_SingleSHGpuBuffer = nullptr; }

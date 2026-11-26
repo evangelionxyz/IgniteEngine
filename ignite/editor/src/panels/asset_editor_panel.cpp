@@ -52,7 +52,7 @@
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/imgui/imgui_nri.hpp"
-#include "ignite/imgui/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/asset/asset_manager.hpp"
@@ -789,6 +789,12 @@ namespace ignite
             }
 
 			FrameContext *frameContext = Renderer::GetCurrentFrameContext();
+            if (assetData.metadata.type != AssetType::Skeleton
+                && assetData.metadata.type != AssetType::SkeletalAnimation
+                && assetData.metadata.type != AssetType::AnimationMontage)
+            {
+                sceneData.sceneRenderer->ClearGizmoDrawList();
+            }
             sceneData.sceneRenderer->BeginFrame();
             sceneData.sceneRenderer->Render(&sceneData.camera, frameContext, sceneData.sceneRT, sceneData.uiRT, sceneData.compositeRT);
         }
@@ -3123,13 +3129,24 @@ namespace ignite
                         ImGui::SameLine(0.0f, 0.0f);
                         ImGui::BeginChild("##material_controls_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
                         {
-							const char *meshNames[] = { "UV Sphere" };
-							int meshSelection = editorState.selectedMeshType;
+							const char *meshNames[] = { "UV Sphere", "Cube", "Cylinder", "Torus", "Plane" };
+							const EMeshType meshTypes[] = { EMeshType::UV_SPHERE, EMeshType::CUBE, EMeshType::CYLINDER, EMeshType::TORUS, EMeshType::PLANE };
+							int meshSelection = std::clamp(editorState.selectedMeshType, 0, 4);
 							if (ImGui::Combo("Preview Mesh", &meshSelection, meshNames, IM_ARRAYSIZE(meshNames)))
 							{
 								editorState.selectedMeshType = meshSelection;
-								assetData.sceneData.sceneRenderer->SetPreviewStaticMesh(Renderer::GetDefaultMesh((EMeshType)meshSelection));
-                                assetData.FocusCameraOnMesh(Renderer::GetDefaultMesh((EMeshType)meshSelection));
+								assetData.sceneData.sceneRenderer->SetPreviewStaticMesh(Renderer::GetDefaultMesh(meshTypes[meshSelection]));
+                                assetData.FocusCameraOnMesh(Renderer::GetDefaultMesh(meshTypes[meshSelection]));
+							}
+
+							ImGui::SameLine();
+							if (ImGui::Button("Reload Shaders"))
+							{
+								for (auto &[key, shader] : Shader::GetShaderCache())
+								{
+									if (shader)
+										shader->Recompile();
+								}
 							}
 
 							assetData.DrawSceneDetails();
@@ -3167,6 +3184,7 @@ namespace ignite
                                         changed |= UI::DrawColorVec4("Specular Color", material->gpuData.specularColor);
                                         changed |= UI::DrawFloatControl("Specular IOR", &material->gpuData.specularIOR, 0.01f, 1.0f, 3.0f);
                                         changed |= UI::DrawFloatControl("Specular Anisotropy", &material->gpuData.specularAnisotropy, 0.025f, 0.0f, 1.0f);
+                                        changed |= UI::DrawFloatControl("Specular Rotation", &material->gpuData.specularRotation, 0.01f, 0.0f, 1.0f);
                                         ImGui::TreePop();
                                     }
 
@@ -3194,6 +3212,7 @@ namespace ignite
                                         changed |= UI::DrawFloatControl("Transmission Weight", &material->gpuData.transmissionWeight, 0.025f, 0.0f, 1.0f);
                                         changed |= UI::DrawColorVec4("Transmission Color", material->gpuData.transmissionColor);
                                         changed |= UI::DrawFloatControl("Transmission Depth", &material->gpuData.transmissionDepth, 0.1f, 0.0f, 100.0f);
+                                        changed |= UI::DrawFloatControl("Transmission Scatter", &material->gpuData.transmissionScatter, 0.025f, 0.0f, 1.0f);
                                         ImGui::TreePop();
                                     }
 
@@ -3209,6 +3228,11 @@ namespace ignite
                                     {
                                         changed |= UI::DrawFloatControl("Multi-Scatter", &material->gpuData.useMultiScatter, 0.025f, 0.0f, 1.0f);
                                         changed |= UI::DrawFloatControl("Emission Luminance", &material->gpuData.emissionLuminance, 1.0f, 0.0f, 10000.0f);
+                                        changed |= UI::DrawFloatControl("Normal Scale", &material->gpuData.normalScale, 0.025f, 0.0f, 4.0f);
+                                        if (material->GetType() == MaterialType::Masked)
+                                        {
+                                            changed |= UI::DrawFloatControl("Alpha Cutoff", &material->gpuData.alphaCutoff, 0.025f, 0.0f, 1.0f);
+                                        }
                                         ImGui::TreePop();
                                     }
 
@@ -4015,14 +4039,17 @@ namespace ignite
                                             GizmoInfo gizmoInfo;
                                             gizmoInfo.cameraView = assetData.sceneData.camera.GetView();
                                             gizmoInfo.cameraProjection = assetData.sceneData.camera.GetProjection();
+                                            gizmoInfo.cameraPosition = assetData.sceneData.camera.position;
+                                            gizmoInfo.cameraForward = assetData.sceneData.camera.GetForwardDirection();
                                             gizmoInfo.cameraType = assetData.sceneData.camera.projectionType;
+                                            gizmoInfo.viewportHovered = previewViewportFocused;
                                             gizmoInfo.snapValue = 0.05f;
                                             gizmoInfo.isSnapping = false;
                                             gizmoInfo.viewRect = viewportRect;
 
                                             s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                                            s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                                            s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
+                                            s_SkeletonPreviewGizmo.SetOperation(GizmoOperation::TRANSLATE);
+                                            s_SkeletonPreviewGizmo.SetMode(GizmoMode::LOCAL);
 
                                             glm::mat4 gizmoTransform = glm::mat4(1.0f);
                                             if (useSocketGizmo)
@@ -4085,6 +4112,15 @@ namespace ignite
 
                                                 skeleton->SetDirtyFlag(true);
                                             }
+
+                                            if (assetData.sceneData.sceneRenderer)
+                                            {
+                                                assetData.sceneData.sceneRenderer->SetGizmoDrawList(s_SkeletonPreviewGizmo.GetDrawList());
+                                            }
+                                        }
+                                        else if (assetData.sceneData.sceneRenderer)
+                                        {
+                                            assetData.sceneData.sceneRenderer->ClearGizmoDrawList();
                                         }
 
                                         if (assetData.sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)

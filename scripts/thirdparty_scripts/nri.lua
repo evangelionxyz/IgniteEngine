@@ -53,9 +53,7 @@ project "NRI"
     }
 
     defines {
-        "NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS",
         "NRI_ENABLE_NONE_SUPPORT",
-        "NRI_ENABLE_VALIDATION_SUPPORT",
         "NRI_ENABLE_VK_SUPPORT",
         "NRI_STREAMER_THREAD_SAFE",
     }
@@ -64,15 +62,33 @@ project "NRI"
 
     filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
+        optimize "off"
         symbols "on"
+        defines {
+            "NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS",
+            "NRI_ENABLE_VALIDATION_SUPPORT",
+        }
 
-    filter { "configurations:Release or Release-Profiling" }
+    filter { "configurations:Release" }
         runtime "Release"
+        optimize "speed"
         symbols "off"
+        defines { "NDEBUG" }
+
+    filter { "configurations:Release-Profiling" }
+        runtime "Release"
+        optimize "speed"
+        symbols "off"
+        defines {
+            "NDEBUG",
+            "NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS",
+        }
 
     filter { "configurations:Shipping or Shipping-Profiling" }
         runtime "Release"
+        optimize "speed"
         symbols "off"
+        defines { "NDEBUG" }
 
     -- Windows
     filter "system:windows"

@@ -15,6 +15,29 @@ static float ComputeSpecularOcclusion(float NdotV, float ao, float roughness)
     return saturate(pow(a, exponent) - 1.0f + saturate(ao));
 }
 
+// Bent-normal cone-intersection specular occlusion (M8): attenuates specular lobes that tilt
+// outside the unoccluded ambient cone around the shading normal while preserving full brightness when ao == 1.
+static float ComputeBentNormalSpecularOcclusion(float3 N, float3 V, float3 R, float ao, float roughness)
+{
+    float aoC = saturate(ao);
+    if (aoC >= 0.999f)
+    {
+        return 1.0f;
+    }
+
+    float lagardeSO = ComputeSpecularOcclusion(saturate(dot(N, V)), aoC, roughness);
+    float r1 = acos(sqrt(max(1.0f - aoC, 0.0f)));
+    float r2 = max(0.05f, saturate(roughness) * 1.1f);
+    float d = acos(saturate(dot(normalize(R), normalize(N))));
+
+    float x = saturate((d - abs(r1 - r2)) / max(r1 + r2 - abs(r1 - r2), 1e-4f));
+    float capRatio = (r1 < r2) ? saturate((1.0f - cos(r1)) / max(1.0f - cos(r2), 1e-4f)) : 1.0f;
+    float coneSO = saturate((1.0f - x) * capRatio);
+    float highAOBlend = smoothstep(0.85f, 0.995f, aoC);
+    float blendedCone = lerp(lerp(coneSO, lagardeSO, 0.25f), lagardeSO, highAOBlend);
+    return saturate(min(lagardeSO, blendedCone));
+}
+
 static float ComputeProbeInfluenceWeight(float3 worldPos, ReflectionProbeGPU probe)
 {
     float3 localP = mul(probe.worldToLocal, float4(worldPos, 1.0f)).xyz;

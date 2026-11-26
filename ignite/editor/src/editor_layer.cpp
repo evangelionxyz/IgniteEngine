@@ -177,19 +177,18 @@ namespace ignite
         }
 
         // Close project
-        CloseCurrentProject();
+        CloseProject();
 
-        // Unsubscribe signals
-        SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
-        m_FileImportSignalToken = kInvalidSignalToken;
-
-        ContentBrowserPanel::ReleaseSharedResources();
         m_ContentBrowserPanels.clear();
         m_ContentBrowserPanelsPendingRemoval.clear();
         m_ContentBrowserPanel = nullptr;
 
         m_SceneRenderer.reset();
         m_GIBaker.reset();
+
+        // Unsubscribe signals
+        SignalBus::Unsubscribe<SuccessResultSignal>(m_FileImportSignalToken);
+        m_FileImportSignalToken = kInvalidSignalToken;
     }
 
     void EditorLayer::AddContentBrowserPanel()
@@ -324,28 +323,44 @@ namespace ignite
             }
             else if (m_ActiveScene)
             {
-                const SceneAssetLoadProgress assetProgress = m_ActiveScene->GetAssetLoadProgress();
-                if (!assetProgress.allReady)
+                if (m_LastAssetProgressScene != m_ActiveScene.get())
                 {
-                    const float clampedProgress = std::clamp(assetProgress.progress, 0.02f, 0.99f);
-                    SetLoadingProgress(clampedProgress);
-                    SetStatusText(std::format("Loading scene assets ({}/{})...", assetProgress.readyAssets, assetProgress.totalAssets));
-                    m_LoadingSceneAssets = true;
+                    m_LastAssetProgressScene = m_ActiveScene.get();
+                    m_CachedAllSceneAssetsReady = false;
+                    m_AssetProgressCheckCounter = 0;
                 }
-                else if (AssetWorker::IsBusy())
+
+                const bool shouldPollProgress = !m_CachedAllSceneAssetsReady
+                    || m_LoadingSceneAssets
+                    || AssetWorker::IsBusy()
+                    || ((++m_AssetProgressCheckCounter % 30u) == 0u);
+
+                if (shouldPollProgress)
                 {
-                    const float workerProgress = AssetWorker::GetProgress();
-                    if (m_LoadingProgress <= 0.0f || m_LoadingProgress >= 1.0f || m_LoadingSceneAssets)
+                    const SceneAssetLoadProgress assetProgress = m_ActiveScene->GetAssetLoadProgress();
+                    m_CachedAllSceneAssetsReady = assetProgress.allReady;
+                    if (!assetProgress.allReady)
                     {
-                        SetLoadingProgress(workerProgress > 0.0f ? workerProgress : 0.1f);
+                        const float clampedProgress = std::clamp(assetProgress.progress, 0.02f, 0.99f);
+                        SetLoadingProgress(clampedProgress);
+                        SetStatusText(std::format("Loading scene assets ({}/{})...", assetProgress.readyAssets, assetProgress.totalAssets));
+                        m_LoadingSceneAssets = true;
                     }
-                    m_LoadingSceneAssets = false;
-                }
-                else if (m_LoadingSceneAssets || (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f))
-                {
-                    SetLoadingProgress(0.0f);
-                    SetStatusText("Ready");
-                    m_LoadingSceneAssets = false;
+                    else if (AssetWorker::IsBusy())
+                    {
+                        const float workerProgress = AssetWorker::GetProgress();
+                        if (m_LoadingProgress <= 0.0f || m_LoadingProgress >= 1.0f || m_LoadingSceneAssets)
+                        {
+                            SetLoadingProgress(workerProgress > 0.0f ? workerProgress : 0.1f);
+                        }
+                        m_LoadingSceneAssets = false;
+                    }
+                    else if (m_LoadingSceneAssets || (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f))
+                    {
+                        SetLoadingProgress(0.0f);
+                        SetStatusText("Ready");
+                        m_LoadingSceneAssets = false;
+                    }
                 }
             }
             else if (AssetWorker::IsBusy())
@@ -395,6 +410,8 @@ namespace ignite
                     m_ActiveScene->OnUpdateEdit(deltaTime);
                     break;
                 }
+                case ESceneState::None:
+                default: break;
             }
 
             m_ScenePanel->OnUpdate(deltaTime);
@@ -479,6 +496,7 @@ namespace ignite
 
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
+        dispatcher.Dispatch<WindowCloseEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnWindowCloseEvent));
     }
 
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
@@ -584,6 +602,14 @@ namespace ignite
                 if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
                 {
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+                }
+                break;
+            }
+            case Key::B:
+            {
+                if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
+                {
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_3D);
                 }
                 break;
             }
@@ -758,6 +784,7 @@ namespace ignite
                             // The projection is already sized to the Editor Viewport, so both viewports are independent.
                             m_EditorPlayCamera.SetView(cc.camera.GetView());
                             m_EditorPlayCamera.position = cc.camera.position;
+                            m_SceneRenderer->ClearGizmoDrawList();
                             {
                                 IGN_PROFILE_SCOPE("SceneRenderer::RenderPlayToEditorViewport");
                                 m_SceneRenderer->Render(&m_EditorPlayCamera, frameContext, false);
@@ -771,6 +798,7 @@ namespace ignite
                 case ESceneState::Stop:
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                    m_ScenePanel->SubmitGizmoForRender(m_SceneRenderer.get(), editCamera);
                     m_SceneRenderer->Render(editCamera, frameContext, true); // enable draw debug
                     break;
                 }
@@ -784,6 +812,7 @@ namespace ignite
             {
                 auto &cc = primaryCam.GetComponent<CameraComponent>();
                 ICamera *gameCamera = &cc.camera;
+                m_SceneRenderer->ClearGizmoDrawList();
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
                     m_SceneRenderer->Render(gameCamera, frameContext, false); // disable draw debug
@@ -876,6 +905,7 @@ namespace ignite
 
                 else if (ImGui::MenuItem("Save Project", nullptr, false, m_ActiveProject != nullptr))
                 {
+                    SerializeEditorState();
                     SaveProject();
                 }
 
@@ -886,7 +916,8 @@ namespace ignite
 
                 else if (ImGui::MenuItem("Close Project", nullptr, false, m_ActiveProject != nullptr))
                 {
-                    CloseCurrentProject();
+                    SerializeEditorState();
+                    CloseProject();
                 }
 
                 ImGui::Separator();
@@ -1060,36 +1091,20 @@ namespace ignite
             // VIEW MENU
             if (ImGui::BeginMenu("View", !m_State.isLoading))
             {
+                ImGui::MenuItem("Game", nullptr, &m_State.gameplayViewportWindow, m_ActiveProject != nullptr);
+                ImGui::MenuItem("Scene Renderer", nullptr, &m_State.sceneRendererWindow, m_ActiveProject &&m_SceneRenderer != nullptr);
+                ImGui::MenuItem("Network", nullptr, &m_State.networkWindow, m_ActiveProject != nullptr);
+                ImGui::MenuItem("Settings", nullptr, &m_State.settingsWindow, m_ActiveProject != nullptr);
+                ImGui::MenuItem("Asset Registry", nullptr, &m_State.assetRegistryWindow, m_ActiveProject != nullptr);
+
                 const bool canAddContentBrowser = (GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) < 4;
                 if (ImGui::MenuItem("Add Content Browser", nullptr, false, canAddContentBrowser))
                 {
                     ++m_PendingContentBrowserPanelsToAdd;
                 }
 
-                if (ImGui::MenuItem("ImGui Demo", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.imguiDemoWindow = true;
-                }
-
-                if (ImGui::MenuItem("Game View", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.gameplayViewportWindow = true;
-                }
-
-                if (ImGui::MenuItem("Network Diagnostics", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.networkWindow = true;
-                }
-
-                if (ImGui::MenuItem("Settings", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.settingsWindow = true;
-                }
-
-                if (ImGui::MenuItem("Asset Registry", nullptr, false, m_ActiveProject != nullptr))
-                {
-                    m_State.assetRegistryWindow = true;
-                }
+                ImGui::MenuItem("UI Showcase", nullptr, &m_State.uiShowcaseWindow);
+                ImGui::MenuItem("ImGui Demo", nullptr, &m_State.imguiDemoWindow);
 
                 ImGui::EndMenu();
             }
@@ -1147,27 +1162,49 @@ namespace ignite
         }
 
         // Reserve space for status bar
-        constexpr float statusBarHeight = 32.0f;
+        const float scale = std::max(UI::GetDpiScale(), 1.0f);
+        const float barHeight = glm::round(36.0f * scale);
+        const float buttonHeight = glm::round(24.0f * scale);
 
-        {
-            // RENDER TOOL BAR
-            ImGui::BeginChild("##toolbar_child", {0.0f, statusBarHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
-            m_ScenePanel->RenderToolbar();
-            ImGui::EndChild();
-        }
+        // RENDER TOOL BAR
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8.0f * scale, 5.0f * scale });
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 5.0f * scale, 0.0f });
+        ImGui::BeginChild("##toolbar_child", { 0.0f, barHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+        m_ScenePanel->RenderToolbar();
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
 
+        // Render Project Creation Pop Up
         UIProjectCreation();
 
+        // Draw Loading Popup Modal
+        if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
+            ImGui::OpenPopup("Please Wait...");
+
+        if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
+        {
+            if (ImGui::BeginPopupModal("Please Wait...", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::TextUnformatted(m_StatusText.c_str());
+                UI::ProgressBar(m_LoadingProgress, ImVec2(320.0f, 24.0f));
+                ImGui::EndPopup();
+            }
+        }
+
+        // Draw Baking Popup Modal
         if (m_GIBaker && m_GIBaker->IsBaking())
             ImGui::OpenPopup("Bake GI");
+
         if (m_State.giBakeModal && ImGui::BeginPopupModal("Bake GI", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             const uint32_t total = m_GIBaker ? m_GIBaker->GetTotalProbes() : 0u;
             const uint32_t completed = m_GIBaker ? m_GIBaker->GetCompletedProbes() : 0u;
             const float progress = m_GIBaker ? m_GIBaker->GetProgress() : 0.0f;
-            ImGui::Text("Time-sliced irradiance bake");
-            ImGui::ProgressBar(progress, ImVec2(320.0f, 0.0f));
+
+            ImGui::TextUnformatted("Time-sliced irradiance bake");
+            UI::ProgressBar(progress, ImVec2(320.0f, 24.0f));
             ImGui::Text("Probes: %u / %u", completed, total);
+
             if (m_GIBaker && m_GIBaker->IsBaking())
             {
                 if (ImGui::Button("Cancel"))
@@ -1178,13 +1215,12 @@ namespace ignite
                 m_State.giBakeModal = false;
                 ImGui::CloseCurrentPopup();
             }
+
             ImGui::EndPopup();
         }
 
-        ImVec2 avail = ImGui::GetContentRegionAvail();
-
-        // Dockspace tabs area gets everything except status bar
-        ImVec2 dockSize = { avail.x, std::max(0.0f, avail.y - statusBarHeight) };
+        const ImVec2 avail = ImGui::GetContentRegionAvail();
+        const ImVec2 dockSize = { avail.x, glm::max(0.0f, avail.y - barHeight) };
         ImGui::BeginChild("##dockspace_tabs_child", dockSize, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
         {
             struct DockWorkspace
@@ -1270,68 +1306,57 @@ namespace ignite
         }
         ImGui::EndChild();
 
-        const auto bottomStatusBarAvail = ImGui::GetContentRegionMax();
-        // Status bar at bottom
-        ImGui::BeginChild("##status_bar", { 0.0f, bottomStatusBarAvail.y }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
-
-        ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
-        if (ImGui::Button("+ Content Browser"))
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8.0f * scale, 5.0f * scale });
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 5.0f * scale, 0.0f });
+        if (ImGui::BeginChild("##status_bar", { 0.0f, barHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar))
         {
-            ++m_PendingContentBrowserPanelsToAdd;
-        }
-        ImGui::EndDisabled();
-
-        if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
-        {
-            ImGui::SameLine();
-            ImGui::ProgressBar(m_LoadingProgress, ImVec2(140.0f, 0.0f));
-        }
-
-        if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && IsSceneGIOutOfDate(m_ActiveScene.get()))
-        {
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.10f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.55f, 0.15f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.75f, 0.35f, 0.05f, 1.0f));
-            const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
-            ImGui::BeginDisabled(isBaking);
-            if (ImGui::Button("GI Out of Date - Rebake"))
+            ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
+            if (UI::Button("Content Browser", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_PLUS))
             {
-                Entity bakeVolume;
-                if (m_ScenePanel)
-                    bakeVolume = m_ScenePanel->GetSelectedEntity();
-                if (!bakeVolume || !bakeVolume.HasComponent<IrradianceVolumeComponent>())
-                {
-                    for (entt::entity e : m_ActiveScene->registry->view<IrradianceVolumeComponent>())
-                    {
-                        bakeVolume = Entity(e, m_ActiveScene.get());
-                        break;
-                    }
-                }
-                if (bakeVolume.IsValid() && m_GIBaker)
-                {
-                    const std::string sceneName = m_CurrentSceneFilePath.empty()
-                        ? "Scene" : m_CurrentSceneFilePath.stem().string();
-                    const std::filesystem::path output = m_ActiveProject->GetDirectory()
-                        / "Baked" / sceneName / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
-                    m_BakeReflectionProbesAfterGI = false;
-                    if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
-                        m_State.giBakeModal = true;
-                }
+                ++m_PendingContentBrowserPanelsToAdd;
             }
             ImGui::EndDisabled();
-            ImGui::PopStyleColor(3);
+
+            if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && IsSceneGIOutOfDate(m_ActiveScene.get()))
+            {
+                ImGui::SameLine();
+                const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
+                if (UI::Button("GI Out of Date - Rebake", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_SPARKLES, isBaking, isBaking))
+                {
+                    Entity bakeVolume;
+                    if (m_ScenePanel)
+                        bakeVolume = m_ScenePanel->GetSelectedEntity();
+                    if (!bakeVolume || !bakeVolume.HasComponent<IrradianceVolumeComponent>())
+                    {
+                        for (entt::entity e : m_ActiveScene->registry->view<IrradianceVolumeComponent>())
+                        {
+                            bakeVolume = Entity(e, m_ActiveScene.get());
+                            break;
+                        }
+                    }
+                    if (bakeVolume.IsValid() && m_GIBaker)
+                    {
+                        const std::string sceneName = m_CurrentSceneFilePath.empty()
+                            ? "Scene"
+                            : m_CurrentSceneFilePath.stem().string();
+
+                        const std::filesystem::path output = m_ActiveProject->GetDirectory()
+                            / "Baked" / sceneName / (std::to_string(static_cast<uint64_t>(bakeVolume.GetUUID())) + ".igi");
+
+                        m_BakeReflectionProbesAfterGI = false;
+                        if (m_GIBaker->StartBake(m_ActiveScene.get(), m_ActiveScene->GetAssetManager(), bakeVolume, output))
+                            m_State.giBakeModal = true;
+                    }
+                }
+            }
+
+            const std::string versionStr = std::format("FPS: {:.7} | Version: {}", ImGui::GetIO().Framerate, Application::GetVersionString());
+            float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
+            ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
+            ImGui::TextUnformatted(versionStr.c_str());
         }
-
-        ImGui::SameLine();
-        ImGui::TextUnformatted(m_StatusText.c_str());
-
-        const std::string versionStr = std::format("FPS: {:.7} | Version: {}", ImGui::GetIO().Framerate, Application::GetVersionString());
-        float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
-        ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
-        ImGui::TextUnformatted(versionStr.c_str());
-
         ImGui::EndChild();
+        ImGui::PopStyleVar(2);
 
         ImGui::End();
 
@@ -1341,60 +1366,97 @@ namespace ignite
             ImGui::ShowDemoWindow(&m_State.imguiDemoWindow);
         }
 
+        // Modern UI Showcase
+        if (m_State.uiShowcaseWindow)
+        {
+            UI::ShowShowcaseWindow(&m_State.uiShowcaseWindow);
+        }
+
         // Console window
         if (m_State.consoleWindow)
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 6.0f * scale, 6.0f * scale });
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 6.0f * scale, 6.0f * scale });
             if (ImGui::Begin("Console", &m_State.consoleWindow))
             {
                 const auto &logs = Logger::GetLogs();
 
                 // Allocate enough memory for log searching
                 static char buffer[256] = { 0 };
-                static std::string consoleLogSearchResultStr;
+                static std::vector<size_t> s_FilteredLogIndices;
+                static std::string s_LastConsoleSearch;
+                static size_t s_LastConsoleLogCount = 0;
+                static std::string s_LastConsoleBackMsg;
+                static bool s_ConsoleFilterDirty = true;
 
-                // Non static to re-create empty set
-                std::set<std::pair<std::string, size_t>> filteredConsoleLog;
-
-                // Clear Logs and Search Query
-                if (UI::DrawButton("Clear", { 48.0f, 24.0f }))
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8.0f * scale, 5.0f * scale });
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 5.0f * scale, 0.0f });
+                if (ImGui::BeginChild("##console_control_bar", { 0.0f, barHeight }, ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
                 {
-                    consoleLogSearchResultStr.clear();
-                    std::memset(buffer, NULL, sizeof(buffer));
-
-                    Logger::ClearLogs();
-                }
-
-                // Query search string
-                ImGui::SameLine();
-                ImGui::InputTextEx("##console_search", "Search", buffer, sizeof(buffer) + 1, {256.0f, 24.0f},
-                    ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll, nullptr, nullptr);
-
-                consoleLogSearchResultStr = std::string(buffer);
-                if (!consoleLogSearchResultStr.empty())
-                {
-                    std::string search = stringutils::ToLower(consoleLogSearchResultStr);
-                    for (size_t i = 0; i < logs.size(); ++i)
+                    // Clear Logs and Search Query
+                    if (UI::Button("Clear", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, buttonHeight), ICON_LC_TRASH_2))
                     {
-                        std::string messageLower = stringutils::ToLower(logs[i].message);
-                        if (messageLower.find(search) != std::string::npos)
+                        std::memset(buffer, 0, sizeof(buffer));
+                        s_LastConsoleSearch.clear();
+                        s_FilteredLogIndices.clear();
+                        s_LastConsoleLogCount = 0;
+                        s_LastConsoleBackMsg.clear();
+                        s_ConsoleFilterDirty = true;
+
+                        Logger::ClearLogs();
+                    }
+
+                    // Query search string
+                    ImGui::SameLine();
+
+                    if (UI::TextField(
+                        "##console_search",
+                        buffer,
+                        sizeof(buffer),
+                        "Filter logs...",
+                        ImVec2(glm::round(280.0f * scale), buttonHeight),
+                        ICON_LC_SEARCH,
+                        true,
+                        ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll))
+                    {
+                        s_ConsoleFilterDirty = true;
+                    }
+
+                    const std::string_view currentSearchView(buffer);
+                    const bool logsChanged = (logs.size() != s_LastConsoleLogCount)
+                        || (!logs.empty() && logs.back().message != s_LastConsoleBackMsg);
+                    if (s_ConsoleFilterDirty || logsChanged || currentSearchView != s_LastConsoleSearch)
+                    {
+                        s_LastConsoleSearch.assign(currentSearchView);
+                        s_LastConsoleLogCount = logs.size();
+                        s_LastConsoleBackMsg = logs.empty() ? std::string() : logs.back().message;
+                        s_ConsoleFilterDirty = false;
+                        s_FilteredLogIndices.clear();
+
+                        if (!s_LastConsoleSearch.empty())
                         {
-                            filteredConsoleLog.insert({ messageLower, i});
+                            const std::string searchLower = stringutils::ToLower(s_LastConsoleSearch);
+                            s_FilteredLogIndices.reserve(logs.size());
+                            for (size_t i = 0; i < logs.size(); ++i)
+                            {
+                                const std::string messageLower = stringutils::ToLower(logs[i].message);
+                                if (messageLower.find(searchLower) != std::string::npos)
+                                {
+                                    s_FilteredLogIndices.push_back(i);
+                                }
+                            }
                         }
                     }
-
-                    // Clear Search Query
-                    ImGui::SameLine();
-                    if (UI::DrawButton("X", {24.0f, 24.0f}))
-                    {
-                        consoleLogSearchResultStr.clear();
-                        std::memset(buffer, NULL, sizeof(buffer));
-                    }
                 }
+                ImGui::EndChild();
+                ImGui::PopStyleVar(2);
+                
 
                 ImGui::Separator();
                 if (ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar))
                 {
-                    static std::function<void(const LogMessage &)> printLogFn = [&](const LogMessage &log)
+                    const auto printLogFn = [](const LogMessage &log)
                     {
                         ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
                         switch (log.level)
@@ -1417,7 +1479,7 @@ namespace ignite
                     };
 
                     // Print with search or default
-                    if (consoleLogSearchResultStr.empty())
+                    if (s_LastConsoleSearch.empty())
                     {
                         for (const auto &log : logs)
                         {
@@ -1426,9 +1488,12 @@ namespace ignite
                     }
                     else
                     {
-                        for (const auto &[_, logIndex] : filteredConsoleLog)
+                        for (const size_t logIndex : s_FilteredLogIndices)
                         {
-                            printLogFn(logs[logIndex]);
+                            if (logIndex < logs.size())
+                            {
+                                printLogFn(logs[logIndex]);
+                            }
                         }
                     }
                 }
@@ -1442,6 +1507,7 @@ namespace ignite
                 ImGui::EndChild();
             }
             ImGui::End();
+            ImGui::PopStyleVar(2);
         }
 
         // Draw UI
@@ -1834,7 +1900,7 @@ namespace ignite
             nullptr, false);
     }
 
-    void EditorLayer::CloseCurrentProject()
+    void EditorLayer::CloseProject()
     {
         if (!m_ActiveProject)
             return;
@@ -1868,6 +1934,8 @@ namespace ignite
             cmdMgr->ClearAll();
         }
 
+        ContentBrowserPanel::ReleaseSharedResources();
+
         ThumbnailGenerator::Get().ClearPending();
         AssetManager::GetInstance()->Reset();
 
@@ -1898,7 +1966,7 @@ namespace ignite
         // Clear old project's loaded assets before opening new project
         if (m_ActiveProject)
         {
-            CloseCurrentProject();
+            CloseProject();
         }
 
         AssetWorker::SubmitJob([this, filepath]()
@@ -1923,8 +1991,9 @@ namespace ignite
         });
     }
 
-    bool EditorLayer::OnMouseMovedEvent(MouseMovedEvent &event)
+    bool EditorLayer::OnWindowCloseEvent(WindowCloseEvent &event)
     {
+        SerializeEditorState();
         return false;
     }
 
@@ -2221,6 +2290,119 @@ namespace ignite
         });
     }
 
+    void EditorLayer::SerializeEditorState()
+    {
+        if (m_ActiveProject)
+        {
+            const auto filepath = m_ActiveProject->GetDirectory() / "EditorStates.ign";
+            Serializer sr(filepath);
+
+            sr.BeginMap(); // START
+
+            sr.BeginMap("EditorStates");
+            {
+                // Windows
+                sr.BeginMap("Windows");
+                {
+                    sr.AddKeyValue("Console", m_State.consoleWindow);
+                    sr.AddKeyValue("Network", m_State.networkWindow);
+                    sr.AddKeyValue("SceneRenderer", m_State.sceneRendererWindow);
+                    sr.AddKeyValue("GameplayViewport", m_State.gameplayViewportWindow);
+                }
+                sr.EndMap();
+
+                // Camera
+                if (m_ScenePanel)
+                {
+                    sr.BeginMap("Camera");
+                    {
+                        const auto &camera = m_ScenePanel->GetViewportCamera();
+                        sr.AddKeyValue("Translation", camera.position);
+                        sr.AddKeyValue("Yaw", camera.yaw);
+                        sr.AddKeyValue("Pitch", camera.pitch);
+                        sr.AddKeyValue("Fov", camera.fov);
+                        sr.AddKeyValue("FarPlane", camera.farPlane);
+                        sr.AddKeyValue("NearPlane", camera.nearPlane);
+                        sr.AddKeyValue("OrthoSize", camera.orthoSize);
+                        sr.AddKeyValue("Distance", camera.GetDistance());
+                        sr.AddKeyValue("FocusTarget", camera.GetTarget());
+                        sr.AddKeyValue("ProjectionType", static_cast<int>(camera.projectionType));
+                    }
+                    sr.EndMap();
+                }
+
+                if (m_SceneRenderer)
+                {
+                    sr.BeginMap("SceneRenderer");
+                    {
+                        const auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
+                        sr.AddKeyValue("ShowBoundingBox", renderSettings.showBoundingBox);
+                        sr.AddKeyValue("ShowPhysicsCollider", renderSettings.showPhysicsCollider);
+                        sr.AddKeyValue("ShowEntityNames", renderSettings.showEntityNames);
+                    }
+                    sr.EndMap();
+                }
+            }
+            sr.EndMap();
+
+            sr.EndMap(); // END
+
+            sr.Serialize();
+        }
+
+    }
+
+    void EditorLayer::DeserializeEditorState()
+    {
+        const auto filepath = m_ActiveProject->GetDirectory() / "EditorStates.ign";
+        if (!std::filesystem::exists(filepath))
+            return;
+
+        JsonNode stateFileNode = Serializer::Deserialize(filepath);
+        JsonNode stateNode = stateFileNode["EditorStates"];
+        if (!stateNode)
+            return;
+
+        if (JsonNode windowsNode = stateNode["Windows"])
+        {
+            if (auto n = windowsNode["Console"]) m_State.consoleWindow = n.as<bool>();
+            if (auto n = windowsNode["Network"]) m_State.networkWindow = n.as<bool>();
+            if (auto n = windowsNode["SceneRenderer"]) m_State.sceneRendererWindow = n.as<bool>();
+            if (auto n = windowsNode["GameplayViewport"]) m_State.gameplayViewportWindow = n.as<bool>();
+        }
+
+        if (m_ScenePanel)
+        {
+            if (JsonNode cameraNode = stateNode["Camera"])
+            {
+                auto &camera = m_ScenePanel->GetViewportCamera();
+                if (auto n = cameraNode["Translation"]) camera.position = n.as<glm::vec3>();
+                if (auto n = cameraNode["Yaw"]) camera.yaw = n.as<float>();
+                if (auto n = cameraNode["Pitch"]) camera.pitch = n.as<float>();
+                if (auto n = cameraNode["Fov"]) camera.fov = n.as<float>();
+                if (auto n = cameraNode["FarPlane"]) camera.farPlane = n.as<float>();
+                if (auto n = cameraNode["NearPlane"]) camera.nearPlane = n.as<float>();
+                if (auto n = cameraNode["OrthoSize"]) camera.orthoSize = n.as<float>();
+                if (auto n = cameraNode["Distance"]) camera.SetDistance(n.as<float>());
+                if (auto n = cameraNode["FocusTarget"]) camera.SetTarget(n.as<glm::vec3>());
+                if (auto n = cameraNode["ProjectionType"]) camera.projectionType = static_cast<ProjectionType>(n.as<int>());
+                camera.UpdateCameraPosition(0.0f);
+                camera.UpdateView();
+            }
+        }
+
+        if (m_SceneRenderer)
+        {
+            if (JsonNode sceneRendererNode = stateNode["SceneRenderer"])
+            {
+                auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
+                if (auto n = sceneRendererNode["ShowBoundingBox"]) renderSettings.showBoundingBox = n.as<bool>();
+                if (auto n = sceneRendererNode["ShowPhysicsCollider"]) renderSettings.showPhysicsCollider = n.as<bool>();
+                if (auto n = sceneRendererNode["ShowEntityNames"]) renderSettings.showEntityNames = n.as<bool>();
+            }
+        }
+    }
+
     void EditorLayer::OnOpenProject()
     {
         // Apply project undo limit setting
@@ -2229,6 +2411,15 @@ namespace ignite
             if (auto *cmdMgr = Application::GetCommandManager())
             {
                 cmdMgr->SetMaxHistory(m_ActiveProject->GetInfo().editorSettings.undoHistoryLimit);
+            }
+            if (m_SceneRenderer)
+            {
+                const std::filesystem::path gameSettingsPath = m_ActiveProject->GetDirectory() / "GameSettings.ign";
+                if (m_SceneRenderer->sceneRenderSettings.DeserializeFromFile(gameSettingsPath))
+                {
+                    m_State.editorRequestToResize = true;
+                    m_State.gameplayRequestToResize = true;
+                }
             }
         }
 
@@ -2263,6 +2454,7 @@ namespace ignite
             NewScene();
         }
 
+        DeserializeEditorState();
         m_State.isLoading = false;
     }
 
@@ -2387,7 +2579,7 @@ namespace ignite
             // Close current project before creating new one
             if (m_ActiveProject)
             {
-                CloseCurrentProject();
+                CloseProject();
             }
 
             const std::string projName = m_State.projectCreateInfo.name;
@@ -3096,17 +3288,180 @@ namespace ignite
 
     void EditorLayer::UISceneRenderer()
     {
-        ImGui::Begin("Scene Renderer");
+        if (!m_State.sceneRendererWindow)
+            return;
+
+        ImGui::Begin("Scene Renderer", &m_State.sceneRendererWindow);
+
+        // Scene Render
+        if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
+            bool settingsChanged = false;
+
+            if (ImGui::TreeNodeEx("Visibility"))
+            {
+                UI::DrawCheckbox("Bounding Box", &renderSettings.showBoundingBox);
+                UI::DrawCheckbox("Physics Collider", &renderSettings.showPhysicsCollider);
+                UI::DrawCheckbox("Entity Names", &renderSettings.showEntityNames);
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (ImGui::TreeNodeEx("Sampling"))
+                {
+                    static const char *sampleMethodLabels[] = { "None", "TAA", "MSAA", "FXAA" };
+                    int currentMethod = static_cast<int>(renderSettings.sampleMethod);
+                    if (UI::DrawComboBox("Method", sampleMethodLabels, IM_ARRAYSIZE(sampleMethodLabels), &currentMethod))
+                    {
+                        m_SceneRenderer->SetSampleMethod(static_cast<SampleMethod>(currentMethod));
+                        settingsChanged = true;
+                    }
+
+                    if (renderSettings.sampleMethod == SampleMethod::TAA)
+                    {
+                        if (UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.01f, 0.02f, 1.0f, 0.10f))
+                            settingsChanged = true;
+                    }
+                    else if (renderSettings.sampleMethod == SampleMethod::MSAA)
+                    {
+                        if (UI::DrawIntControl("Samples", &renderSettings.msaaProperties.sampleCount, 1, 2, 8))
+                        {
+                            if (renderSettings.msaaProperties.sampleCount <= 2) renderSettings.msaaProperties.sampleCount = 2;
+                            else if (renderSettings.msaaProperties.sampleCount <= 4) renderSettings.msaaProperties.sampleCount = 4;
+                            else renderSettings.msaaProperties.sampleCount = 8;
+                            settingsChanged = true;
+                        }
+                    }
+                    else if (renderSettings.sampleMethod == SampleMethod::FXAA)
+                    {
+                        if (UI::DrawFloatControl("Subpixel Quality", &renderSettings.fxaaProperties.subpixQuality, 0.02f, 0.0f, 1.0f, 0.75f))
+                            settingsChanged = true;
+                        if (UI::DrawFloatControl("Edge Threshold", &renderSettings.fxaaProperties.edgeThreshold, 0.01f, 0.063f, 0.333f, 0.125f))
+                            settingsChanged = true;
+                        if (UI::DrawFloatControl("Min Threshold", &renderSettings.fxaaProperties.edgeThresholdMin, 0.005f, 0.015f, 0.0833f, 0.0417f))
+                            settingsChanged = true;
+                    }
+
+                    if (settingsChanged)
+                    {
+                        m_State.editorRequestToResize = true;
+                        m_State.gameplayRequestToResize = true;
+                        if (m_ActiveProject)
+                            renderSettings.SerializeToFile(m_ActiveProject->GetDirectory() / "GameSettings.ign");
+                    }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Render scale"))
+                {
+                    if (UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f))
+                        settingsChanged = true;
+                    if (UI::DrawButtonWithColumn("", "Apply"))
+                    {
+                        m_State.gameplayRequestToResize = true;
+                        m_State.editorRequestToResize = true;
+                        settingsChanged = true;
+                    }
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Shading"))
+                {
+                    static const char *renderModeLabels[] = {
+                        "Color", "Diffuse", "Normals", "Metallic", "Roughness",
+                        "Subsurface", "Transmission", "Coat", "Fuzz",
+                        "GI Diffuse", "GI Specular", "AO", "Probe Weights"
+                    };
+                    static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
+                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "ACES Filmic" };
+                    static const char *fillModeLabels[]{ "Solid", "Wireframe" };
+
+                    int fillMode = static_cast<int>(renderSettings.fillMode);
+                    if (UI::DrawComboBox("Fill Mode", fillModeLabels, IM_ARRAYSIZE(fillModeLabels), &fillMode))
+                    {
+                        m_SceneRenderer->SetFillMode(static_cast<nri::FillMode>(fillMode));
+                    }
+
+                    int renderMode = m_SceneRenderer->GetRenderMode();
+                    if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
+                    {
+                        m_SceneRenderer->SetRenderMode(renderMode);
+                    }
+
+                    int debugShadow = m_SceneRenderer->GetDebugShadowMode();
+                    if (UI::DrawComboBox("CSM Debug", debugShadowLabels, IM_ARRAYSIZE(debugShadowLabels), &debugShadow))
+                    {
+                        m_SceneRenderer->SetDebugShadowMode(debugShadow);
+                    }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Global Illumination & AO"))
+                {
+                    static const char *giModeLabels[] = { "Volume Default", "Off", "Fast", "Leak-Resistant" };
+                    int giIdx = std::clamp(renderSettings.giModeOverride + 1, 0, 3);
+                    if (UI::DrawComboBox("GI Mode", giModeLabels, IM_ARRAYSIZE(giModeLabels), &giIdx))
+                    {
+                        renderSettings.giModeOverride = giIdx - 1;
+                        settingsChanged = true;
+                    }
+
+                    static const char *aoModeLabels[] = { "Camera Default", "Off", "Legacy SSAO", "GTAO" };
+                    int aoIdx = std::clamp(renderSettings.aoModeOverride + 1, 0, 3);
+                    if (UI::DrawComboBox("AO Mode", aoModeLabels, IM_ARRAYSIZE(aoModeLabels), &aoIdx))
+                    {
+                        renderSettings.aoModeOverride = aoIdx - 1;
+                        settingsChanged = true;
+                    }
+
+                    if (UI::DrawCheckbox("Depth+Normal Prepass", &renderSettings.enableDepthPrepass))
+                        settingsChanged = true;
+                    if (UI::DrawCheckbox("Specular AA", &renderSettings.enableSpecularAA))
+                        settingsChanged = true;
+                    if (UI::DrawCheckbox("Screen-Space Reflections (SSR)", &renderSettings.enableSSR))
+                        settingsChanged = true;
+                    if (renderSettings.enableSSR)
+                    {
+                        if (UI::DrawFloatControl("SSR Intensity", &renderSettings.ssrIntensity, 0.025f, 0.0f, 2.0f, 1.0f))
+                            settingsChanged = true;
+                        if (UI::DrawFloatControl("SSR Max Roughness", &renderSettings.ssrMaxRoughness, 0.025f, 0.05f, 1.0f, 0.6f))
+                            settingsChanged = true;
+                    }
+                    if (UI::DrawCheckbox("Show GI Probes", &renderSettings.showGIProbes))
+                        settingsChanged = true;
+
+                    ImGui::TreePop();
+                }
+
+                ImGui::TreePop();
+            }
+
+            if (settingsChanged && m_ActiveProject)
+            {
+                renderSettings.SerializeToFile(m_ActiveProject->GetDirectory() / "GameSettings.ign");
+            }
+
+            ImGui::TreePop();
+        }
 
         // Shaders
         if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
         {
             for (auto &[key, shader] : Shader::GetShaderCache())
             {
+                constexpr float buttonW = 24.0f;
+                const float w = ImGui::GetContentRegionAvail().x - buttonW;
+
                 ImGui::PushID(key.filename.c_str());
+                ImGui::SetNextItemWidth(w);
                 ImGui::Text(shader->GetName().c_str());
                 ImGui::SameLine();
-                if (ImGui::Button("Reload"))
+
+                if (UI::Button("##recompile_shader", UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, ImVec2(buttonW, 0.0f), ICON_LC_ROTATE_CW))
                 {
                     shader->Recompile();
                 }
@@ -3123,7 +3478,7 @@ namespace ignite
             const auto &stats = Renderer::Stats;
 
             // Helper lambda to format bytes as KB or MB
-            auto fmtBytes = [](size_t bytes, char *buf, size_t bufLen)
+            auto fmtBytes = [ ](size_t bytes, char *buf, size_t bufLen)
             {
                 if (bytes >= 1024u * 1024u)
                     snprintf(buf, bufLen, "%.1f MB", bytes / (1024.0f * 1024.0f));
@@ -3179,7 +3534,7 @@ namespace ignite
             }
             else
             {
-                for (const auto& [name, count] : stats.pipelineCounts)
+                for (const auto &[name, count] : stats.pipelineCounts)
                 {
                     ImGui::Text("%s: %zu", name.c_str(), count);
                 }
@@ -3193,7 +3548,7 @@ namespace ignite
             }
             else
             {
-                for (const auto& [name, count] : stats.bindingSetCounts)
+                for (const auto &[name, count] : stats.bindingSetCounts)
                 {
                     ImGui::Text("%s: %zu", name.c_str(), count);
                 }
@@ -3216,118 +3571,6 @@ namespace ignite
                 }
                 ImGui::Separator();
                 ImGui::Text("Total Timed: %.3f ms", totalMs);
-            }
-
-            ImGui::TreePop();
-        }
-
-        // Scene Render
-        if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
-
-            if (ImGui::TreeNodeEx("Visibility"))
-            {
-                UI::DrawCheckbox("Bounding Box", &renderSettings.showBoundingBox);
-                UI::DrawCheckbox("Physics Collider", &renderSettings.showPhysicsCollider);
-                UI::DrawCheckbox("Entity Names", &renderSettings.showEntityNames);
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNodeEx("Render Properties", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                if (ImGui::TreeNodeEx("Sampling"))
-                {
-                    static const char *sampleMethodLabels[] = { "None", "TAA", "MSAA", "FXAA" };
-                    int currentMethod = static_cast<int>(renderSettings.sampleMethod);
-                    if (UI::DrawComboBox("Method", sampleMethodLabels, IM_ARRAYSIZE(sampleMethodLabels), &currentMethod))
-                    {
-                        m_SceneRenderer->SetSampleMethod(static_cast<SampleMethod>(currentMethod));
-                    }
-
-                    if (renderSettings.sampleMethod == SampleMethod::TAA)
-                    {
-                        UI::DrawFloatControl("Blend Factor", &renderSettings.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
-                    }
-                    else if (renderSettings.sampleMethod == SampleMethod::MSAA)
-                    {
-                        if (UI::DrawIntControl("Samples", &renderSettings.msaaProperties.sampleCount, 1, 2, 8))
-                        {
-                            if (renderSettings.msaaProperties.sampleCount <= 2) renderSettings.msaaProperties.sampleCount = 2;
-                            else if (renderSettings.msaaProperties.sampleCount <= 4) renderSettings.msaaProperties.sampleCount = 4;
-                            else renderSettings.msaaProperties.sampleCount = 8;
-                        }
-                    }
-
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNodeEx("Render scale"))
-                {
-                    UI::DrawFloatControl("Factor", &renderSettings.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
-                    if (UI::DrawButtonWithColumn("", "Apply"))
-                    {
-                        m_State.gameplayRequestToResize = true;
-                        m_State.editorRequestToResize = true;
-                    }
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNodeEx("Shading"))
-                {
-                    static const char *renderModeLabels[] = {
-                        "Color", "Diffuse", "Normals", "Metallic", "Roughness",
-                        "Subsurface", "Transmission", "Coat", "Fuzz",
-                        "GI Diffuse", "GI Specular", "AO", "Probe Weights"
-                    };
-                    static const char *debugShadowLabels[] = { "Off", "Cascade Colors", "Shadow Term" };
-                    static const char *tonemapLabels[] = { "Reinhard", "Uncharted2", "ACES Filmic" };
-                    static const char *fillModeLabels[]{ "Solid", "Wireframe" };
-
-                    int fillMode = static_cast<int>(renderSettings.fillMode);
-                    if (UI::DrawComboBox("Fill Mode", fillModeLabels, IM_ARRAYSIZE(fillModeLabels), &fillMode))
-                    {
-                        m_SceneRenderer->SetFillMode(static_cast<nri::FillMode>(fillMode));
-                    }
-
-                    int renderMode = m_SceneRenderer->GetRenderMode();
-                    if (UI::DrawComboBox("Render Mode", renderModeLabels, IM_ARRAYSIZE(renderModeLabels), &renderMode))
-                    {
-                        m_SceneRenderer->SetRenderMode(renderMode);
-                    }
-
-                    int debugShadow = m_SceneRenderer->GetDebugShadowMode();
-                    if (UI::DrawComboBox("CSM Debug", debugShadowLabels, IM_ARRAYSIZE(debugShadowLabels), &debugShadow))
-                    {
-                        m_SceneRenderer->SetDebugShadowMode(debugShadow);
-                    }
-
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNodeEx("Global Illumination & AO"))
-                {
-                    static const char *giModeLabels[] = { "Volume Default", "Off", "Fast", "Leak-Resistant" };
-                    int giIdx = std::clamp(renderSettings.giModeOverride + 1, 0, 3);
-                    if (UI::DrawComboBox("GI Mode", giModeLabels, IM_ARRAYSIZE(giModeLabels), &giIdx))
-                    {
-                        renderSettings.giModeOverride = giIdx - 1;
-                    }
-
-                    static const char *aoModeLabels[] = { "Camera Default", "Off", "Legacy SSAO", "GTAO" };
-                    int aoIdx = std::clamp(renderSettings.aoModeOverride + 1, 0, 3);
-                    if (UI::DrawComboBox("AO Mode", aoModeLabels, IM_ARRAYSIZE(aoModeLabels), &aoIdx))
-                    {
-                        renderSettings.aoModeOverride = aoIdx - 1;
-                    }
-
-                    UI::DrawCheckbox("Depth+Normal Prepass", &renderSettings.enableDepthPrepass);
-                    UI::DrawCheckbox("Show GI Probes", &renderSettings.showGIProbes);
-
-                    ImGui::TreePop();
-                }
-
-                ImGui::TreePop();
             }
 
             ImGui::TreePop();
@@ -3363,7 +3606,7 @@ namespace ignite
         postProcessing.renderScale = glm::clamp(postProcessing.renderScale * globalScale, 0.25f, 1.0f);
 
         const uint32_t expectedRenderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.x) * postProcessing.renderScale)));
-        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(static_cast<float>(desiredSize.y) * postProcessing.renderScale));
+        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.y) * postProcessing.renderScale)));
 
         const glm::uvec2 sceneRTSize = target ? target->sceneRT->GetSize() : glm::uvec2(0);
 
@@ -3372,6 +3615,7 @@ namespace ignite
         const bool sceneRTNeedsResize = (!target || expectedRenderWidth != sceneRTSize.x || expectedRenderHeight != sceneRTSize.y);
 
         const bool needsResize = cameraNeedsResize || compositeNeedsResize || sceneRTNeedsResize || requestToResize;
+        const bool immediateRequest = requestToResize;
 
         if (needsResize)
         {
@@ -3389,7 +3633,7 @@ namespace ignite
 
         if (isResizing && m_SceneRenderer)
         {
-            if (!target || targetSize.x == 0 || targetSize.y == 0 || sceneRTSize.x == 0 || sceneRTSize.y == 0)
+            if (immediateRequest || !target || targetSize.x == 0 || targetSize.y == 0 || sceneRTSize.x == 0 || sceneRTSize.y == 0)
             {
                 m_SceneRenderer->ResizeFramebuffer(camera, desiredSize.x, desiredSize.y);
                 isResizing = false;

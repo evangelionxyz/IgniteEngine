@@ -18,6 +18,7 @@ namespace ignite
         static Ref<BindingSet> GetCachedBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex = 0);
         static Ref<BindingSet> GetOrCreateBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex = 0, const std::string &debugName = "");
         static void RemoveBindingSet(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex = 0);
+        static void RemovePipelineLayout(nri::PipelineLayout *pipelineLayout);
     };
 }
 

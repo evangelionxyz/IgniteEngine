@@ -50,7 +50,8 @@ namespace ignite
 
         const ShadowMapQuality &GetQuality() const { return m_Quality; }
 
-        void ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance = 200.0f);
+        void ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance = 200.0f, int activeCascades = NUM_CASCADES);
+        float GetCascadeTexelSize(int cascadeIndex) const { return (cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES) ? m_CascadeTexelSizes[cascadeIndex] : 0.0f; }
 
         // Computes a single orthographic shadow matrix covering sceneBounds along -normalize(lightDirection),
         // setting all 4 cascade slots and disabling cascade splits so GI bakes use cascade 0 everywhere.
@@ -69,6 +70,7 @@ namespace ignite
         float m_ShadowDistance = 200.0f;
         ShadowMapQuality m_Quality = ShadowMapQuality::COUNT;
         CSM_GPUData m_GPUData{};
+        std::array<float, NUM_CASCADES> m_CascadeTexelSizes{};
         nri::Descriptor *m_DepthSampler = nullptr;
     };
 }

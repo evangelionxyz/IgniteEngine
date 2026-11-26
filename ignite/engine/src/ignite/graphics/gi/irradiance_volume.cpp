@@ -77,6 +77,7 @@ namespace ignite
         m_Data = data;
         m_OffsetTexture.reset();
         m_VisibilityAtlas.reset();
+        m_SkyVisibilityTexture.reset();
 
         constexpr uint32_t kRGBA16BytesPerPixel = 8u;
         for (int t = 0; t < 7; ++t)
@@ -133,6 +134,16 @@ namespace ignite
             }
         }
 
+        if (data.skyVisibilityHalfRGBA.size() == expectedHalfCount)
+        {
+            m_SkyVisibilityTexture = CreateAndUploadTexture3D(
+                data.dims.x, data.dims.y, data.dims.z,
+                nri::Format::RGBA16_SFLOAT,
+                data.skyVisibilityHalfRGBA.data(),
+                kRGBA16BytesPerPixel,
+                "[GI IrradianceVolume SkyVisibility]");
+        }
+
         BindlessSystem::FlushPendingWrites();
         return IsValid();
     }
@@ -171,6 +182,8 @@ namespace ignite
             outGI.shTextureIndices0 = glm::ivec4(-1);
             outGI.shTextureIndices1 = glm::ivec4(-1);
             outGI.visibilityParams = glm::ivec4(-1, 8, 0, 0);
+            outGI.skyVisibilityTexIndex = -1;
+            outGI.skyVisibilitySplit = 0;
             return;
         }
 
@@ -214,6 +227,12 @@ namespace ignite
             static_cast<int32_t>(m_Data.visOctRes),
             static_cast<int32_t>(m_Data.visAtlasCols),
             static_cast<int32_t>(m_Data.visAtlasRows));
+
+        const int32_t skyVisIdx = (m_SkyVisibilityTexture && m_SkyVisibilityTexture->GetBindlessIndex() != UINT32_MAX)
+            ? static_cast<int32_t>(m_SkyVisibilityTexture->GetBindlessIndex())
+            : -1;
+        outGI.skyVisibilityTexIndex = skyVisIdx;
+        outGI.skyVisibilitySplit = (comp && comp->skyVisibilitySplit && skyVisIdx >= 0) ? 1 : 0;
     }
 
     std::vector<gi::DebugProbeGPU> IrradianceVolume::BuildDebugProbes(float radius) const

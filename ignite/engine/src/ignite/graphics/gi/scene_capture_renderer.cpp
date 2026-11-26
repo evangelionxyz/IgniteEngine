@@ -617,6 +617,8 @@ namespace ignite
         m_PreparedBatches.clear();
         m_RetainedMaterials.clear();
         m_ActiveEnvironment.reset();
+        m_PreparedEnvTexture.reset();
+        m_HasPreparedSkyIBL = false;
         m_HasDirectionalLight = false;
         m_HasBakeLocalShadows = false;
         m_HasOverrideGIData = (giDataOverride != nullptr);
@@ -729,9 +731,15 @@ namespace ignite
                 gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
                 gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation, 0.0f);
 
-                if (pi < kMaxBakePointShadows)
+                if (pi < kMaxBakePointShadows && light.castShadow)
                 {
+                    gpu.shadowParams = glm::vec4(static_cast<float>(pi), light.shadowBias,
+                        light.softShadows ? light.pcfRadius : 0.0f, light.shadowStrength);
                     localShadowLights.push_back({ pi, tr.world.translation, clampedRange });
+                }
+                else
+                {
+                    gpu.shadowParams = glm::vec4(-1.0f, light.shadowBias, 0.0f, 0.0f);
                 }
             }
             m_BaseSceneData.numPointLights = pointCount;
@@ -772,9 +780,15 @@ namespace ignite
                 gpu.attenuation = glm::vec4(std::max(light.constantAttenuation, 0.001f), light.linearAttenuation, light.quadraticAttenuation,
                     glm::cos(glm::radians(light.innerConeAngle)));
 
-                if (si < kMaxBakeSpotShadows)
+                if (si < kMaxBakeSpotShadows && light.castShadow)
                 {
+                    gpu.shadowParams = glm::vec4(static_cast<float>(kMaxBakePointShadows + si), light.shadowBias,
+                        light.softShadows ? light.pcfRadius : 0.0f, light.shadowStrength);
                     localShadowLights.push_back({ kMaxBakePointShadows + si, tr.world.translation, clampedRange });
+                }
+                else
+                {
+                    gpu.shadowParams = glm::vec4(-1.0f, light.shadowBias, 0.0f, 0.0f);
                 }
             }
             m_BaseSceneData.numSpotLights = spotCount;
@@ -787,10 +801,16 @@ namespace ignite
         Ref<Texture> envMapTex = Renderer::GetBlackTexture();
         if (WorldEnvironment *worldEnv = scene->GetActiveWorldEnvironment())
         {
+            if (!worldEnv->environment)
+            {
+                worldEnv->environment = Environment::Create();
+                worldEnv->gpuInitialized = false;
+            }
             if (worldEnv->environment)
             {
                 m_ActiveEnvironment = worldEnv->environment;
                 m_ActiveSkyType = worldEnv->skyType;
+                m_ActiveEnvironment->SetSkyType(worldEnv->skyType);
                 m_BaseSceneData.skyType = static_cast<int32_t>(worldEnv->skyType);
                 m_ActiveEnvironment->WriteBuffer(cmd);
 
@@ -806,9 +826,36 @@ namespace ignite
                         envMapTex = sky->GetSkyViewLUT();
                     }
                 }
-                else if (m_ActiveEnvironment->GetHDRTexture())
+                else
                 {
-                    envMapTex = m_ActiveEnvironment->GetHDRTexture();
+                    if (worldEnv->skyType == SkyType::HDRI && worldEnv->hdrHandle != AssetHandle(0) && assetManager)
+                    {
+                        Ref<Texture> currentHdr = m_ActiveEnvironment->GetHDRTexture();
+                        if (worldEnv->dirtyEnvironment || !currentHdr || currentHdr == Renderer::GetBlackTexture() || !currentHdr->IsReady())
+                        {
+                            Ref<Texture> hdrTex = assetManager->GetAsset<Texture>(worldEnv->hdrHandle);
+                            if (!hdrTex || !hdrTex->IsReady())
+                            {
+                                hdrTex = assetManager->GetAssetImmediate<Texture>(worldEnv->hdrHandle);
+                            }
+                            if (hdrTex && hdrTex->IsReady())
+                            {
+                                m_ActiveEnvironment->SetTexture(hdrTex);
+                                worldEnv->dirtyEnvironment = false;
+                            }
+                        }
+                    }
+
+                    if (m_ActiveEnvironment->GetHDRTexture())
+                    {
+                        envMapTex = m_ActiveEnvironment->GetHDRTexture();
+                    }
+                }
+
+                if (worldEnv->enableIBL && envMapTex && envMapTex != Renderer::GetBlackTexture())
+                {
+                    m_PreparedEnvTexture = envMapTex;
+                    m_HasPreparedSkyIBL = true;
                 }
             }
         }
@@ -828,6 +875,8 @@ namespace ignite
             uint32_t objectIndex = 0;
             Ref<BindingSet> matSet;
             nri::CullMode cullMode = nri::CullMode::FRONT;
+            AABB worldAABB{};
+            bool castShadow = true;
         };
         std::vector<SubmeshEntry> entries;
         BatchBuilder shadowBatchBuilder;
@@ -835,16 +884,16 @@ namespace ignite
         Ref<Material> defaultMaterial = Renderer::GetDefaultMaterial();
         std::unordered_set<Material *> uploadedMaterials;
 
-        auto resolveMaterial = [&](int submeshIdx, const std::unordered_map<int, AssetHandle> &overrides, AssetHandle instanceHandle) -> Ref<Material>
+        auto resolveMaterial = [&](AssetHandle matHandle) -> Ref<Material>
         {
-            AssetHandle matHandle = instanceHandle;
-            if (auto it = overrides.find(submeshIdx); it != overrides.end() && it->second != AssetHandle(0))
-            {
-                matHandle = it->second;
-            }
             if (assetManager && matHandle != AssetHandle(0))
             {
-                if (Ref<Material> mat = assetManager->GetAsset<Material>(matHandle))
+                Ref<Material> mat = assetManager->GetAsset<Material>(matHandle);
+                if (!mat)
+                {
+                    mat = assetManager->GetAssetImmediate<Material>(matHandle);
+                }
+                if (mat)
                 {
                     return mat;
                 }
@@ -852,18 +901,49 @@ namespace ignite
             return defaultMaterial;
         };
 
+        auto ensureMaterialTexturesLoaded = [&](const Ref<Material> &mat)
+        {
+            if (!assetManager || !mat)
+            {
+                return;
+            }
+            const AssetHandle texHandles[6] = {
+                mat->baseColorTextureHandle,
+                mat->emissiveTextureHandle,
+                mat->metallicTextureHandle,
+                mat->roughnessTextureHandle,
+                mat->normalTextureHandle,
+                mat->occlusionTextureHandle
+            };
+            for (AssetHandle h : texHandles)
+            {
+                if (h == AssetHandle(0))
+                {
+                    continue;
+                }
+                Ref<Texture> tex = assetManager->GetAsset<Texture>(h);
+                if (!tex || !tex->IsReady())
+                {
+                    (void)assetManager->GetAssetImmediate<Texture>(h);
+                }
+            }
+        };
+
         if (scene->registry)
         {
             auto meshView = scene->registry->view<TransformComponent, StaticMeshComponent>();
             for (auto entity : meshView)
             {
-                if (const auto *rc = scene->registry->try_get<RenderingComponent>(entity))
+                const auto *rc = scene->registry->try_get<RenderingComponent>(entity);
+                if (rc)
                 {
-                    if (!rc->visible || !rc->contributeGI)
+                    if (!rc->visible || !rc->contributeGI || rc->mobility != EntityMobility::Static)
                     {
                         continue;
                     }
                 }
+                const bool castShadow = (!rc || rc->castShadow);
+                const bool receiveShadow = (!rc || rc->receiveShadow);
 
                 const auto &tr = meshView.get<TransformComponent>(entity);
                 auto &smc = meshView.get<StaticMeshComponent>(entity);
@@ -873,6 +953,10 @@ namespace ignite
                 }
 
                 Ref<StaticMesh> mesh = assetManager->GetAsset<StaticMesh>(smc.handle);
+                if (!mesh)
+                {
+                    mesh = assetManager->GetAssetImmediate<StaticMesh>(smc.handle);
+                }
                 if (!mesh)
                 {
                     continue;
@@ -901,7 +985,7 @@ namespace ignite
                         continue;
                     }
 
-                    Ref<Material> material = resolveMaterial(static_cast<int>(idx), smc.overrideMaterials, inst->GetMaterialAssetHandle());
+                    Ref<Material> material = resolveMaterial(inst->GetMaterialAssetHandle());
                     if (!material)
                     {
                         continue;
@@ -914,6 +998,7 @@ namespace ignite
 
                     if (material->UpdateBindingSet(envMapTex, bakeShadowTex) && uploadedMaterials.insert(material.get()).second)
                     {
+                        ensureMaterialTexturesLoaded(material);
                         material->UploadToGpu(cmd);
                     }
                     Ref<BindingSet> matSet = material->GetBindingSet();
@@ -939,16 +1024,20 @@ namespace ignite
                     objData.normal = glm::mat4(glm::transpose(glm::inverse(glm::mat3(worldTransform))));
                     objData.objectID = 0xFFFFFFFFu;
                     objData.boneOffset = 0;
+                    objData.receiveShadow = receiveShadow ? 1u : 0u;
                     const uint32_t objectIdx = m_ObjectAllocator.Allocate(cmd, objData);
 
                     nri::Buffer *vb = primitive->vertexBuffer->GetHandle();
                     nri::Buffer *ib = primitive->indexBuffer->GetHandle();
                     const uint32_t indexCount = primitive->indexBuffer->GetCount();
 
-                    entries.push_back({ vb, ib, indexCount, objectIdx, matSet, material->GetCullMode() });
+                    entries.push_back({ vb, ib, indexCount, objectIdx, matSet, material->GetCullMode(), instAABB, castShadow });
 
-                    BatchKey shadowKey{ vb, ib, m_ShadowBindingSet ? m_ShadowBindingSet->GetHandle() : nullptr, nullptr, nullptr };
-                    shadowBatchBuilder.Submit(shadowKey, vb, ib, m_ShadowBindingSet, nullptr, nullptr, indexCount, objectIdx, sizeof(VertexMeshStatic));
+                    if (castShadow)
+                    {
+                        BatchKey shadowKey{ vb, ib, m_ShadowBindingSet ? m_ShadowBindingSet->GetHandle() : nullptr, nullptr, nullptr };
+                        shadowBatchBuilder.Submit(shadowKey, vb, ib, m_ShadowBindingSet, nullptr, nullptr, indexCount, objectIdx, sizeof(VertexMeshStatic));
+                    }
                 }
             }
         }
@@ -991,6 +1080,7 @@ namespace ignite
         {
             PreparedBatch batch;
             std::vector<uint32_t> objectIndices;
+            std::vector<uint32_t> shadowObjectIndices;
         };
         std::unordered_map<BatchAccumKey, BatchAccumVal, BatchAccumKeyHash> grouped;
         grouped.reserve(entries.size());
@@ -1008,6 +1098,12 @@ namespace ignite
                 acc.batch.cullMode = e.cullMode;
             }
             acc.objectIndices.push_back(e.objectIndex);
+            acc.batch.instanceObjectIndices.push_back(e.objectIndex);
+            acc.batch.instanceWorldAABBs.push_back(e.worldAABB);
+            if (e.castShadow)
+            {
+                acc.shadowObjectIndices.push_back(e.objectIndex);
+            }
         }
 
         m_PreparedBatches.reserve(grouped.size());
@@ -1015,6 +1111,10 @@ namespace ignite
         {
             acc.batch.instanceCount = static_cast<uint32_t>(acc.objectIndices.size());
             acc.batch.baseInstanceOffset = m_InstanceIndexAllocator.Allocate(cmd, acc.objectIndices.data(), acc.batch.instanceCount);
+            acc.batch.shadowInstanceCount = static_cast<uint32_t>(acc.shadowObjectIndices.size());
+            acc.batch.shadowBaseInstanceOffset = (acc.batch.shadowInstanceCount > 0)
+                ? m_InstanceIndexAllocator.Allocate(cmd, acc.shadowObjectIndices.data(), acc.batch.shadowInstanceCount)
+                : 0u;
             m_PreparedBatches.push_back(std::move(acc.batch));
         }
 
@@ -1134,7 +1234,7 @@ namespace ignite
 
                         for (const PreparedBatch &batch : m_PreparedBatches)
                         {
-                            if (batch.instanceCount == 0 || !batch.vertexBuffer || !batch.indexBuffer)
+                            if (batch.shadowInstanceCount == 0 || !batch.vertexBuffer || !batch.indexBuffer)
                             {
                                 continue;
                             }
@@ -1148,7 +1248,7 @@ namespace ignite
 
                             nri::SetRootConstantsDesc rootConst = {};
                             rootConst.rootConstantIndex = 0;
-                            rootConst.data = &batch.baseInstanceOffset;
+                            rootConst.data = &batch.shadowBaseInstanceOffset;
                             rootConst.size = sizeof(uint32_t);
                             rootConst.offset = 0;
                             rootConst.bindPoint = nri::BindPoint::GRAPHICS;
@@ -1156,7 +1256,7 @@ namespace ignite
 
                             nri::DrawIndexedDesc drawDesc = {};
                             drawDesc.indexNum = batch.indexCount;
-                            drawDesc.instanceNum = batch.instanceCount;
+                            drawDesc.instanceNum = batch.shadowInstanceCount;
                             nri.CmdDrawIndexed(*cmd, drawDesc);
                         }
                     }
@@ -1238,6 +1338,73 @@ namespace ignite
             slot.faceCameraBuffers[face]->SetData(&camData, sizeof(camData));
         }
 
+        // Pre-filter batches for Reflection captures so small enclosing objects (e.g. a chrome sphere
+        // hosting a local ReflectionProbe at its center) do not self-occlude their own cubemap.
+        struct DrawSlice
+        {
+            const PreparedBatch *batch = nullptr;
+            uint32_t baseOffset = 0;
+            uint32_t instanceCount = 0;
+        };
+        std::vector<DrawSlice> drawSlices;
+        drawSlices.reserve(m_PreparedBatches.size());
+        const bool checkExcludeOrigin = (settings.mode == CaptureMode::Reflection && settings.excludeOriginRadius > 0.0f);
+        for (const PreparedBatch &batch : m_PreparedBatches)
+        {
+            if (batch.instanceCount == 0 || !batch.vertexBuffer || !batch.indexBuffer || !batch.materialBindingSet)
+            {
+                continue;
+            }
+            if (!checkExcludeOrigin || batch.instanceWorldAABBs.size() != batch.instanceCount)
+            {
+                drawSlices.push_back({ &batch, batch.baseInstanceOffset, batch.instanceCount });
+                continue;
+            }
+
+            std::vector<uint32_t> keptIndices;
+            bool anyExcluded = false;
+            const float r = settings.excludeOriginRadius;
+            for (size_t k = 0; k < batch.instanceWorldAABBs.size(); ++k)
+            {
+                const AABB &wb = batch.instanceWorldAABBs[k];
+                const glm::vec3 size = wb.GetSize();
+                const float maxDim = std::max({ size.x, size.y, size.z });
+                const bool containsOrigin =
+                    worldPos.x >= wb.min.x && worldPos.x <= wb.max.x &&
+                    worldPos.y >= wb.min.y && worldPos.y <= wb.max.y &&
+                    worldPos.z >= wb.min.z && worldPos.z <= wb.max.z;
+                const float distToCenter = glm::length(wb.GetCenter() - worldPos);
+                const bool isSelfEnclosing = (containsOrigin || distToCenter < r) && (maxDim < r * 4.0f);
+                if (isSelfEnclosing)
+                {
+                    if (!anyExcluded)
+                    {
+                        keptIndices.reserve(batch.instanceCount - 1u);
+                        for (size_t prev = 0; prev < k; ++prev)
+                        {
+                            keptIndices.push_back(batch.instanceObjectIndices[prev]);
+                        }
+                        anyExcluded = true;
+                    }
+                }
+                else if (anyExcluded)
+                {
+                    keptIndices.push_back(batch.instanceObjectIndices[k]);
+                }
+            }
+
+            if (!anyExcluded)
+            {
+                drawSlices.push_back({ &batch, batch.baseInstanceOffset, batch.instanceCount });
+            }
+            else if (!keptIndices.empty())
+            {
+                const uint32_t filteredCount = static_cast<uint32_t>(keptIndices.size());
+                const uint32_t filteredBase = m_InstanceIndexAllocator.Allocate(cmd, keptIndices.data(), filteredCount);
+                drawSlices.push_back({ &batch, filteredBase, filteredCount });
+            }
+        }
+
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
         Ref<GraphicsPipeline> skyPSO = settings.includeSky ? GetOrCreateSkyPSO() : nullptr;
 
@@ -1253,12 +1420,9 @@ namespace ignite
 
             if (slot.staticFaceBindingSets[face])
             {
-                for (const PreparedBatch &batch : m_PreparedBatches)
+                for (const DrawSlice &slice : drawSlices)
                 {
-                    if (batch.instanceCount == 0 || !batch.vertexBuffer || !batch.indexBuffer || !batch.materialBindingSet)
-                    {
-                        continue;
-                    }
+                    const PreparedBatch &batch = *slice.batch;
 
                     const nri::CullMode faceCullMode = (settings.mode == CaptureMode::Irradiance)
                         ? nri::CullMode::NONE
@@ -1289,7 +1453,7 @@ namespace ignite
 
                     nri::SetRootConstantsDesc rootConst = {};
                     rootConst.rootConstantIndex = 0;
-                    rootConst.data = &batch.baseInstanceOffset;
+                    rootConst.data = &slice.baseOffset;
                     rootConst.size = sizeof(uint32_t);
                     rootConst.offset = 0;
                     rootConst.bindPoint = nri::BindPoint::GRAPHICS;
@@ -1297,7 +1461,7 @@ namespace ignite
 
                     nri::DrawIndexedDesc drawDesc = {};
                     drawDesc.indexNum = batch.indexCount;
-                    drawDesc.instanceNum = batch.instanceCount;
+                    drawDesc.instanceNum = slice.instanceCount;
                     nri.CmdDrawIndexed(*cmd, drawDesc);
                 }
             }

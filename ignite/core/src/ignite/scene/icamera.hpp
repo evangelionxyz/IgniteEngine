@@ -52,13 +52,21 @@ namespace ignite
     struct TAAProperties
     {
         bool enable = false;
-        float blendFactor = 0.08f; // Current-frame weight; lower is smoother, higher is more responsive
+        float blendFactor = 0.10f; // Current-frame weight; lower is smoother, higher is more responsive
     };
 
     struct MSAAProperties
     {
         bool enable = false;
         int sampleCount = 4; // Requested MSAA sample count for compatible render paths
+    };
+
+    struct FXAAProperties
+    {
+        bool enable = true;
+        float subpixQuality = 0.75f;      // 0.0 (sharp) .. 1.0 (soft subpixel AA)
+        float edgeThreshold = 0.125f;     // 0.063 (high) .. 0.333 (low)
+        float edgeThresholdMin = 0.0417f; // Minimum luma delta to process edges
     };
 
     struct PostProcessing

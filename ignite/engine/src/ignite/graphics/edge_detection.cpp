@@ -69,6 +69,7 @@ namespace ignite
         }
         if (m_PipelineLayout)
         {
+            BindingSet::OnPipelineLayoutDestroyed(m_PipelineLayout);
             nri.DestroyPipelineLayout(m_PipelineLayout);
             m_PipelineLayout = nullptr;
         }

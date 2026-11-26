@@ -318,6 +318,9 @@ namespace ignite
                 sr.BeginMap("Rendering");
                 {
                     sr.AddKeyValue("Visible", comp.visible);
+                    sr.AddKeyValue("Mobility", static_cast<int>(comp.mobility));
+                    sr.AddKeyValue("CastShadow", comp.castShadow);
+                    sr.AddKeyValue("ReceiveShadow", comp.receiveShadow);
                     sr.AddKeyValue("ContributeGI", comp.contributeGI);
                     sr.AddKeyValue("ReceiveGI", comp.receiveGI);
                 }
@@ -360,6 +363,12 @@ namespace ignite
                     sr.AddKeyValue("ConstantAttenuation", comp.constantAttenuation);
                     sr.AddKeyValue("LinearAttenuation", comp.linearAttenuation);
                     sr.AddKeyValue("QuadraticAttenuation", comp.quadraticAttenuation);
+                    sr.AddKeyValue("CastShadow", comp.castShadow);
+                    sr.AddKeyValue("BakeStaticShadow", comp.bakeStaticShadow);
+                    sr.AddKeyValue("SoftShadows", comp.softShadows);
+                    sr.AddKeyValue("ShadowStrength", comp.shadowStrength);
+                    sr.AddKeyValue("ShadowBias", comp.shadowBias);
+                    sr.AddKeyValue("PCFRadius", comp.pcfRadius);
                 }
                 sr.EndMap();
             }
@@ -380,6 +389,12 @@ namespace ignite
                     sr.AddKeyValue("QuadraticAttenuation", comp.quadraticAttenuation);
                     sr.AddKeyValue("InnerConeAngle", comp.innerConeAngle);
                     sr.AddKeyValue("OuterConeAngle", comp.outerConeAngle);
+                    sr.AddKeyValue("CastShadow", comp.castShadow);
+                    sr.AddKeyValue("BakeStaticShadow", comp.bakeStaticShadow);
+                    sr.AddKeyValue("SoftShadows", comp.softShadows);
+                    sr.AddKeyValue("ShadowStrength", comp.shadowStrength);
+                    sr.AddKeyValue("ShadowBias", comp.shadowBias);
+                    sr.AddKeyValue("PCFRadius", comp.pcfRadius);
                 }
                 sr.EndMap();
             }
@@ -396,6 +411,7 @@ namespace ignite
                     sr.AddKeyValue("CaptureResolution", comp.captureResolution);
                     sr.AddKeyValue("SHOrder", comp.shOrder);
                     sr.AddKeyValue("RuntimeMode", comp.runtimeMode);
+                    sr.AddKeyValue("SkyVisibilitySplit", comp.skyVisibilitySplit);
                     sr.AddKeyValue("NormalBias", comp.normalBias);
                     sr.AddKeyValue("ViewBias", comp.viewBias);
                     sr.AddKeyValue("EdgeFade", comp.edgeFade);
@@ -424,6 +440,7 @@ namespace ignite
                     sr.AddKeyValue("Normalize", comp.normalize);
                     sr.AddKeyValue("NormalizationStrength", comp.normalizationStrength);
                     sr.AddKeyValue("BoxProjection", comp.boxProjection);
+                    sr.AddKeyValue("ExcludeRadius", comp.excludeRadius);
                     sr.AddKeyValue("BakedAsset", static_cast<uint64_t>(comp.bakedAsset));
                     sr.AddKeyValue("BakedAssetPath", comp.bakedAssetPath);
                     sr.AddKeyValue("BakeHash", comp.bakeHash);
@@ -637,16 +654,6 @@ namespace ignite
                 sr.BeginMap("StaticMesh");
                 {
                     sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
-
-                    sr.BeginSequence("OverrideMaterials");
-                    for (const auto &[meshIndex, materialHandle] : comp.overrideMaterials)
-                    {
-                        sr.BeginMap();
-                        sr.AddKeyValue("Mesh", meshIndex);
-                        sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(materialHandle));
-                        sr.EndMap();
-                    }
-                    sr.EndSequence();
                 }
                 sr.EndMap();
             }
@@ -660,16 +667,6 @@ namespace ignite
                     sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
                     sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.runtimeAnimatorHandle));
                     sr.AddKeyValue("UniqueAnimator", comp.uniqueAnimator);
-
-                    sr.BeginSequence("OverrideMaterials");
-                    for (const auto &[meshIndex, materialHandle] : comp.overrideMaterials)
-                    {
-                        sr.BeginMap();
-                        sr.AddKeyValue("Mesh", meshIndex);
-                        sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(materialHandle));
-                        sr.EndMap();
-                    }
-                    sr.EndSequence();
 
                     sr.BeginSequence("SocketAttachments");
                     for (const auto &[socketName, attachedMeshHandle] : comp.socketAttachments)
@@ -1135,6 +1132,9 @@ namespace ignite
         {
             auto &comp = desEntity.AddComponent<RenderingComponent>();
             if (auto n = node["Visible"]) comp.visible = n.as<bool>();
+            if (auto n = node["Mobility"]) comp.mobility = static_cast<EntityMobility>(std::clamp(n.as<int>(), 0, 1));
+            if (auto n = node["CastShadow"]) comp.castShadow = n.as<bool>();
+            if (auto n = node["ReceiveShadow"]) comp.receiveShadow = n.as<bool>();
             if (auto n = node["ContributeGI"]) comp.contributeGI = n.as<bool>();
             if (auto n = node["ReceiveGI"]) comp.receiveGI = n.as<bool>();
         }
@@ -1232,6 +1232,12 @@ namespace ignite
             if (auto n = node["ConstantAttenuation"]) comp.constantAttenuation = n.as<float>();
             if (auto n = node["LinearAttenuation"]) comp.linearAttenuation = n.as<float>();
             if (auto n = node["QuadraticAttenuation"]) comp.quadraticAttenuation = n.as<float>();
+            if (auto n = node["CastShadow"]) comp.castShadow = n.as<bool>();
+            if (auto n = node["BakeStaticShadow"]) comp.bakeStaticShadow = n.as<bool>();
+            if (auto n = node["SoftShadows"]) comp.softShadows = n.as<bool>();
+            if (auto n = node["ShadowStrength"]) comp.shadowStrength = n.as<float>();
+            if (auto n = node["ShadowBias"]) comp.shadowBias = n.as<float>();
+            if (auto n = node["PCFRadius"]) comp.pcfRadius = n.as<float>();
         }
 
         // Spot Light
@@ -1248,6 +1254,12 @@ namespace ignite
             if (auto n = node["QuadraticAttenuation"]) comp.quadraticAttenuation = n.as<float>();
             if (auto n = node["InnerConeAngle"]) comp.innerConeAngle = n.as<float>();
             if (auto n = node["OuterConeAngle"]) comp.outerConeAngle = n.as<float>();
+            if (auto n = node["CastShadow"]) comp.castShadow = n.as<bool>();
+            if (auto n = node["BakeStaticShadow"]) comp.bakeStaticShadow = n.as<bool>();
+            if (auto n = node["SoftShadows"]) comp.softShadows = n.as<bool>();
+            if (auto n = node["ShadowStrength"]) comp.shadowStrength = n.as<float>();
+            if (auto n = node["ShadowBias"]) comp.shadowBias = n.as<float>();
+            if (auto n = node["PCFRadius"]) comp.pcfRadius = n.as<float>();
         }
 
         // Irradiance Volume
@@ -1260,6 +1272,7 @@ namespace ignite
             if (auto n = node["CaptureResolution"]) comp.captureResolution = n.as<int>();
             if (auto n = node["SHOrder"]) comp.shOrder = n.as<int>();
             if (auto n = node["RuntimeMode"]) comp.runtimeMode = n.as<int>();
+            if (auto n = node["SkyVisibilitySplit"]) comp.skyVisibilitySplit = n.as<bool>();
             if (auto n = node["NormalBias"]) comp.normalBias = n.as<float>();
             if (auto n = node["ViewBias"]) comp.viewBias = n.as<float>();
             if (auto n = node["EdgeFade"]) comp.edgeFade = n.as<float>();
@@ -1284,6 +1297,7 @@ namespace ignite
             if (auto n = node["Normalize"]) comp.normalize = n.as<bool>();
             if (auto n = node["NormalizationStrength"]) comp.normalizationStrength = n.as<float>();
             if (auto n = node["BoxProjection"]) comp.boxProjection = n.as<bool>();
+            if (auto n = node["ExcludeRadius"]) comp.excludeRadius = n.as<float>();
             if (auto n = node["BakedAsset"]) comp.bakedAsset = AssetHandle(n.as<uint64_t>());
             if (auto n = node["BakedAssetPath"]) comp.bakedAssetPath = n.as<std::string>();
             if (auto n = node["BakeHash"]) comp.bakeHash = n.as<uint64_t>();
@@ -1426,16 +1440,6 @@ namespace ignite
         {
             auto &comp = desEntity.AddComponent<StaticMeshComponent>();
             if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
-
-            if (JsonNode matsNode = node["OverrideMaterials"])
-            {
-                for (JsonNode matNode : matsNode)
-                {
-                    const auto meshIndex = matNode["Mesh"].as<uint32_t>();
-                    AssetHandle materialHandle = AssetHandle(matNode["MaterialHandle"].as<uint64_t>());
-                    comp.overrideMaterials[meshIndex] = materialHandle;
-                }
-            }
         }
 
         // Skeletal Mesh Component
@@ -1445,16 +1449,6 @@ namespace ignite
             if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["AnimatorHandle"]) comp.runtimeAnimatorHandle = AssetHandle(n.as<uint64_t>());
             if (auto n = node["UniqueAnimator"]) comp.uniqueAnimator = n.as<bool>();
-
-            if (JsonNode matsNode = node["OverrideMaterials"])
-            {
-                for (JsonNode matNode : matsNode)
-                {
-                    uint32_t meshIndex = matNode["Mesh"].as<uint32_t>();
-                    AssetHandle materialHandle = AssetHandle(matNode["MaterialHandle"].as<uint64_t>());
-                    comp.overrideMaterials[meshIndex] = materialHandle;
-                }
-            }
 
             if (JsonNode socketsNode = node["SocketAttachments"])
             {

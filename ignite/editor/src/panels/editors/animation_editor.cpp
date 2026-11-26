@@ -11,7 +11,7 @@
 
 #include "states.hpp"
 #include "ignite/math/math.hpp"
-#include "ignite/imgui/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>

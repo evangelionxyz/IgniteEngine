@@ -1,14 +1,62 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 #include "ignite_pch.hpp"
 #include "binding_set.hpp"
+#include "binding_cache.hpp"
 #include "bindless_system.hpp"
 #include "renderer.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/hashing.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+
+#include <algorithm>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace ignite
 {
+    namespace
+    {
+        struct DescriptorSetPoolKey
+        {
+            nri::PipelineLayout *pipelineLayout = nullptr;
+            uint32_t setIndex = 0;
+
+            bool operator==(const DescriptorSetPoolKey &other) const noexcept
+            {
+                return pipelineLayout == other.pipelineLayout && setIndex == other.setIndex;
+            }
+        };
+
+        struct DescriptorSetPoolKeyHash
+        {
+            size_t operator()(const DescriptorSetPoolKey &key) const noexcept
+            {
+                return Hashing::HashCombineAll(key.pipelineLayout, key.setIndex);
+            }
+        };
+
+        struct RetiredDescriptorSet
+        {
+            nri::DescriptorSet *handle = nullptr;
+            DescriptorSetPoolKey key;
+            uint64_t retiredFrame = 0;
+        };
+
+        struct DescriptorSetRecyclingPool
+        {
+            std::mutex mutex;
+            uint64_t currentFrame = 0;
+            std::unordered_map<nri::DescriptorSet *, DescriptorSetPoolKey> allocatedMeta;
+            std::unordered_set<nri::DescriptorSet *> inUseSets;
+            std::vector<RetiredDescriptorSet> retiredSets;
+            std::unordered_map<DescriptorSetPoolKey, std::vector<nri::DescriptorSet *>, DescriptorSetPoolKeyHash> freeSets;
+        };
+
+        DescriptorSetRecyclingPool g_DescriptorSetPool;
+        constexpr uint64_t kFramesBeforeDescriptorSetReuse = 4;
+    }
     nri::PipelineLayout *BindingLayoutDesc::CreatePipelineLayout(nri::StageBits shaderStages, nri::Device *device) const
     {
         return CreatePipelineLayout(std::vector<BindingLayoutDesc>{ *this }, shaderStages, device);
@@ -109,6 +157,19 @@ namespace ignite
 
     BindingSet::~BindingSet()
     {
+        if (m_Handle && BindlessSystem::GetDescriptorPool())
+        {
+            std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+            if (g_DescriptorSetPool.inUseSets.erase(m_Handle) > 0)
+            {
+                auto it = g_DescriptorSetPool.allocatedMeta.find(m_Handle);
+                if (it != g_DescriptorSetPool.allocatedMeta.end())
+                {
+                    g_DescriptorSetPool.retiredSets.push_back({ m_Handle, it->second, g_DescriptorSetPool.currentFrame });
+                }
+            }
+        }
+        m_Handle = nullptr;
         Renderer::DecrementBindingSetCount(m_Name);
     }
 
@@ -145,6 +206,24 @@ namespace ignite
         }
         if (m_Handle)
         {
+            if (m_PipelineLayout && BindlessSystem::GetDescriptorPool())
+            {
+                {
+                    std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+                    if (g_DescriptorSetPool.inUseSets.erase(m_Handle) > 0)
+                    {
+                        auto it = g_DescriptorSetPool.allocatedMeta.find(m_Handle);
+                        if (it != g_DescriptorSetPool.allocatedMeta.end())
+                        {
+                            g_DescriptorSetPool.retiredSets.push_back({ m_Handle, it->second, g_DescriptorSetPool.currentFrame });
+                        }
+                    }
+                }
+                m_Handle = nullptr;
+                m_Handle = AllocateAndUpdate(m_PipelineLayout, m_SetIndex, desc);
+                return;
+            }
+
             if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
             {
                 GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
@@ -165,8 +244,32 @@ namespace ignite
 
         const auto &nri = dm->GetCoreInterface();
         nri::DescriptorSet *descriptorSet = nullptr;
-        nri::Result res = nri.AllocateDescriptorSets(*pool, *pipelineLayout, setIndex, &descriptorSet, 1, 0);
-        LOG_ASSERT(res == nri::Result::SUCCESS && descriptorSet, "[BindingSet] Failed to allocate descriptor set!");
+        const DescriptorSetPoolKey key{ pipelineLayout, setIndex };
+
+        {
+            std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+            auto freeIt = g_DescriptorSetPool.freeSets.find(key);
+            if (freeIt != g_DescriptorSetPool.freeSets.end() && !freeIt->second.empty())
+            {
+                descriptorSet = freeIt->second.back();
+                freeIt->second.pop_back();
+                g_DescriptorSetPool.inUseSets.insert(descriptorSet);
+            }
+            else
+            {
+                nri::Result res = nri.AllocateDescriptorSets(*pool, *pipelineLayout, setIndex, &descriptorSet, 1, 0);
+                LOG_ASSERT(res == nri::Result::SUCCESS && descriptorSet, "[BindingSet] Failed to allocate descriptor set!");
+                if (res == nri::Result::SUCCESS && descriptorSet)
+                {
+                    g_DescriptorSetPool.allocatedMeta[descriptorSet] = key;
+                    g_DescriptorSetPool.inUseSets.insert(descriptorSet);
+                }
+                else
+                {
+                    descriptorSet = nullptr;
+                }
+            }
+        }
 
         if (descriptorSet)
         {
@@ -213,5 +316,99 @@ namespace ignite
     nri::DescriptorSet *BindingSet::AllocateAndUpdate(const BindingSetDesc &desc, nri::PipelineLayout *pipelineLayout, uint32_t setIndex)
     {
         return AllocateAndUpdate(pipelineLayout, setIndex, desc);
+    }
+
+    void BindingSet::AdvanceFrame(uint64_t frameCounter)
+    {
+        std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+        g_DescriptorSetPool.currentFrame = frameCounter;
+
+        auto &retired = g_DescriptorSetPool.retiredSets;
+        size_t writeIdx = 0;
+        for (size_t i = 0; i < retired.size(); ++i)
+        {
+            const auto &entry = retired[i];
+            if (frameCounter >= entry.retiredFrame + kFramesBeforeDescriptorSetReuse)
+            {
+                g_DescriptorSetPool.freeSets[entry.key].push_back(entry.handle);
+            }
+            else
+            {
+                if (writeIdx != i)
+                    retired[writeIdx] = entry;
+                ++writeIdx;
+            }
+        }
+        retired.resize(writeIdx);
+    }
+
+    void BindingSet::ReclaimRetiredBeforeCurrentFrame()
+    {
+        std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+        const uint64_t currentFrame = g_DescriptorSetPool.currentFrame;
+
+        auto &retired = g_DescriptorSetPool.retiredSets;
+        size_t writeIdx = 0;
+        for (size_t i = 0; i < retired.size(); ++i)
+        {
+            const auto &entry = retired[i];
+            if (entry.retiredFrame < currentFrame)
+            {
+                g_DescriptorSetPool.freeSets[entry.key].push_back(entry.handle);
+            }
+            else
+            {
+                if (writeIdx != i)
+                    retired[writeIdx] = entry;
+                ++writeIdx;
+            }
+        }
+        retired.resize(writeIdx);
+    }
+
+    void BindingSet::OnPipelineLayoutDestroyed(nri::PipelineLayout *pipelineLayout)
+    {
+        if (!pipelineLayout)
+            return;
+
+        BindingCache::RemovePipelineLayout(pipelineLayout);
+
+        std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+
+        for (auto it = g_DescriptorSetPool.freeSets.begin(); it != g_DescriptorSetPool.freeSets.end(); )
+        {
+            if (it->first.pipelineLayout == pipelineLayout)
+                it = g_DescriptorSetPool.freeSets.erase(it);
+            else
+                ++it;
+        }
+
+        std::erase_if(g_DescriptorSetPool.retiredSets, [pipelineLayout](const RetiredDescriptorSet &entry)
+        {
+            return entry.key.pipelineLayout == pipelineLayout;
+        });
+
+        for (auto it = g_DescriptorSetPool.allocatedMeta.begin(); it != g_DescriptorSetPool.allocatedMeta.end(); )
+        {
+            if (it->second.pipelineLayout == pipelineLayout)
+            {
+                g_DescriptorSetPool.inUseSets.erase(it->first);
+                it = g_DescriptorSetPool.allocatedMeta.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    void BindingSet::ShutdownPool()
+    {
+        std::lock_guard<std::mutex> lock(g_DescriptorSetPool.mutex);
+        g_DescriptorSetPool.freeSets.clear();
+        g_DescriptorSetPool.retiredSets.clear();
+        g_DescriptorSetPool.inUseSets.clear();
+        g_DescriptorSetPool.allocatedMeta.clear();
+        g_DescriptorSetPool.currentFrame = 0;
     }
 }

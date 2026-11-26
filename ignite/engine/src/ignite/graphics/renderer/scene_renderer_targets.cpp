@@ -6,6 +6,7 @@
 #include "ignite/graphics/binding_cache.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
+#include "ignite/imgui/imgui_nri.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -25,6 +26,7 @@ namespace ignite
         {
             GPUUploadSync::DeviceWaitIdle(m_Device);
             BindingCache::Clear();
+            ImGui_NRI::ClearTextureCache();
             m_ResizeWaitedThisFrame = true;
         }
 
@@ -61,10 +63,12 @@ namespace ignite
 
         if (auto it = m_Blooms.find(camera); it != m_Blooms.end())
         {
+            const uint32_t bloomWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(renderWidth) * sceneRenderSettings.bloomResolutionScale)));
+            const uint32_t bloomHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(renderHeight) * sceneRenderSettings.bloomResolutionScale)));
             for (auto &bloom : it->second)
             {
                 if (bloom)
-                    bloom->Resize(renderWidth, renderHeight);
+                    bloom->Resize(bloomWidth, bloomHeight);
             }
         }
 
@@ -82,8 +86,22 @@ namespace ignite
             for (auto &gtao : it->second)
             {
                 if (gtao)
-                    gtao->Resize(renderWidth, renderHeight);
+                    gtao->Resize(renderWidth, renderHeight, sceneRenderSettings.gtaoResolutionScale);
             }
+        }
+
+        if (auto it = m_SSRs.find(camera); it != m_SSRs.end())
+        {
+            for (auto &ssr : it->second)
+            {
+                if (ssr)
+                    ssr->Resize(renderWidth, renderHeight, sceneRenderSettings.ssrResolutionScale);
+            }
+        }
+
+        if (m_OutlineJFA && m_OutlineJFA->GetOutputTexture())
+        {
+            m_OutlineJFA->CreateOutputTexture(renderWidth, renderHeight);
         }
 
         auto it = m_RenderTargets.find(camera);
@@ -105,6 +123,8 @@ namespace ignite
                 target->sceneResolvedRT->Resize(renderWidth, renderHeight, false);
             if (target->widgetRT)
                 target->widgetRT->Resize(width, height, false);
+            if (target->gizmoRT)
+                target->gizmoRT->Resize(width, height, false);
             if (target->compositeRT)
                 target->compositeRT->Resize(width, height, false);
             if (target->postProcessRT)
@@ -114,6 +134,10 @@ namespace ignite
                 if (historyRT)
                     historyRT->Resize(width, height, false);
             }
+            target->taaHistoryValid = false;
+            target->prevSceneColor.reset();
+            target->prevSceneColorValid = false;
+            target->ssrHistoryValid = false;
             target->taaHistoryValid = false;
 
             if (target->debugRT)
@@ -144,6 +168,28 @@ namespace ignite
         else if (target->widgetRT->GetWidth() != width || target->widgetRT->GetHeight() != height)
         {
             target->widgetRT->Resize(width, height);
+        }
+    }
+
+    void SceneRenderer::EnsureGizmoRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
+    {
+        const uint32_t safeW = std::max(width, 1u);
+        const uint32_t safeH = std::max(height, 1u);
+        if (!target->gizmoRT)
+        {
+            RenderTargetCreateInfo createInfo = {};
+            createInfo.width = safeW;
+            createInfo.height = safeH;
+            createInfo.attachments =
+            {
+                FramebufferAttachments{ "[Gizmo DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
+                FramebufferAttachments{ "[Gizmo ColorAttachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT },
+            };
+            target->gizmoRT = RenderTarget::Create(createInfo, "[Scene Renderer] Gizmo RT");
+        }
+        else if (target->gizmoRT->GetWidth() != safeW || target->gizmoRT->GetHeight() != safeH)
+        {
+            target->gizmoRT->Resize(safeW, safeH);
         }
     }
 
@@ -179,10 +225,11 @@ namespace ignite
             createInfo.height = height;
             createInfo.attachments =
             {
-                FramebufferAttachments{ "[TAA History Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::SHADER_RESOURCE }
+                FramebufferAttachments{ "[TAA History Color Attachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT }
             };
             for (Ref<RenderTarget> &historyRT : target->taaHistoryRT)
                 historyRT = RenderTarget::Create(createInfo, "[Scene Renderer] TAA History RT");
+            target->taaHistoryValid = false;
         }
         else if (target->taaHistoryRT[0]->GetWidth() != width || target->taaHistoryRT[0]->GetHeight() != height)
         {
@@ -191,6 +238,7 @@ namespace ignite
                 if (historyRT)
                     historyRT->Resize(width, height);
             }
+            target->taaHistoryValid = false;
         }
     }
 
@@ -233,6 +281,14 @@ namespace ignite
         if (!sampleCountChanged && !resolveRTMissing)
             return;
 
+        if (!m_ResizeWaitedThisFrame)
+        {
+            GPUUploadSync::DeviceWaitIdle(m_Device);
+            BindingCache::Clear();
+            ImGui_NRI::ClearTextureCache();
+            m_ResizeWaitedThisFrame = true;
+        }
+
         target->msaaSampleCount = desiredSampleCount;
 
         RenderTargetCreateInfo sceneRTCreateInfo = {};
@@ -267,7 +323,44 @@ namespace ignite
 
         target->debugRT = nullptr;
         target->depthPrepassRT = nullptr;
+        target->prevSceneColor.reset();
+        target->prevSceneColorValid = false;
         m_CompositeBindingSetCache.clear();
+    }
+
+    void SceneRenderer::EnsurePrevSceneColor(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        if (!target)
+            return;
+        const uint32_t safeW = std::max(renderWidth, 1u);
+        const uint32_t safeH = std::max(renderHeight, 1u);
+        if (target->prevSceneColor
+            && target->prevSceneColor->GetWidth() == static_cast<int>(safeW)
+            && target->prevSceneColor->GetHeight() == static_cast<int>(safeH))
+        {
+            return;
+        }
+
+        TextureCreateInfo info;
+        info.width = safeW;
+        info.height = safeH;
+        info.depth = 1;
+        info.mipLevels = 1;
+        info.arraySize = 1;
+        info.sampleCount = 1;
+        info.dimension = nri::TextureType::TEXTURE_2D;
+        info.format = nri::Format::RGBA16_SFLOAT;
+        info.isRenderTarget = false;
+        info.isUAV = false;
+        info.bindless = false;
+        info.samplerLinearFiltering = true;
+        info.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
+        info.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
+        info.initialLayout = nri::Layout::SHADER_RESOURCE;
+        info.initialAccess = nri::AccessBits::SHADER_RESOURCE;
+        info.initialStages = nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER;
+        target->prevSceneColor = Texture::Create(info, "[SSR Prev Scene Color]");
+        target->prevSceneColorValid = false;
     }
 
     Ref<CameraRenderTarget> SceneRenderer::GetOrCreateRenderTarget(ICamera *camera)
@@ -373,7 +466,7 @@ namespace ignite
         return SSAOs;
     }
 
-    std::vector<Ref<GTAO>> SceneRenderer::GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight)
+    std::vector<Ref<GTAO>> SceneRenderer::GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale)
     {
         const uint32_t safeW = std::max(renderWidth, 1u);
         const uint32_t safeH = std::max(renderHeight, 1u);
@@ -383,7 +476,7 @@ namespace ignite
             for (auto &gtao : it->second)
             {
                 if (gtao)
-                    gtao->Resize(safeW, safeH);
+                    gtao->Resize(safeW, safeH, resolutionScale);
             }
             return it->second;
         }
@@ -393,9 +486,35 @@ namespace ignite
             static_cast<uint32_t>(m_CommandBufferSlots.size()));
         std::vector<Ref<GTAO>> gtaos(slotCount);
         for (uint32_t i = 0; i < slotCount; ++i)
-            gtaos[i] = CreateRef<GTAO>(safeW, safeH);
+            gtaos[i] = CreateRef<GTAO>(safeW, safeH, resolutionScale);
 
         m_GTAOs.emplace(camera, gtaos);
         return gtaos;
+    }
+
+    std::vector<Ref<SSR>> SceneRenderer::GetOrCreateSSRs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale)
+    {
+        const uint32_t safeW = std::max(renderWidth, 1u);
+        const uint32_t safeH = std::max(renderHeight, 1u);
+        auto it = m_SSRs.find(camera);
+        if (it != m_SSRs.end())
+        {
+            for (auto &ssr : it->second)
+            {
+                if (ssr)
+                    ssr->Resize(safeW, safeH, resolutionScale);
+            }
+            return it->second;
+        }
+
+        const uint32_t slotCount = std::max<uint32_t>(
+            DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight,
+            static_cast<uint32_t>(m_CommandBufferSlots.size()));
+        std::vector<Ref<SSR>> ssrs(slotCount);
+        for (uint32_t i = 0; i < slotCount; ++i)
+            ssrs[i] = CreateRef<SSR>(safeW, safeH, resolutionScale);
+
+        m_SSRs.emplace(camera, ssrs);
+        return ssrs;
     }
 }

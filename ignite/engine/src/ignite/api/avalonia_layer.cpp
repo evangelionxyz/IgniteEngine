@@ -14,6 +14,8 @@
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/asset/asset_worker.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/serializer/scene_serializer.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/scene/prefab.hpp"
@@ -35,6 +37,88 @@
 
 namespace ignite
 {
+    namespace
+    {
+        AABB ComputeAvaloniaEntityBounds(Entity entity)
+        {
+            if (!entity.IsValid())
+                return AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+
+            AssetManager *am = AssetManager::GetInstance();
+            if (entity.HasComponent<StaticMeshComponent>() && am)
+            {
+                const auto &smc = entity.GetComponent<StaticMeshComponent>();
+                if (smc.handle != AssetHandle(0))
+                {
+                    if (Ref<StaticMesh> mesh = am->GetAsset<StaticMesh>(smc.handle))
+                    {
+                        const AABB &aabb = (glm::length(mesh->localAABB.GetSize()) > 1e-4f)
+                            ? mesh->localAABB
+                            : mesh->CalculateLocalAABB();
+                        if (glm::length(aabb.GetSize()) > 1e-4f)
+                            return aabb;
+                    }
+                }
+            }
+            if (entity.HasComponent<SkeletalMeshComponent>() && am)
+            {
+                const auto &skc = entity.GetComponent<SkeletalMeshComponent>();
+                if (skc.handle != AssetHandle(0))
+                {
+                    if (Ref<SkeletalMesh> mesh = am->GetAsset<SkeletalMesh>(skc.handle))
+                    {
+                        const AABB &aabb = (glm::length(mesh->localAABB.GetSize()) > 1e-4f)
+                            ? mesh->localAABB
+                            : mesh->CalculateLocalAABB();
+                        if (glm::length(aabb.GetSize()) > 1e-4f)
+                            return aabb;
+                    }
+                }
+            }
+            if (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>())
+                return AABB::FromMinMax(glm::vec3(-0.5f, -0.5f, 0.0f), glm::vec3(0.5f, 0.5f, 0.0f));
+
+            return AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+        }
+
+        void ComputeAvaloniaSharedGizmo(const std::unordered_map<UUID, Entity> &selectedEntities, glm::vec3 &outPivot, AABB &outBounds)
+        {
+            outPivot = glm::vec3(0.0f);
+            if (selectedEntities.empty())
+            {
+                outBounds = AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+                return;
+            }
+            for (Entity entity : selectedEntities | std::views::values)
+                outPivot += entity.GetTransform().world.translation;
+            outPivot /= static_cast<float>(selectedEntities.size());
+
+            glm::vec3 boundsMin(std::numeric_limits<float>::max());
+            glm::vec3 boundsMax(std::numeric_limits<float>::lowest());
+            bool anyValid = false;
+            for (Entity entity : selectedEntities | std::views::values)
+            {
+                const AABB localBounds = ComputeAvaloniaEntityBounds(entity);
+                const glm::mat4 worldMat = entity.GetTransform().world.GetMatrix();
+                for (int corner = 0; corner < 8; ++corner)
+                {
+                    const glm::vec3 c(
+                        (corner & 1) ? localBounds.max.x : localBounds.min.x,
+                        (corner & 2) ? localBounds.max.y : localBounds.min.y,
+                        (corner & 4) ? localBounds.max.z : localBounds.min.z);
+                    const glm::vec3 rel = glm::vec3(worldMat * glm::vec4(c, 1.0f)) - outPivot;
+                    boundsMin = glm::min(boundsMin, rel);
+                    boundsMax = glm::max(boundsMax, rel);
+                    anyValid = true;
+                }
+            }
+            if (!anyValid || glm::any(glm::lessThanEqual(boundsMax - boundsMin, glm::vec3(1e-4f))))
+                outBounds = AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+            else
+                outBounds = AABB::FromMinMax(boundsMin, boundsMax);
+        }
+    }
+
     AvaloniaLayer::AvaloniaLayer(uint32_t width, uint32_t height)
         : Layer("AvaloniaLayer")
         , m_Width(width)
@@ -50,7 +134,7 @@ namespace ignite
         m_EditorCamera.UpdateView();
         m_EditorCamera.UpdateProjection(width, height);
         m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
-        m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+        m_Gizmo.SetOperation(GizmoOperation::NONE);
 
         if (auto *imguiLayer = Application::GetInstance()->GetImGuiLayer())
         {
@@ -165,6 +249,51 @@ namespace ignite
         m_SceneRenderer->ResizeFramebuffer(cameraToUse, m_Width, m_Height);
         m_SceneRenderer->SetActiveScene(activeScene);
         m_SceneRenderer->BeginFrame();
+
+        if (!activeScene->IsPlaying() && m_GizmoOperation != GizmoOperation::NONE && !m_SelectedEntities.empty())
+        {
+            GizmoInfo gizmoInfo;
+            gizmoInfo.cameraView = m_EditorCamera.GetView();
+            gizmoInfo.cameraProjection = m_EditorCamera.GetProjection();
+            gizmoInfo.cameraPosition = m_EditorCamera.position;
+            gizmoInfo.cameraForward = m_EditorCamera.GetForwardDirection();
+            gizmoInfo.cameraType = m_EditorCamera.projectionType;
+            gizmoInfo.viewRect = Rect(glm::vec2(0.0f), glm::vec2(static_cast<float>(std::max(1u, m_Width)), static_cast<float>(std::max(1u, m_Height))));
+            gizmoInfo.isSnapping = m_SnapEnabled;
+            switch (m_GizmoOperation)
+            {
+            case GizmoOperation::ROTATE:    gizmoInfo.snapValue = m_SnapValues[1]; break;
+            case GizmoOperation::SCALE:
+            case GizmoOperation::BOUND_SIZING_2D:
+            case GizmoOperation::BOUND_SIZING_3D:
+                gizmoInfo.snapValue = m_SnapValues[2];
+                break;
+            default:                        gizmoInfo.snapValue = m_SnapValues[0]; break;
+            }
+            m_Gizmo.SetInfo(gizmoInfo);
+
+            if (m_SelectedEntities.size() > 1)
+            {
+                glm::vec3 pivot(0.0f);
+                AABB sharedBounds(glm::vec3(0.0f), glm::vec3(1.0f));
+                ComputeAvaloniaSharedGizmo(m_SelectedEntities, pivot, sharedBounds);
+                m_Gizmo.BuildDrawList(glm::translate(glm::mat4(1.0f), pivot), sharedBounds);
+                m_SceneRenderer->SetGizmoDrawList(m_Gizmo.GetDrawList());
+            }
+            else if (Entity entity = GetSelectedEntity(); entity.IsValid())
+            {
+                m_Gizmo.BuildDrawList(entity.GetTransform().world.GetMatrix(), ComputeAvaloniaEntityBounds(entity));
+                m_SceneRenderer->SetGizmoDrawList(m_Gizmo.GetDrawList());
+            }
+            else
+            {
+                m_SceneRenderer->ClearGizmoDrawList();
+            }
+        }
+        else
+        {
+            m_SceneRenderer->ClearGizmoDrawList();
+        }
 
         constexpr bool drawDebug = true;
         FrameContext *frameContext = Renderer::GetCurrentFrameContext();
@@ -965,14 +1094,14 @@ namespace ignite
 
         if (!uuids || count == 0)
         {
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+            m_Gizmo.SetOperation(GizmoOperation::NONE);
             return;
         }
 
         Ref<Scene> scene = GetActiveScene();
         if (!scene)
         {
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+            m_Gizmo.SetOperation(GizmoOperation::NONE);
             return;
         }
 
@@ -990,7 +1119,7 @@ namespace ignite
 
         if (m_SelectedEntities.empty())
         {
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+            m_Gizmo.SetOperation(GizmoOperation::NONE);
         }
         else
         {
@@ -1156,6 +1285,8 @@ namespace ignite
         GizmoInfo gizmoInfo;
         gizmoInfo.cameraView = view;
         gizmoInfo.cameraProjection = projection;
+        gizmoInfo.cameraPosition = m_EditorCamera.position;
+        gizmoInfo.cameraForward = m_EditorCamera.GetForwardDirection();
         gizmoInfo.cameraType = m_EditorCamera.projectionType;
         gizmoInfo.viewRect = Rect({ 0, 0 }, { viewport->Size.x, viewport->Size.y });
 
@@ -1165,105 +1296,97 @@ namespace ignite
         {
             case GizmoOperation::TRANSLATE: gizmoInfo.snapValue = m_SnapValues[0]; break;
             case GizmoOperation::ROTATE:    gizmoInfo.snapValue = m_SnapValues[1]; break;
-            case GizmoOperation::SCALE:     gizmoInfo.snapValue = m_SnapValues[2]; break;
+            case GizmoOperation::SCALE:
+            case GizmoOperation::BOUND_SIZING_2D:
+            case GizmoOperation::BOUND_SIZING_3D:
+                gizmoInfo.snapValue = m_SnapValues[2];
+                break;
             default:                        gizmoInfo.snapValue = m_SnapValues[0]; break;
         }
 
         m_Gizmo.SetInfo(gizmoInfo);
 
-        // Start manipulation: Fired only on the first frame of interaction
-        // const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
-        // bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
         const bool gizmoEnabled = m_GizmoOperation != GizmoOperation::NONE && !m_SelectedEntities.empty();
-        bool isManipulatingNow = gizmoEnabled && m_Gizmo.IsManipulating();
 
         static std::unordered_map<UUID, TransformComponent> initialTransforms;
+        static glm::vec3 initialPivot(0.0f);
+        static AABB initialSharedBounds(glm::vec3(0.0f), glm::vec3(1.0f));
 
-        if (isManipulatingNow && !m_IsGizmoManipulating)
+        const bool isPlayOrSimulate = m_ActiveScene->GetState() == ESceneState::Play || m_ActiveScene->GetState() == ESceneState::Simulate;
+        const bool wasManipulating = m_IsGizmoManipulating;
+
+        if (!wasManipulating && gizmoEnabled)
         {
             initialTransforms.clear();
             for (const auto &[uuid, entity] : m_SelectedEntities)
             {
-                // Store the original transform of each selected entity
                 initialTransforms[uuid] = entity.GetTransform();
+            }
+            if (m_SelectedEntities.size() > 1)
+            {
+                ComputeAvaloniaSharedGizmo(m_SelectedEntities, initialPivot, initialSharedBounds);
             }
         }
 
-        // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
-        bool isPlayOrSimulate = m_ActiveScene->GetState() == ESceneState::Play || m_ActiveScene->GetState() == ESceneState::Simulate;
-        bool wasManipulating = m_IsGizmoManipulating;
-
-        m_IsGizmoManipulating = isManipulatingNow;
-        m_IsGizmoBeingUse = gizmoEnabled && (isManipulatingNow || m_Gizmo.IsHovered());
+        bool isManipulatingNow = false;
 
         if (gizmoEnabled && m_SelectedEntities.size() > 1)
         {
-            // Step 1: Compute shared pivot (center of all selected entities)
-            glm::vec3 pivot(0.0f);
-            for (Entity entity : m_SelectedEntities | std::views::values)
+            glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), initialPivot);
+            glm::mat4 manipulatedTransform = gizmoTransform;
+
+            isManipulatingNow = m_Gizmo.Manipulate(manipulatedTransform, initialSharedBounds);
+            m_IsGizmoManipulating = isManipulatingNow;
+            m_IsGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
+
+            if (isManipulatingNow)
             {
-                pivot += entity.GetTransform().world.translation;
-            }
-            pivot /= static_cast<float>(m_SelectedEntities.size());
+                const glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
 
-            // Step 2: create a transform matrix for the gizmo at the pivot point
-            glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
-            glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
-
-            // Step 3: Manipulate the matrix
-            m_Gizmo.Manipulate(manipulatedTransform);
-
-            if (m_IsGizmoManipulating)
-            {
-                // THis delta is now the TOTAL change from the moment of manipulation began
-                glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
-
-                // Decompose the total delta
                 glm::vec3 deltaTranslation, deltaScale, deltaRotation;
                 Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
+                const GizmoOperation op = m_Gizmo.GetOperation();
+                const bool applyScale = (op == GizmoOperation::SCALE || op == GizmoOperation::BOUND_SIZING_2D || op == GizmoOperation::BOUND_SIZING_3D);
+
+                const glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -initialPivot);
+                const glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), initialPivot);
+                const glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
 
                 for (auto &[uuid, entity] : m_SelectedEntities)
                 {
-                    // Get the live transform component to apply changes to it
+                    auto itInit = initialTransforms.find(uuid);
+                    if (itInit == initialTransforms.end())
+                        continue;
+
                     auto &tr = entity.GetTransform();
+                    const auto &initialTransform = itInit->second;
+                    const glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
 
-                    // Get the ORIGINAL transform we stored at the beginning of the manipulation
-                    const auto &initialTransform = initialTransforms.at(uuid);
-                    glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
+                    const glm::vec3 newWorldPos = glm::vec3(fromPivot * gizmoDelta * toPivot * glm::vec4(initialTransform.world.translation, 1.0f));
+                    glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * initialWorldMatrix;
+                    newWorldMatrix[3] = glm::vec4(newWorldPos, 1.0f);
 
-                    // Apply Translation and Rotation around the shared pivot
-                    glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
-                    glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
-                    glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
-
-                    // Apply the total delta to the ORIGINAL world matrix
-                    glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
                     glm::vec3 newTranslation, newRotationEuler, newScale;
                     Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
 
-                    // ----- Apply Scale and Update Local Transform -----
                     if (entity.GetParentUUID() != UUID(0))
                     {
                         Entity parent = SceneManager::GetEntity(m_ActiveScene.get(), entity.GetParentUUID());
                         const auto &parentTr = parent.GetTransform();
-                        glm::mat4 parentWorld = parentTr.world.GetMatrix();
-                        glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
+                        const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                        const glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
                         glm::vec3 localTranslation, localEuler, localScale;
                         Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
                         tr.local.translation = localTranslation;
                         tr.local.rotation = glm::quat(localEuler);
-
-                        // Apply the total scale delta to the ORIGINAL local scale
-                        tr.local.scale = initialTransform.local.scale * deltaScale;
+                        tr.local.scale = applyScale ? (initialTransform.local.scale * deltaScale) : initialTransform.local.scale;
                     }
                     else
                     {
                         tr.local.translation = newTranslation;
                         tr.local.rotation = glm::quat(newRotationEuler);
-
-                        // Apply the total scale delta to the ORIGINAL local scale
-                        tr.local.scale = initialTransform.local.scale * deltaScale;
+                        tr.local.scale = applyScale ? (initialTransform.local.scale * deltaScale) : initialTransform.local.scale;
                     }
 
                     tr.dirty = true;
@@ -1348,15 +1471,19 @@ namespace ignite
             Entity entity = GetSelectedEntity();
             auto &tr = entity.GetTransform();
             glm::mat4 transformMatrix = tr.world.GetMatrix();
+            const AABB localBounds = ComputeAvaloniaEntityBounds(entity);
 
-            m_Gizmo.Manipulate(transformMatrix);
+            isManipulatingNow = m_Gizmo.Manipulate(transformMatrix, localBounds);
+            m_IsGizmoManipulating = isManipulatingNow;
+            m_IsGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
 
-            if (m_Gizmo.IsManipulating())
+            if (isManipulatingNow)
             {
                 const glm::vec3 preservedLocalScale = tr.local.scale;
                 glm::vec3 translation, rotation, scale;
                 Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
-                const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
+                const GizmoOperation op = m_Gizmo.GetOperation();
+                const bool applyScale = (op == GizmoOperation::SCALE || op == GizmoOperation::BOUND_SIZING_2D || op == GizmoOperation::BOUND_SIZING_3D);
 
                 if (entity.GetParentUUID() != UUID(0))
                 {
@@ -1369,29 +1496,13 @@ namespace ignite
                     Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
                     tr.local.translation = localTranslation;
                     tr.local.rotation = glm::quat(localEuler);
-
-                    if (op == ImGuizmo::SCALE)
-                    {
-                        tr.local.scale = localScale;
-                    }
-                    else
-                    {
-                        tr.local.scale = preservedLocalScale;
-                    }
+                    tr.local.scale = applyScale ? localScale : preservedLocalScale;
                 }
                 else
                 {
                     tr.local.translation = translation;
                     tr.local.rotation = glm::quat(rotation);
-
-                    if (op == ImGuizmo::SCALE)
-                    {
-                        tr.local.scale = scale;
-                    }
-                    else
-                    {
-                        tr.local.scale = preservedLocalScale;
-                    }
+                    tr.local.scale = applyScale ? scale : preservedLocalScale;
                 }
                 tr.dirty = true;
 
@@ -1459,10 +1570,11 @@ namespace ignite
             }
 
         }
-        
-
-        m_IsGizmoManipulating = gizmoEnabled && m_Gizmo.IsManipulating();
-        m_IsGizmoBeingUse = gizmoEnabled && (m_IsGizmoManipulating || m_Gizmo.IsHovered());
+        else
+        {
+            m_IsGizmoManipulating = false;
+            m_IsGizmoBeingUse = false;
+        }
 
         ImGui::End();
     }
@@ -1485,7 +1597,7 @@ namespace ignite
         {
             m_IsGizmoManipulating = false;
             m_IsGizmoBeingUse = false;
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+            m_Gizmo.SetOperation(GizmoOperation::NONE);
             return;
         }
 
@@ -1495,21 +1607,7 @@ namespace ignite
             m_IsGizmoBeingUse = false;
         }
 
-        switch (m_GizmoOperation)
-        {
-        case GizmoOperation::TRANSLATE:
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-            break;
-        case GizmoOperation::ROTATE:
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::ROTATE);
-            break;
-        case GizmoOperation::SCALE:
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::SCALE);
-            break;
-        default:
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
-            break;
-        }
+        m_Gizmo.SetOperation(m_GizmoOperation);
     }
 
     void AvaloniaLayer::SetGizmoOperation(int op)
@@ -1556,12 +1654,12 @@ namespace ignite
 
     void AvaloniaLayer::SetGizmoMode(int mode)
     {
-        m_Gizmo.SetMode(mode == 1 ? ImGuizmo::MODE::WORLD : ImGuizmo::MODE::LOCAL);
+        m_Gizmo.SetMode(mode == 1 ? GizmoMode::WORLD : GizmoMode::LOCAL);
     }
 
     int AvaloniaLayer::GetGizmoMode() const
     {
-        return m_Gizmo.GetMode() == ImGuizmo::MODE::WORLD ? 1 : 0;
+        return m_Gizmo.GetMode() == GizmoMode::WORLD ? 1 : 0;
     }
 
     void AvaloniaLayer::SetSnapEnabled(bool enabled)

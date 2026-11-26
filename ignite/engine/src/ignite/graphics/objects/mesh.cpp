@@ -831,7 +831,91 @@ namespace ignite
 
             material->gpuData.metallicFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
+            material->gpuData.metallicChannel = 2; // glTF 2.0 metallicRoughnessTexture: B = metallic
+            material->gpuData.roughnessChannel = 1; // glTF 2.0 metallicRoughnessTexture: G = roughness
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
+            material->gpuData.alphaCutoff = static_cast<float>(gltfMaterial.alphaCutoff);
+            material->gpuData.normalScale = static_cast<float>(gltfMaterial.normalTexture.scale);
+
+            auto getExtFloat = [](const tinygltf::Value &ext, const char *key, float fallback) -> float
+            {
+                if (ext.IsObject() && ext.Has(key))
+                {
+                    const tinygltf::Value &v = ext.Get(key);
+                    if (v.IsNumber())
+                        return static_cast<float>(v.GetNumberAsDouble());
+                }
+                return fallback;
+            };
+            auto getExtColor3 = [](const tinygltf::Value &ext, const char *key, const glm::vec3 &fallback) -> glm::vec3
+            {
+                if (ext.IsObject() && ext.Has(key))
+                {
+                    const tinygltf::Value &arr = ext.Get(key);
+                    if (arr.IsArray() && arr.ArrayLen() >= 3)
+                    {
+                        return {
+                            static_cast<float>(arr.Get(0).GetNumberAsDouble()),
+                            static_cast<float>(arr.Get(1).GetNumberAsDouble()),
+                            static_cast<float>(arr.Get(2).GetNumberAsDouble())
+                        };
+                    }
+                }
+                return fallback;
+            };
+
+            const auto &exts = gltfMaterial.extensions;
+            if (auto it = exts.find("KHR_materials_ior"); it != exts.end())
+            {
+                material->gpuData.specularIOR = std::max(1.0f, getExtFloat(it->second, "ior", material->gpuData.specularIOR));
+            }
+            if (auto it = exts.find("KHR_materials_specular"); it != exts.end())
+            {
+                material->gpuData.specularWeight = std::clamp(getExtFloat(it->second, "specularFactor", material->gpuData.specularWeight), 0.0f, 1.0f);
+                const glm::vec3 specCol = getExtColor3(it->second, "specularColorFactor", glm::vec3(material->gpuData.specularColor));
+                material->gpuData.specularColor = glm::vec4(specCol, 1.0f);
+            }
+            if (auto it = exts.find("KHR_materials_clearcoat"); it != exts.end())
+            {
+                material->gpuData.coatWeight = std::clamp(getExtFloat(it->second, "clearcoatFactor", 0.0f), 0.0f, 1.0f);
+                material->gpuData.coatRoughness = std::clamp(getExtFloat(it->second, "clearcoatRoughnessFactor", 0.0f), 0.0f, 1.0f);
+            }
+            if (auto it = exts.find("KHR_materials_sheen"); it != exts.end())
+            {
+                const glm::vec3 sheenCol = getExtColor3(it->second, "sheenColorFactor", glm::vec3(0.0f));
+                material->gpuData.fuzzColor = glm::vec4(sheenCol, 1.0f);
+                material->gpuData.fuzzRoughness = std::clamp(getExtFloat(it->second, "sheenRoughnessFactor", 0.5f), 0.0f, 1.0f);
+                if (sheenCol.r > 0.0f || sheenCol.g > 0.0f || sheenCol.b > 0.0f)
+                {
+                    material->gpuData.fuzzWeight = 1.0f;
+                }
+            }
+            if (auto it = exts.find("KHR_materials_transmission"); it != exts.end())
+            {
+                material->gpuData.transmissionWeight = std::clamp(getExtFloat(it->second, "transmissionFactor", 0.0f), 0.0f, 1.0f);
+            }
+            if (auto it = exts.find("KHR_materials_volume"); it != exts.end())
+            {
+                const float attDist = getExtFloat(it->second, "attenuationDistance", 0.0f);
+                material->gpuData.transmissionDepth = (attDist > 0.0f && std::isfinite(attDist)) ? attDist : 0.0f;
+                const glm::vec3 attCol = getExtColor3(it->second, "attenuationColor", glm::vec3(1.0f));
+                material->gpuData.transmissionColor = glm::vec4(attCol, 1.0f);
+                const float thickness = getExtFloat(it->second, "thicknessFactor", 0.0f);
+                if (thickness > 0.0f)
+                {
+                    material->gpuData.transmissionScatter = std::clamp(thickness * 0.25f, 0.0f, 1.0f);
+                }
+            }
+            if (auto it = exts.find("KHR_materials_emissive_strength"); it != exts.end())
+            {
+                material->gpuData.emissionLuminance = std::max(0.0f, getExtFloat(it->second, "emissiveStrength", material->gpuData.emissionLuminance));
+            }
+            if (auto it = exts.find("KHR_materials_anisotropy"); it != exts.end())
+            {
+                material->gpuData.specularAnisotropy = std::clamp(getExtFloat(it->second, "anisotropyStrength", 0.0f), 0.0f, 1.0f);
+                const float rotRad = getExtFloat(it->second, "anisotropyRotation", 0.0f);
+                material->gpuData.specularRotation = rotRad / (2.0f * glm::pi<float>());
+            }
 
             const std::string cleanStem = SanitizeFilenameComponent(meshStem, "Mesh");
             auto resolveTextureName = [&cleanStem](const LoadedGltfTexture &tex, const char *slotTypeName) -> std::string

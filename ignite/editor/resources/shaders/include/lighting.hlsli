@@ -39,6 +39,59 @@ static float3 MultiBounceAO(float ao, float3 albedo)
     return saturate(max(x, ((x * a + b) * x + c) * x));
 }
 
+static void SampleEnvAndProbesAtDir(
+    float3 worldPos,
+    float3 N,
+    float3 dir,
+    float rough,
+    float3 coatDir,
+    float coatRough,
+    float3 combinedDiff,
+    float cameraAltitudeKm,
+    Scene scene,
+    GIData gi,
+    StructuredBuffer<ReflectionProbeGPU> reflectionProbes,
+    Texture2D environmentMapTexture,
+    SamplerState sampler0,
+    out float3 outBase,
+    out float3 outCoat)
+{
+    float3 skyB = float3(0.0f, 0.0f, 0.0f);
+    float3 skyC = float3(0.0f, 0.0f, 0.0f);
+    if (scene.enableIBL != 0)
+    {
+        if (gi.skyPrefilterCubeIndex >= 0)
+        {
+            TextureCube skyPrefilterCube = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyPrefilterCubeIndex)];
+            float maxSkyMip = float(max(gi.skyPrefilterMipCount - 1, 0));
+            skyB = skyPrefilterCube.SampleLevel(sampler0, dir, saturate(rough) * maxSkyMip).rgb;
+            skyC = skyPrefilterCube.SampleLevel(sampler0, coatDir, saturate(coatRough) * maxSkyMip).rgb;
+        }
+        else
+        {
+            float3 skySharpB = SampleEnvironmentMap(environmentMapTexture, sampler0, dir, scene.skyType, cameraAltitudeKm);
+            float3 skyBlurB = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, dir, rough, scene.skyType, cameraAltitudeKm);
+            skyB = lerp(skySharpB, skyBlurB, smoothstep(0.0f, 0.6f, rough));
+
+            float3 skySharpC = SampleEnvironmentMap(environmentMapTexture, sampler0, coatDir, scene.skyType, cameraAltitudeKm);
+            float3 skyBlurC = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, coatDir, coatRough, scene.skyType, cameraAltitudeKm);
+            skyC = lerp(skySharpC, skyBlurC, smoothstep(0.0f, 0.6f, coatRough));
+        }
+    }
+
+    outBase = skyB;
+    outCoat = skyC;
+    if (gi.reflectionProbeCount > 0 && gi.reflectionCubeArrayIndex >= 0 && gi.viewportInvSizeAndFlags.w > 0.5f)
+    {
+        float3 probeB, probeC;
+        float probeWeight = 0.0f;
+        EvaluateReflectionProbes(worldPos, N, dir, rough, coatRough,
+            combinedDiff, gi, reflectionProbes, sampler0, probeB, probeC, probeWeight);
+        outBase = lerp(skyB, probeB, probeWeight);
+        outCoat = lerp(skyC, probeC, probeWeight);
+    }
+}
+
 static PSOutput EvaluateMeshPixel(
     PixelVertexInput input,
     bool isFrontFace,
@@ -105,7 +158,8 @@ static PSOutput EvaluateMeshPixel(
     float finalAlpha = baseColorSample.a * material.baseColorFactor.a;
 
     // Discard nearly transparent fragments in transparent mode, or below cutoff in masked mode
-    if ((material.blendMode == 1 && finalAlpha < 0.001f) || (material.blendMode == 2 && finalAlpha < 0.5f))
+    float alphaCutoff = (material.alphaCutoff > 0.0f) ? material.alphaCutoff : 0.5f;
+    if ((material.blendMode == 1 && finalAlpha < 0.001f) || (material.blendMode == 2 && finalAlpha < alphaCutoff))
     {
         discard;
     }
@@ -118,7 +172,13 @@ static PSOutput EvaluateMeshPixel(
         return result;
     }
 
-    // Tangent space normal mapping with safe orthonormal basis fallback
+    // Tangent space normal mapping with safe orthonormal basis fallback.
+    // Under frontCounterClockwise = false + negative viewport height, double-sided backfaces
+    // in the main color pass arrive with isFrontFace == true; flip them toward the viewer.
+    if ((gi.captureMode == 0 && isFrontFace) || (gi.captureMode == 2 && !isFrontFace))
+    {
+        N = -N;
+    }
     float3 finalNormal = N;
     float3 T = input.tangent - N * dot(N, input.tangent);
     float tLenSq = dot(T, T);
@@ -133,11 +193,24 @@ static PSOutput EvaluateMeshPixel(
     }
     float3 bitangent = cross(N, T);
     float3 B = dot(bitangent, input.bitangent) < 0.0f ? -bitangent : bitangent;
+    float normalMapLength = 1.0f;
     if (material.normalTextureIndex >= 0)
     {
         Texture2D normalMapTex = ResourceDescriptorHeap[SafeBindlessIndex(material.normalTextureIndex)];
         float3 tangentNormal = normalMapTex.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
+        normalMapLength = length(tangentNormal);
+        tangentNormal.xy *= material.normalScale;
         finalNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
+    }
+
+    if (gi.captureMode == 0 && (gi.renderFeatureFlags & 1u) != 0u)
+    {
+        roughness = ComputeGeometricSpecularAA(N, roughness, 0.25f, 0.18f);
+        if (material.normalTextureIndex >= 0)
+        {
+            roughness = ComputeGeometricSpecularAA(finalNormal, roughness, 0.12f, 0.12f);
+            roughness = ComputeToksvigSpecularAA(roughness, normalMapLength);
+        }
     }
 
     if (scene.renderMode == RENDER_MODE_COLOR
@@ -156,10 +229,16 @@ static PSOutput EvaluateMeshPixel(
         surface.specularIOR = max(material.specularIOR, 1.0f);
         surface.coatWeight = saturate(material.coatWeight);
         surface.coatColor = material.coatColor.rgb;
-        surface.coatRoughness = max(saturate(material.coatRoughness), 0.05f);
+        float coatRough = max(saturate(material.coatRoughness), 0.05f);
+        if (gi.captureMode == 0 && (gi.renderFeatureFlags & 1u) != 0u && surface.coatWeight > 0.001f)
+        {
+            coatRough = ComputeGeometricSpecularAA(N, coatRough, 0.25f, 0.18f);
+        }
+        surface.coatRoughness = coatRough;
         surface.coatIOR = max(material.coatIOR, 1.0f);
         surface.coatDarkening = saturate(material.coatDarkening);
         surface.specularAnisotropy = saturate(material.specularAnisotropy);
+        surface.specularRotation = material.specularRotation;
         surface.subsurfaceWeight = saturate(material.subsurfaceWeight);
         surface.subsurfaceColor = material.subsurfaceColor.rgb;
         surface.subsurfaceRadius = material.subsurfaceRadius.rgb;
@@ -167,6 +246,7 @@ static PSOutput EvaluateMeshPixel(
         surface.transmissionWeight = saturate(material.transmissionWeight);
         surface.transmissionColor = material.transmissionColor.rgb;
         surface.transmissionDepth = material.transmissionDepth;
+        surface.transmissionScatter = saturate(material.transmissionScatter);
         surface.fuzzWeight = saturate(material.fuzzWeight);
         surface.fuzzColor = material.fuzzColor.rgb;
         surface.fuzzRoughness = max(saturate(material.fuzzRoughness), 0.05f);
@@ -180,12 +260,23 @@ static PSOutput EvaluateMeshPixel(
                 ? EvalSHIrradiance4(gi.skySH, finalNormal)
                 : SampleEnvironmentIrradiance(environmentMapTexture, sampler0, finalNormal, scene.skyType, cameraAltitudeKm);
         }
+        else if (gi.captureMode == 1 && gi.biasAndFade.w > 0.5f
+            && gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0 && gi.skySH[0].w > 0.5f)
+        {
+            // Bounce >= 1 when SkyVisibilitySplit is enabled: include sky diffuse attenuated by
+            // previous-bounce sky visibility so skylight bounces into enclosed arches and corridors.
+            skyDiffuseIrradiance = EvalSHIrradiance4(gi.skySH, finalNormal);
+        }
+
+        const bool receiveShadow = (input.receiveShadow != 0u);
 
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
         float3 directLighting = OpenPBRDirect(surface, finalNormal, lightDirection, viewDirection, T, B, irradiance);
 
-        float shadowTerm = SampleShadow(csm, shadowMap, shadowSampler, camera.view,
-            input.worldPos, finalNormal, lightDirection, input.position.xy);
+        float shadowTerm = receiveShadow
+            ? SampleShadow(csm, shadowMap, shadowSampler, camera.view,
+                input.worldPos, finalNormal, lightDirection, input.position.xy)
+            : 1.0f;
 
         directLighting *= shadowTerm;
 
@@ -207,12 +298,18 @@ static PSOutput EvaluateMeshPixel(
 
             float3 toLight = lightVec / d;
             float localShadow = 1.0f;
-            if (gi.captureMode != 0 && gi.bakePointShadowCubeArrayIndex >= 0 && pi < 8)
+            if (receiveShadow)
             {
-                TextureCubeArray<float4> localShadowCubes = ResourceDescriptorHeap[SafeBindlessIndex(gi.bakePointShadowCubeArrayIndex)];
-                float stored = localShadowCubes.SampleLevel(sampler0, float4(-toLight, float(pi)), 0.0f).r;
-                float bias = 0.006f + 0.012f * (1.0f - saturate(dot(finalNormal, toLight)));
-                localShadow = (((d / range) - bias) <= stored) ? 1.0f : 0.0f;
+                localShadow = SampleLocalPointOrSpotShadow(
+                    gi.bakePointShadowCubeArrayIndex,
+                    gi.dynamicPointShadowCubeArrayIndex,
+                    sampler0,
+                    pointLights[pi].shadowParams,
+                    lightPos,
+                    range,
+                    input.worldPos,
+                    finalNormal,
+                    input.position.xy);
             }
 
             float atten = 1.0f / max(constAtt + linAtt * d + quadAtt * (d * d), 1e-4f);
@@ -247,12 +344,18 @@ static PSOutput EvaluateMeshPixel(
                 continue;
 
             float localShadow = 1.0f;
-            if (gi.captureMode != 0 && gi.bakePointShadowCubeArrayIndex >= 0 && si < 4)
+            if (receiveShadow)
             {
-                TextureCubeArray<float4> localShadowCubes = ResourceDescriptorHeap[SafeBindlessIndex(gi.bakePointShadowCubeArrayIndex)];
-                float stored = localShadowCubes.SampleLevel(sampler0, float4(-toLight, float(8 + si)), 0.0f).r;
-                float bias = 0.006f + 0.012f * (1.0f - saturate(dot(finalNormal, toLight)));
-                localShadow = (((d / range) - bias) <= stored) ? 1.0f : 0.0f;
+                localShadow = SampleLocalPointOrSpotShadow(
+                    gi.bakePointShadowCubeArrayIndex,
+                    gi.dynamicPointShadowCubeArrayIndex,
+                    sampler0,
+                    spotLights[si].shadowParams,
+                    lightPos,
+                    range,
+                    input.worldPos,
+                    finalNormal,
+                    input.position.xy);
             }
 
             float atten = 1.0f / max(constAtt + linAtt * d + quadAtt * (d * d), 1e-4f);
@@ -270,10 +373,11 @@ static PSOutput EvaluateMeshPixel(
         float3 ambient = float3(0.0f, 0.0f, 0.0f);
         float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
         float volW = 0.0f;
+        float skyVis = 1.0f;
         float3 volIrradiance = float3(0.0f, 0.0f, 0.0f);
         if (gi.giMode > 0 && gi.biasAndFade.w > 0.5f && gi.viewportInvSizeAndFlags.w > 0.5f)
         {
-            volIrradiance = SampleGIIrradiance(input.worldPos, finalNormal, viewDirection, gi, sampler0, volW) * gi.gridMinAndIntensity.w;
+            volIrradiance = SampleGIIrradianceAndSkyVis(input.worldPos, finalNormal, viewDirection, gi, sampler0, volW, skyVis) * gi.gridMinAndIntensity.w;
         }
 
         float NdotV = saturate(dot(finalNormal, viewDirection));
@@ -282,56 +386,78 @@ static PSOutput EvaluateMeshPixel(
 
         if (gi.captureMode == 0)
         {
-            float3 combinedDiff = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f && gi.viewportInvSizeAndFlags.w > 0.5f)
-                ? lerp(skyDiffuseIrradiance, volIrradiance, volW)
-                : skyDiffuseIrradiance;
-            ambient = kD * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
-
-            // Specular indirect radiance for base and coat roughness lobes
-            float3 R = reflect(-viewDirection, finalNormal);
-            float3 skyBaseRad = float3(0.0f, 0.0f, 0.0f);
-            float3 skyCoatRad = float3(0.0f, 0.0f, 0.0f);
-            if (scene.enableIBL != 0)
+            const bool hasVol = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f && gi.viewportInvSizeAndFlags.w > 0.5f);
+            float3 combinedDiff = skyDiffuseIrradiance;
+            if (hasVol)
             {
-                if (gi.skyPrefilterCubeIndex >= 0)
+                if (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0)
                 {
-                    TextureCube skyPrefilterCube = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyPrefilterCubeIndex)];
-                    float maxSkyMip = float(max(gi.skyPrefilterMipCount - 1, 0));
-                    skyBaseRad = skyPrefilterCube.SampleLevel(sampler0, R, saturate(surface.specularRoughness) * maxSkyMip).rgb;
-                    skyCoatRad = skyPrefilterCube.SampleLevel(sampler0, R, saturate(surface.coatRoughness) * maxSkyMip).rgb;
+                    combinedDiff = volIrradiance * volW + skyDiffuseIrradiance * lerp(1.0f, skyVis, volW);
                 }
                 else
                 {
-                    float3 skySharp = SampleEnvironmentMap(environmentMapTexture, sampler0, R, scene.skyType, cameraAltitudeKm);
-                    float3 skyBlurBase = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, R, surface.specularRoughness, scene.skyType, cameraAltitudeKm);
-                    float3 skyBlurCoat = SampleRoughEnvironmentSpecular(environmentMapTexture, sampler0, R, surface.coatRoughness, scene.skyType, cameraAltitudeKm);
-                    skyBaseRad = lerp(skySharp, skyBlurBase, smoothstep(0.0f, 0.6f, surface.specularRoughness));
-                    skyCoatRad = lerp(skySharp, skyBlurCoat, smoothstep(0.0f, 0.6f, surface.coatRoughness));
+                    combinedDiff = lerp(skyDiffuseIrradiance, volIrradiance, volW);
                 }
             }
 
-            float3 finalBaseRad = skyBaseRad;
-            float3 finalCoatRad = skyCoatRad;
-            if (gi.reflectionProbeCount > 0 && gi.reflectionCubeArrayIndex >= 0 && gi.viewportInvSizeAndFlags.w > 0.5f)
+            // Diffuse indirect (attenuated by transmission on transmissive dielectrics)
+            float3 diffuseIndirect = kD * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
+
+            float baseEffRough = OpenPBRCoatRoughenedRoughness(surface.specularRoughness, surface.coatRoughness, surface.coatWeight);
+            float3 baseR = OpenPBRAnisotropicReflectionDir(viewDirection, finalNormal, T, B, baseEffRough, surface.specularAnisotropy, surface.specularRotation);
+            float3 coatR = reflect(-viewDirection, finalNormal);
+
+            float3 finalBaseRad = float3(0.0f, 0.0f, 0.0f);
+            float3 finalCoatRad = float3(0.0f, 0.0f, 0.0f);
+            SampleEnvAndProbesAtDir(input.worldPos, finalNormal, baseR, baseEffRough, coatR, surface.coatRoughness,
+                combinedDiff, cameraAltitudeKm, scene, gi, reflectionProbes, environmentMapTexture, sampler0,
+                finalBaseRad, finalCoatRad);
+
+            if ((gi.renderFeatureFlags & 2u) != 0u && gi.ssrTextureIndex >= 0 && material.blendMode != 1)
             {
-                float3 probeBaseRad, probeCoatRad;
-                float probeWeight = 0.0f;
-                EvaluateReflectionProbes(input.worldPos, finalNormal, R, surface.specularRoughness, surface.coatRoughness,
-                    combinedDiff, gi, reflectionProbes, sampler0, probeBaseRad, probeCoatRad, probeWeight);
-                finalBaseRad = lerp(skyBaseRad, probeBaseRad, probeWeight);
-                finalCoatRad = lerp(skyCoatRad, probeCoatRad, probeWeight);
+                float2 halfTexelSSR = gi.viewportInvSizeAndFlags.xy;
+                float2 ssrUV = clamp(input.position.xy * gi.viewportInvSizeAndFlags.xy, halfTexelSSR, 1.0f - halfTexelSSR);
+                Texture2D ssrTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.ssrTextureIndex)];
+                float4 ssrSample = ssrTex.SampleLevel(sampler0, ssrUV, 0.0f);
+                float maxR = max(gi.ssrMaxRoughness, 0.05f);
+                float roughFade = 1.0f - smoothstep(maxR * 0.6f, maxR, baseEffRough);
+                float ssrWeight = saturate(ssrSample.a * roughFade * gi.ssrIntensity);
+                finalBaseRad = lerp(finalBaseRad, ssrSample.rgb, ssrWeight);
             }
+
+            // Indirect OpenPBR transmission along refracted vector when transmissionWeight > 0
+            if (surface.transmissionWeight > 0.001f && (scene.enableIBL != 0 || (gi.reflectionProbeCount > 0 && gi.reflectionCubeArrayIndex >= 0)))
+            {
+                float3 refrDir = refract(-viewDirection, finalNormal, 1.0f / max(surface.specularIOR, 1.01f));
+                if (dot(refrDir, refrDir) < 1e-4f)
+                {
+                    refrDir = -viewDirection;
+                }
+                float transRough = saturate(baseEffRough * 0.5f + surface.transmissionScatter * 0.5f);
+                float3 transBaseRad = float3(0.0f, 0.0f, 0.0f);
+                float3 transUnusedCoat = float3(0.0f, 0.0f, 0.0f);
+                SampleEnvAndProbesAtDir(input.worldPos, finalNormal, refrDir, transRough, coatR, surface.coatRoughness,
+                    combinedDiff, cameraAltitudeKm, scene, gi, reflectionProbes, environmentMapTexture, sampler0,
+                    transBaseRad, transUnusedCoat);
+
+                float3 beer = TransmissionBeerLaw(surface.transmissionColor, surface.transmissionDepth, NdotV);
+                float3 scatterTint = lerp(beer, combinedDiff * surface.transmissionColor, surface.transmissionScatter * 0.5f);
+                float3 transmittedIndirect = (1.0f - surface.metalness) * (1.0f - kS) * transBaseRad * scatterTint;
+                diffuseIndirect = lerp(diffuseIndirect, transmittedIndirect, surface.transmissionWeight);
+            }
+            ambient = diffuseIndirect;
 
             if (scene.enableIBL != 0 || (gi.reflectionProbeCount > 0 && gi.reflectionCubeArrayIndex >= 0))
             {
                 float3 coatF = SchlickFresnelCos(NdotV, DielectricF0(max(surface.coatIOR, 1.0f)));
-                float3 coatSpec = surface.coatWeight * coatF;
-                float3 throughCoat = lerp(float3(1.0f, 1.0f, 1.0f), saturate(surface.coatColor) * (1.0f - coatF),
-                    surface.coatWeight * surface.coatDarkening);
-                float3 fuzz = surface.fuzzWeight * surface.fuzzColor * combinedDiff * MultiBounceAO(ao, surface.fuzzColor);
+                float2 coatAB = EnvBRDFApprox(saturate(surface.coatRoughness), NdotV);
+                float coatF0 = DielectricF0(max(surface.coatIOR, 1.0f));
+                float3 coatSpec = surface.coatWeight * saturate(coatF0 * coatAB.x + coatAB.y);
+                float3 throughCoat = OpenPBRThroughCoat(NdotV, coatF, surface);
+                float3 fuzz = surface.fuzzWeight * surface.fuzzColor * EnvSheenApprox(surface.fuzzRoughness, NdotV) * combinedDiff * MultiBounceAO(ao, surface.fuzzColor);
 
-                float baseSO = ComputeSpecularOcclusion(NdotV, ao, surface.specularRoughness);
-                float coatSO = ComputeSpecularOcclusion(NdotV, ao, surface.coatRoughness);
+                float baseSO = ComputeBentNormalSpecularOcclusion(finalNormal, viewDirection, baseR, ao, baseEffRough);
+                float coatSO = ComputeBentNormalSpecularOcclusion(finalNormal, viewDirection, coatR, ao, surface.coatRoughness);
 
                 reflectedSpecular = fuzz + (1.0f - surface.fuzzWeight) *
                     (coatSpec * finalCoatRad * coatSO + kS * throughCoat * finalBaseRad * baseSO);
@@ -341,14 +467,29 @@ static PSOutput EvaluateMeshPixel(
         {
             if (gi.biasAndFade.w > 0.5f)
             {
-                ambient = kD * surface.baseWeight * surface.baseColor * volIrradiance * volW * ao;
+                float3 combinedDiff = volIrradiance * volW;
+                if (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0 && gi.skySH[0].w > 0.5f)
+                {
+                    combinedDiff += skyDiffuseIrradiance * lerp(1.0f, skyVis, volW);
+                }
+                ambient = (1.0f - surface.metalness) * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
             }
         }
         else if (gi.captureMode == 2)
         {
-            float3 combinedDiff = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f)
-                ? lerp(skyDiffuseIrradiance, volIrradiance, volW)
-                : skyDiffuseIrradiance;
+            const bool hasVol = (gi.giMode > 0 && gi.biasAndFade.w > 0.5f);
+            float3 combinedDiff = skyDiffuseIrradiance;
+            if (hasVol)
+            {
+                if (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0)
+                {
+                    combinedDiff = volIrradiance * volW + skyDiffuseIrradiance * lerp(1.0f, skyVis, volW);
+                }
+                else
+                {
+                    combinedDiff = lerp(skyDiffuseIrradiance, volIrradiance, volW);
+                }
+            }
             ambient = kD * surface.baseWeight * surface.baseColor * combinedDiff * MultiBounceAO(ao, surface.baseColor);
         }
 

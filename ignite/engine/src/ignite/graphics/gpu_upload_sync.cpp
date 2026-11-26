@@ -5,6 +5,8 @@
 #include "gpu_upload_sync.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/profiler/profiler.hpp"
+#include "ignite/graphics/binding_set.hpp"
 
 #include <condition_variable>
 
@@ -51,15 +53,20 @@ namespace ignite
 
     void GPUUploadSync::DeviceWaitIdle(nri::Device *device)
     {
+        IGN_PROFILE_SCOPE("GPUUploadSync::DeviceWaitIdle");
         auto doWaitIdle = [&]()
         {
-            std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
-            auto *deviceManager = DeviceManager::GetInstance();
-            nri::Device *dev = device ? device : (deviceManager ? deviceManager->GetDevice() : nullptr);
-            if (dev && deviceManager)
             {
-                deviceManager->GetCoreInterface().DeviceWaitIdle(dev);
+                std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
+                auto *deviceManager = DeviceManager::GetInstance();
+                nri::Device *dev = device ? device : (deviceManager ? deviceManager->GetDevice() : nullptr);
+                if (dev && deviceManager)
+                {
+                    IGN_PROFILE_SCOPE("GPU::DeviceWaitIdle");
+                    deviceManager->GetCoreInterface().DeviceWaitIdle(dev);
+                }
             }
+            BindingSet::ReclaimRetiredBeforeCurrentFrame();
         };
 
         auto *app = Application::GetInstance();
@@ -80,6 +87,7 @@ namespace ignite
                     waitCv.notify_one();
                 });
 
+            IGN_PROFILE_SCOPE("GPUUploadSync::DeviceWaitIdle::WaitCrossThread");
             std::unique_lock<std::mutex> waitLock(waitMutex);
             waitCv.wait(waitLock, [&]() { return done; });
             return;
@@ -102,6 +110,7 @@ namespace ignite
                 waitCv.notify_one();
             });
 
+            IGN_PROFILE_SCOPE("GPUUploadSync::DeviceWaitIdle::WaitCrossThread");
             std::unique_lock<std::mutex> waitLock(waitMutex);
             waitCv.wait(waitLock, [&]() { return done; });
             return;

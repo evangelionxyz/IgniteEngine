@@ -43,6 +43,7 @@ namespace ignite
         CaptureMode mode = CaptureMode::Irradiance;
         bool includeSky = true;
         bool enablePreviousGI = false;
+        float excludeOriginRadius = 0.0f;
         GI_GPUData previousGIData{};
     };
 
@@ -74,6 +75,16 @@ namespace ignite
         // uploads GPU instance buffers, and renders the single ortho bake shadow map into cascade 0.
         void PrepareScene(Scene *scene, AssetManager *assetManager, nri::CommandBuffer *cmd, const GI_GPUData *giDataOverride = nullptr);
 
+        // Updates only the previous-bounce GI override without re-uploading scene geometry or shadow maps.
+        void SetOverrideGIData(const GI_GPUData *giDataOverride)
+        {
+            m_HasOverrideGIData = (giDataOverride != nullptr);
+            if (giDataOverride)
+            {
+                m_OverrideGIData = *giDataOverride;
+            }
+        }
+
         // Renders all 6 faces at worldPos into cached colorCube + depthCube targets using the
         // currently prepared scene. Must be called outside RenderTarget::BeginRendering.
         CaptureResult CaptureCubemap(nri::CommandBuffer *cmd, const glm::vec3 &worldPos, const CaptureSettings &settings);
@@ -88,6 +99,9 @@ namespace ignite
 
         const AABB &GetPreparedSceneBounds() const { return m_SceneBounds; }
         size_t GetPreparedBatchCount() const { return m_PreparedBatches.size(); }
+        Ref<Texture> GetPreparedEnvironmentTexture() const { return m_PreparedEnvTexture; }
+        SkyType GetPreparedSkyType() const { return m_ActiveSkyType; }
+        bool IsPreparedSkyIBLEnabled() const { return m_HasPreparedSkyIBL; }
 
         // Returns a persistent per-resolution colorCube + depthCube if already allocated.
         CaptureResult GetCachedCaptureTargets() const { return { m_ColorCube, m_DepthCube }; }
@@ -101,8 +115,12 @@ namespace ignite
             uint32_t vertexStride = 0;
             uint32_t baseInstanceOffset = 0;
             uint32_t instanceCount = 0;
+            uint32_t shadowBaseInstanceOffset = 0;
+            uint32_t shadowInstanceCount = 0;
             Ref<BindingSet> materialBindingSet;
             nri::CullMode cullMode = nri::CullMode::FRONT;
+            std::vector<uint32_t> instanceObjectIndices;
+            std::vector<AABB> instanceWorldAABBs;
         };
 
         struct CaptureUniformSlot
@@ -143,7 +161,9 @@ namespace ignite
 
         Ref<CascadedShadowMap> m_BakeShadowMap;
         Ref<Environment> m_ActiveEnvironment;
+        Ref<Texture> m_PreparedEnvTexture;
         SkyType m_ActiveSkyType = SkyType::HDRI;
+        bool m_HasPreparedSkyIBL = false;
         bool m_HasDirectionalLight = false;
         glm::vec3 m_SunDirection = glm::vec3(0.0f, 1.0f, 0.0f);
         Scene_GPUData m_BaseSceneData{};

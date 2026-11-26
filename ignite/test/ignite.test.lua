@@ -60,7 +60,6 @@ project "Ignite.Test"
         "%{IncludeDir.GLM}",
         "%{IncludeDir.FMOD}",
         "%{IncludeDir.IMGUI}",
-        "%{IncludeDir.IMGUIZMO}",
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.SPDLOG}",
@@ -92,9 +91,7 @@ project "Ignite.Test"
 
     defines {
         "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
-        "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
-        "JPH_DEBUG_RENDERER",
-        "JPH_PROFILE_ENABLED",
+        "JPH_SHARED_LIBRARY",
         "JPH_OBJECT_STREAM",
         "_WIN32_WINNT=0x0A00",
     }
@@ -258,30 +255,66 @@ project "Ignite.Test"
 
     links { "d3dcompiler", "dxcompiler", "delayimp" }
 
-    filter "configurations:Debug or Debug-Profiling"
+    filter "configurations:Debug"
         runtime "Debug"
         optimize "off"
         symbols "on"
         defines {
             "IGN_DEBUG_BUILD",
             "DEBUG",
-            "_DEBUG"
+            "_DEBUG",
+            "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+            "JPH_DEBUG_RENDERER",
+            "JPH_PROFILE_ENABLED",
         }
 
-    filter "configurations:Release or Release-Profiling"
+    filter "configurations:Debug-Profiling"
+        runtime "Debug"
+        optimize "off"
+        symbols "on"
+        defines {
+            "IGN_DEBUG_BUILD",
+            "DEBUG",
+            "_DEBUG",
+            "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+            "JPH_DEBUG_RENDERER",
+            "JPH_PROFILE_ENABLED",
+        }
+
+    filter "configurations:Release"
         runtime "Release"
-        optimize "on"
+        optimize "speed"
         symbols "on"
         defines {
             "IGN_RELEASE_BUILD",
             "NDEBUG"
         }
 
-    filter "configurations:Shipping or Shipping-Profiling"
+    filter "configurations:Release-Profiling"
         runtime "Release"
-        optimize "on"
+        optimize "speed"
+        symbols "on"
+        defines {
+            "IGN_RELEASE_BUILD",
+            "NDEBUG",
+            "JPH_PROFILE_ENABLED",
+        }
+
+    filter "configurations:Shipping"
+        runtime "Release"
+        optimize "speed"
         symbols "off"
         defines {
             "IGN_SHIPPING_BUILD",
             "NDEBUG"
+        }
+
+    filter "configurations:Shipping-Profiling"
+        runtime "Release"
+        optimize "speed"
+        symbols "off"
+        defines {
+            "IGN_SHIPPING_BUILD",
+            "NDEBUG",
+            "JPH_PROFILE_ENABLED",
         }

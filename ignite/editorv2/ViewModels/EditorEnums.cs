@@ -19,7 +19,8 @@ public enum GizmoOperation
     Translate = 0,
     Rotate = 1,
     Scale = 2,
-    BoundSizing2D = 3
+    BoundSizing2D = 3,
+    BoundSizing3D = 4
 }
 
 /// <summary>

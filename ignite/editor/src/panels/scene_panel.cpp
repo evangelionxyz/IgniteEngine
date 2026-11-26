@@ -2,6 +2,8 @@
 
 #include "pch.hpp"
 #include "scene_panel.hpp"
+#include "content_browser_panel.hpp"
+#include "ignite/core/signal_bus.hpp"
 #include "ignite/graphics/gi/gi_baker.hpp"
 #include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
@@ -57,6 +59,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
+#include <string_view>
 #include <format>
 #include <algorithm>
 #include <ranges>
@@ -73,13 +76,51 @@ namespace ignite
 {
     namespace
     {
-        const std::array<glm::vec2, 4> kBoundsCorners =
+        void ComputeSharedGizmoPivotAndBounds(const ScenePanel *panel, const std::unordered_map<UUID, Entity> &selectedEntities, glm::vec3 &outPivot, AABB &outBounds)
         {
-            glm::vec2(-0.5f, -0.5f),
-            glm::vec2( 0.5f, -0.5f),
-            glm::vec2( 0.5f,  0.5f),
-            glm::vec2(-0.5f,  0.5f)
-        };
+            outPivot = glm::vec3(0.0f);
+            if (selectedEntities.empty())
+            {
+                outBounds = AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+                return;
+            }
+
+            for (Entity entity : selectedEntities | std::views::values)
+            {
+                outPivot += entity.GetTransform().world.translation;
+            }
+            outPivot /= static_cast<float>(selectedEntities.size());
+
+            glm::vec3 boundsMin(std::numeric_limits<float>::max());
+            glm::vec3 boundsMax(std::numeric_limits<float>::lowest());
+            bool anyValid = false;
+
+            for (Entity entity : selectedEntities | std::views::values)
+            {
+                const AABB localBounds = panel->ComputeEntityLocalBounds(entity);
+                const glm::mat4 worldMat = entity.GetTransform().world.GetMatrix();
+                for (int corner = 0; corner < 8; ++corner)
+                {
+                    const glm::vec3 localCorner(
+                        (corner & 1) ? localBounds.max.x : localBounds.min.x,
+                        (corner & 2) ? localBounds.max.y : localBounds.min.y,
+                        (corner & 4) ? localBounds.max.z : localBounds.min.z);
+                    const glm::vec3 relWorld = glm::vec3(worldMat * glm::vec4(localCorner, 1.0f)) - outPivot;
+                    boundsMin = glm::min(boundsMin, relWorld);
+                    boundsMax = glm::max(boundsMax, relWorld);
+                    anyValid = true;
+                }
+            }
+
+            if (!anyValid || glm::any(glm::lessThanEqual(boundsMax - boundsMin, glm::vec3(1e-4f))))
+            {
+                outBounds = AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+            }
+            else
+            {
+                outBounds = AABB::FromMinMax(boundsMin, boundsMax);
+            }
+        }
 
         std::vector<UUID> FilterTopLevelUUIDs(Scene *scene, const std::vector<UUID> &inputUUIDs)
         {
@@ -164,6 +205,166 @@ namespace ignite
             }
             return count;
         }
+
+        struct NodeVisual
+        {
+            const char *icon = ICON_LC_CIRCLE_DOT;
+            glm::vec4 color = UI::GetTheme().mutedForeground;
+        };
+
+        NodeVisual GetComponentVisual(CompType type)
+        {
+            const auto &t = UI::GetTheme();
+            switch (type)
+            {
+                case CompType_Transform:            return { ICON_LC_MOVE_3D, UI::Accent::Camera };
+                case CompType_Rendering:            return { ICON_LC_EYE, t.foreground };
+                case CompType_Camera:               return { ICON_LC_CAMERA, UI::Accent::Camera };
+                case CompType_Widget:               return { ICON_LC_LAYOUT_TEMPLATE, UI::Accent::Widget };
+                case CompType_Sprite2D:             return { ICON_LC_IMAGE, UI::Accent::Material };
+                case CompType_Animator2D:           return { ICON_LC_CLAPPERBOARD, UI::Accent::Animation };
+                case CompType_Circle2D:             return { ICON_LC_CIRCLE, UI::Accent::Material };
+                case CompType_PointLight2D:         return { ICON_LC_LIGHTBULB, UI::Accent::Folder };
+                case CompType_Text:                 return { ICON_LC_TYPE, UI::Accent::Widget };
+                case CompType_StaticMesh:           return { ICON_LC_BOX, UI::Accent::Mesh };
+                case CompType_SkeletalMesh:         return { ICON_LC_BONE, UI::Accent::Animation };
+                case CompType_DirectionalLight:     return { ICON_LC_SUN, UI::Accent::Folder };
+                case CompType_PointLight:           return { ICON_LC_LIGHTBULB, UI::Accent::Folder };
+                case CompType_SpotLight:            return { ICON_LC_FLASHLIGHT, UI::Accent::Folder };
+                case CompType_WorldEnvironment:     return { ICON_LC_GLOBE, UI::Accent::Environment };
+                case CompType_IrradianceVolume:     return { ICON_LC_BOXES, UI::Accent::Environment };
+                case CompType_ReflectionProbe:      return { ICON_LC_RADAR, UI::Accent::Camera };
+                case CompType_Terrain:              return { ICON_LC_MOUNTAIN, UI::Accent::Environment };
+                case CompType_Rigidbody:
+                case CompType_Rigidbody2D:          return { ICON_LC_ACTIVITY, UI::Accent::Physics };
+                case CompType_BoxCollider:
+                case CompType_BoxCollider2D:        return { ICON_LC_SQUARE, UI::Accent::Physics };
+                case CompType_SphereCollider:
+                case CompType_CircleCollider2D:     return { ICON_LC_CIRCLE, UI::Accent::Physics };
+                case CompType_CapsuleCollider:      return { ICON_LC_PILL, UI::Accent::Physics };
+                case CompType_MeshCollider:         return { ICON_LC_SHIELD, UI::Accent::Physics };
+                case CompType_PlaneCollider:        return { ICON_LC_LAYERS, UI::Accent::Physics };
+                case CompType_HeightFieldCollider:  return { ICON_LC_MOUNTAIN_SNOW, UI::Accent::Physics };
+                case CompType_CharacterController:  return { ICON_LC_PERSON_STANDING, UI::Accent::Physics };
+                case CompType_PhysicsJoint:         return { ICON_LC_ANCHOR, UI::Accent::Physics };
+                case CompType_AudioSource:          return { ICON_LC_VOLUME_2, UI::Accent::Audio };
+                case CompType_ParticleSystem:       return { ICON_LC_SPARKLES, UI::Accent::Audio };
+                case CompType_Script:               return { ICON_LC_FILE_CODE_2, UI::Accent::ScriptCS };
+                case CompType_LuaScript:            return { ICON_LC_FILE_CODE, UI::Accent::ScriptLua };
+                case CompType_Prefab:               return { ICON_LC_PACKAGE, UI::Accent::Mesh };
+                case CompType_NetworkIdentity:      return { ICON_LC_NETWORK, UI::Accent::Network };
+                default:                            return { ICON_LC_SLIDERS_HORIZONTAL, t.mutedForeground };
+            }
+        }
+
+        NodeVisual GetComponentVisualByName(std::string_view name)
+        {
+            if (name == "Transform")            return GetComponentVisual(CompType_Transform);
+            if (name == "Rendering")            return GetComponentVisual(CompType_Rendering);
+            if (name == "Network Identity")     return GetComponentVisual(CompType_NetworkIdentity);
+            if (name == "Prefab")               return GetComponentVisual(CompType_Prefab);
+            if (name == "Widget")               return GetComponentVisual(CompType_Widget);
+            if (name == "World Environment")    return GetComponentVisual(CompType_WorldEnvironment);
+            if (name == "Directional Light")    return GetComponentVisual(CompType_DirectionalLight);
+            if (name == "Point Light")          return GetComponentVisual(CompType_PointLight);
+            if (name == "Spot Light")           return GetComponentVisual(CompType_SpotLight);
+            if (name == "Irradiance Volume")    return GetComponentVisual(CompType_IrradianceVolume);
+            if (name == "Reflection Probe")     return GetComponentVisual(CompType_ReflectionProbe);
+            if (name == "Sprite 2D")            return GetComponentVisual(CompType_Sprite2D);
+            if (name == "Animator 2D")          return GetComponentVisual(CompType_Animator2D);
+            if (name == "Point Light 2D")       return GetComponentVisual(CompType_PointLight2D);
+            if (name == "Circle 2D")            return GetComponentVisual(CompType_Circle2D);
+            if (name == "Static Mesh")          return GetComponentVisual(CompType_StaticMesh);
+            if (name == "Skeletal Mesh")        return GetComponentVisual(CompType_SkeletalMesh);
+            if (name == "Camera")               return GetComponentVisual(CompType_Camera);
+            if (name == "Rigid Body 2D")        return GetComponentVisual(CompType_Rigidbody2D);
+            if (name == "Box Collider 2D")      return GetComponentVisual(CompType_BoxCollider2D);
+            if (name == "Circle Collider 2D")   return GetComponentVisual(CompType_CircleCollider2D);
+            if (name == "Rigid Body")           return GetComponentVisual(CompType_Rigidbody);
+            if (name == "Box Collider")         return GetComponentVisual(CompType_BoxCollider);
+            if (name == "Sphere Collider")      return GetComponentVisual(CompType_SphereCollider);
+            if (name == "Capsule Collider")     return GetComponentVisual(CompType_CapsuleCollider);
+            if (name == "Character Controller") return GetComponentVisual(CompType_CharacterController);
+            if (name == "Mesh Collider")        return GetComponentVisual(CompType_MeshCollider);
+            if (name == "Plane Collider")       return GetComponentVisual(CompType_PlaneCollider);
+            if (name == "HeightField Collider") return GetComponentVisual(CompType_HeightFieldCollider);
+            if (name == "Physics Joint")        return GetComponentVisual(CompType_PhysicsJoint);
+            if (name == "Text")                 return GetComponentVisual(CompType_Text);
+            if (name == "Audio Source")         return GetComponentVisual(CompType_AudioSource);
+            if (name == "C# Script")            return GetComponentVisual(CompType_Script);
+            if (name == "Lua Script")           return GetComponentVisual(CompType_LuaScript);
+            if (name == "Terrain")              return GetComponentVisual(CompType_Terrain);
+            if (name == "Particle System")      return GetComponentVisual(CompType_ParticleSystem);
+            return GetComponentVisual(CompType_Invalid);
+        }
+
+        NodeVisual GetEntityVisual(Entity entity, bool isOpen)
+        {
+            const auto &idComp = entity.GetComponent<IDComponent>();
+            if (idComp.IsInType(EntityType_Folder))             return { isOpen ? ICON_LC_FOLDER_OPEN : ICON_LC_FOLDER, UI::Accent::Folder };
+            if (entity.HasComponent<CameraComponent>())         return GetComponentVisual(CompType_Camera);
+            if (entity.HasComponent<DirectionalLightComponent>()) return GetComponentVisual(CompType_DirectionalLight);
+            if (entity.HasComponent<PointLightComponent>())     return GetComponentVisual(CompType_PointLight);
+            if (entity.HasComponent<SpotLightComponent>())      return GetComponentVisual(CompType_SpotLight);
+            if (entity.HasComponent<PointLight2DComponent>())   return GetComponentVisual(CompType_PointLight2D);
+            if (entity.HasComponent<WorldEnvironment>())        return GetComponentVisual(CompType_WorldEnvironment);
+            if (entity.HasComponent<IrradianceVolumeComponent>()) return GetComponentVisual(CompType_IrradianceVolume);
+            if (entity.HasComponent<ReflectionProbeComponent>()) return GetComponentVisual(CompType_ReflectionProbe);
+            if (entity.HasComponent<TerrainComponent>())        return GetComponentVisual(CompType_Terrain);
+            if (entity.HasComponent<ParticleSystemComponent>()) return GetComponentVisual(CompType_ParticleSystem);
+            if (entity.HasComponent<AudioSourceComponent>())    return GetComponentVisual(CompType_AudioSource);
+            if (entity.HasComponent<SkeletalMeshComponent>())   return GetComponentVisual(CompType_SkeletalMesh);
+            if (entity.HasComponent<StaticMeshComponent>())     return GetComponentVisual(CompType_StaticMesh);
+            if (entity.HasComponent<WidgetComponent>())         return GetComponentVisual(CompType_Widget);
+            if (entity.HasComponent<Sprite2DComponent>())       return GetComponentVisual(CompType_Sprite2D);
+            if (entity.HasComponent<Circle2DComponent>())       return GetComponentVisual(CompType_Circle2D);
+            if (entity.HasComponent<TextComponent>())           return GetComponentVisual(CompType_Text);
+            if (idComp.IsInType(EntityType_Prefab) || entity.HasComponent<PrefabComponent>())
+                return { ICON_LC_PACKAGE, UI::Accent::Mesh };
+            return { ICON_LC_CIRCLE_DOT, UI::GetTheme().mutedForeground };
+        }
+
+        bool EntityHasCompType(Entity entity, CompType type)
+        {
+            switch (type)
+            {
+                case CompType_Camera:              return entity.HasComponent<CameraComponent>();
+                case CompType_Sprite2D:            return entity.HasComponent<Sprite2DComponent>();
+                case CompType_Animator2D:          return entity.HasComponent<Animator2DComponent>();
+                case CompType_Circle2D:            return entity.HasComponent<Circle2DComponent>();
+                case CompType_PointLight2D:        return entity.HasComponent<PointLight2DComponent>();
+                case CompType_DirectionalLight:    return entity.HasComponent<DirectionalLightComponent>();
+                case CompType_PointLight:          return entity.HasComponent<PointLightComponent>();
+                case CompType_SpotLight:           return entity.HasComponent<SpotLightComponent>();
+                case CompType_IrradianceVolume:    return entity.HasComponent<IrradianceVolumeComponent>();
+                case CompType_ReflectionProbe:     return entity.HasComponent<ReflectionProbeComponent>();
+                case CompType_Text:                return entity.HasComponent<TextComponent>();
+                case CompType_Widget:              return entity.HasComponent<WidgetComponent>();
+                case CompType_Rigidbody2D:         return entity.HasComponent<Rigidbody2DComponent>();
+                case CompType_BoxCollider2D:       return entity.HasComponent<BoxCollider2DComponent>();
+                case CompType_CircleCollider2D:    return entity.HasComponent<CircleCollider2DComponent>();
+                case CompType_SkeletalMesh:        return entity.HasComponent<SkeletalMeshComponent>();
+                case CompType_StaticMesh:          return entity.HasComponent<StaticMeshComponent>();
+                case CompType_Rigidbody:           return entity.HasComponent<RigidbodyComponent>();
+                case CompType_BoxCollider:         return entity.HasComponent<BoxColliderComponent>();
+                case CompType_SphereCollider:      return entity.HasComponent<SphereColliderComponent>();
+                case CompType_CapsuleCollider:     return entity.HasComponent<CapsuleColliderComponent>();
+                case CompType_CharacterController: return entity.HasComponent<CharacterControllerComponent>();
+                case CompType_MeshCollider:        return entity.HasComponent<MeshColliderComponent>();
+                case CompType_PlaneCollider:       return entity.HasComponent<PlaneColliderComponent>();
+                case CompType_Terrain:             return entity.HasComponent<TerrainComponent>();
+                case CompType_HeightFieldCollider: return entity.HasComponent<HeightFieldColliderComponent>();
+                case CompType_Prefab:              return entity.HasComponent<PrefabComponent>();
+                case CompType_AudioSource:         return entity.HasComponent<AudioSourceComponent>();
+                case CompType_WorldEnvironment:    return entity.HasComponent<WorldEnvironment>();
+                case CompType_Script:              return entity.HasComponent<ScriptComponent>();
+                case CompType_LuaScript:           return entity.HasComponent<LuaScriptComponent>();
+                case CompType_ParticleSystem:      return entity.HasComponent<ParticleSystemComponent>();
+                case CompType_PhysicsJoint:        return entity.HasComponent<PhysicsJointComponent>();
+                case CompType_NetworkIdentity:     return entity.HasComponent<NetworkIdentityComponent>();
+                default:                           return false;
+            }
+        }
     }
 
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
@@ -206,24 +407,8 @@ namespace ignite
         createInfo.keepInitialState = true;
         createInfo.bindless = false;
 
-        m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo, nullptr);
-
-        m_Icons["transform_world"] = Texture::Create("resources/ui/editor/ic_editor_world_transform.png", createInfo, nullptr);
-        m_Icons["transform_local"] = Texture::Create("resources/ui/editor/ic_editor_local_transform.png", createInfo, nullptr);
-        m_Icons["picking"] = Texture::Create("resources/ui/editor/ic_editor_picking.png", createInfo, nullptr);
-        m_Icons["translate"] = Texture::Create("resources/ui/editor/ic_editor_translate.png", createInfo, nullptr);
-        m_Icons["scale"] = Texture::Create("resources/ui/editor/ic_editor_scale.png", createInfo, nullptr);
-        m_Icons["rotate"] = Texture::Create("resources/ui/editor/ic_editor_rotate.png", createInfo, nullptr);
-
-        m_Icons["play"] = Texture::Create("resources/ui/editor/ic_editor_play.png", createInfo, nullptr);
-        m_Icons["stop"] = Texture::Create("resources/ui/editor/ic_editor_stop.png", createInfo, nullptr);
-        m_Icons["pause"] = Texture::Create("resources/ui/editor/ic_editor_pause.png", createInfo, nullptr);
-        m_Icons["simulate"] = Texture::Create("resources/ui/editor/ic_editor_simulate.png", createInfo, nullptr);
-        m_Icons["stepping"] = Texture::Create("resources/ui/editor/ic_editor_stepping.png", createInfo, nullptr);
-
         m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, nullptr);
         m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, nullptr);
-        m_Icons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, nullptr);
     }
 
     ScenePanel::~ScenePanel()
@@ -253,15 +438,12 @@ namespace ignite
         m_FocusRenameInput = false;
         m_LastAutoExpandedSelection = UUID(0);
 
-        // A scene swap can happen while a gizmo or 2D bounds resize is active.
+        // A scene swap can happen while a gizmo drag is active.
         // Drop those entity-specific interaction handles before the next panel
         // frame can resolve them against the new scene.
         m_Data.isGizmoManipulating = false;
         m_Data.isGizmoBeingUse = false;
-        m_Data.is2DBoundsSizing = false;
-        m_Data.is2DBoundsHovered = false;
-        m_Data.active2DCorner = -1;
-        m_Data.active2DEntity = UUID(0);
+        m_Gizmo.ResetInteraction();
         m_ViewportData.wantMouseDragging = false;
         m_SceneFocused = false;
     }
@@ -343,19 +525,34 @@ namespace ignite
     void ScenePanel::RenderHierarchy()
     {
         IGN_PROFILE_FUNCTION();
+        const auto &theme = UI::GetTheme();
+        const float scale = std::max(UI::GetDpiScale(), 1.0f);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * scale, 8.0f * scale));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * scale, 6.0f * scale));
         ImGui::Begin("Hierarchy");
 
         if (!m_Scene || !m_Scene->registry)
         {
             ImGui::End();
+            ImGui::PopStyleVar(2);
             return;
         }
 
         auto assetManager = AssetManager::GetInstance();
-        SceneManager::SyncHierarchyOrder(m_Scene);
+        const size_t currentEntityCount = m_Scene->registry->storage<entt::entity>().size();
+        if (m_HierarchyDirty || currentEntityCount != m_LastEntityCount || m_Scene != m_LastSyncedScene || (++m_HierarchySyncFrameCounter >= 60u))
+        {
+            SceneManager::SyncHierarchyOrder(m_Scene);
+            m_HierarchyDirty = false;
+            m_LastEntityCount = currentEntityCount;
+            m_LastSyncedScene = m_Scene;
+            m_HierarchySyncFrameCounter = 0;
+        }
 
-        // Toolbar: + Folder button & search filter
-        if (ImGui::SmallButton("+ Folder"))
+        // Matched-height toolbar: + Folder, + Entity popup, and Search filter
+        const float barH = std::round(26.0f * scale);
+        if (UI::Button("Folder", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, barH), ICON_LC_FOLDER_PLUS))
         {
             Entity selected = GetSelectedEntity();
             Entity targetParent = (selected.IsValid() && selected.GetComponent<IDComponent>().IsInType(EntityType_Folder))
@@ -363,13 +560,28 @@ namespace ignite
                 : Entity{};
             CreateFolderInHierarchy(targetParent);
         }
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
         {
-            ImGui::SetTooltip("Create a new Folder in Hierarchy (nests under selected folder if any)");
+            ImGui::SetTooltip("Create a new Folder (nests under selected folder if any)");
         }
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint("##hierarchy_search", "Search hierarchy...", m_HierarchySearchBuffer, sizeof(m_HierarchySearchBuffer));
+
+        ImGui::SameLine(0.0f, 4.0f * scale);
+        if (UI::IconButton("##hier_create_btn", ICON_LC_PLUS, UI::ButtonVariant::Secondary, UI::ButtonSize::IconSm, "Create Entity"))
+        {
+            UI::OpenPopupMenu("##hier_toolbar_create_popup");
+        }
+        if (UI::BeginPopupMenu("##hier_toolbar_create_popup"))
+        {
+            UI::ContextMenuLabel("Create Entity");
+            UI::ContextMenuSeparator();
+            ScopedCommandTransaction tx("Create Entity");
+            ShowEntityContextMenu();
+            UI::EndContextMenu();
+        }
+
+        ImGui::SameLine(0.0f, 6.0f * scale);
+        UI::TextField( "##hierarchy_search", m_HierarchySearchBuffer, sizeof(m_HierarchySearchBuffer), "Search hierarchy...",
+            ImVec2(-1.0f, barH), ICON_LC_SEARCH, true, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
 
         // Keyboard shortcuts when Hierarchy is focused
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && !m_Scene->IsRunning())
@@ -390,20 +602,50 @@ namespace ignite
             }
         }
 
-        constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersOuter
-                                             | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_HighlightHoveredColumn;
+        constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersOuter;
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, UI::ToImVec4(theme.card));
+        ImGui::PushStyleColor(ImGuiCol_Border, UI::ToImVec4(theme.border));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f * scale, 1.0f * scale));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f * scale, 1.0f * scale));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * scale, 3.0f * scale));
 
         if (ImGui::BeginTable("entity_hierarchy_table", 1, tableFlags))
         {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_NoReorder | ImGuiTableColumnFlags_WidthStretch);
 
-            ImGui::TableHeadersRow();
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
 
             const auto sceneName = m_EditorLayer->IsInPrefabIsolation() ? "Prefab" : assetManager->GetAssetDisplayName(m_Scene->handle);
-            const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
+            const std::string rootLabel = std::string("     ") + sceneName;
+            const ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
                 | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns | ImGuiTreeNodeFlags_DefaultOpen;
 
-            if (ImGui::TreeNodeEx(sceneName.c_str(), treeFlags))
+            ImGui::PushStyleColor(ImGuiCol_Header, UI::ToImVec4(theme.secondary));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, UI::ToImVec4(theme.secondaryHover));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, UI::ToImVec4(theme.secondaryActive));
+            const bool sceneRootOpened = ImGui::TreeNodeEx(sceneName.c_str(), treeFlags, "%s", rootLabel.c_str());
+            const ImVec2 sceneRectMin = ImGui::GetItemRectMin();
+            const ImVec2 sceneRectMax = ImGui::GetItemRectMax();
+            ImGui::PopStyleColor(3);
+
+            {
+                const float rowH = (std::max)(1.0f, sceneRectMax.y - sceneRectMin.y);
+                const float iconX = sceneRectMin.x + ImGui::GetTreeNodeToLabelSpacing();
+                const char *sceneIcon = m_EditorLayer->IsInPrefabIsolation() ? ICON_LC_PACKAGE : ICON_LC_LAYERS;
+                const glm::vec4 sceneIconCol = m_EditorLayer->IsInPrefabIsolation() ? UI::Accent::Mesh : UI::Accent::Environment;
+                {
+                    UI::ScopedFont smallFont(UI::FontVariant::Small);
+                    const ImVec2 icSz = ImGui::CalcTextSize(sceneIcon);
+                    ImGui::GetWindowDrawList()->AddText(
+                        ImVec2(iconX, sceneRectMin.y + std::round((rowH - icSz.y) * 0.5f)),
+                        UI::ToU32(sceneIconCol),
+                        sceneIcon);
+                }
+            }
+
+            if (sceneRootOpened)
             {
                 auto acceptRootDrop = [&]()
                 {
@@ -453,13 +695,13 @@ namespace ignite
 
                 const std::string filterLower = stringutils::ToLower(std::string(m_HierarchySearchBuffer));
 
-                const std::vector<UUID> rootOrderCopy = m_Scene->rootEntityOrder;
-                for (UUID rootUUID : rootOrderCopy)
+                const auto &rootOrder = m_Scene->rootEntityOrder;
+                for (size_t i = 0; i < rootOrder.size(); ++i)
                 {
-                    Entity entity = SceneManager::GetEntity(m_Scene, rootUUID);
+                    Entity entity = SceneManager::GetEntity(m_Scene, rootOrder[i]);
                     if (entity.IsValid() && MatchesHierarchyFilter(entity, filterLower))
                     {
-                        RenderEntityNode(entity);
+                        RenderEntityNode(entity, filterLower);
                     }
                 }
 
@@ -474,23 +716,28 @@ namespace ignite
             }
 
             // Context menu on empty hierarchy area
-            if (ImGui::BeginPopupContextWindow("create_entity_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+            if (UI::BeginWindowContextMenu("create_entity_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
             {
-                if (ImGui::MenuItem("Folder"))
+                UI::ContextMenuLabel("Hierarchy");
+                UI::ContextMenuSeparator();
+                if (UI::ContextMenuItem("Folder", nullptr, ICON_LC_FOLDER_PLUS, false, true, UI::Accent::Folder))
                 {
                     ScopedCommandTransaction tx("Create Folder");
                     CreateFolderInHierarchy({});
                 }
-                ImGui::Separator();
+                UI::ContextMenuSeparator();
                 {
                     ScopedCommandTransaction tx("Create Entity");
                     ShowEntityContextMenu();
                 }
-                ImGui::EndPopup();
+                UI::EndContextMenu();
             }
 
             ImGui::EndTable();
         }
+
+        ImGui::PopStyleVar(3);
+        ImGui::PopStyleColor(2);
 
         // Deferred hierarchy modifications executed safely outside tree iteration
         if (m_PendingHierarchyDrop.has_value())
@@ -653,20 +900,21 @@ namespace ignite
         }
 
         ImGui::End();
+        ImGui::PopStyleVar(2);
     }
 
     Entity ScenePanel::ShowEntityContextMenu()
     {
         Entity entity = {};
-        if (ImGui::MenuItem("Empty"))
+        if (UI::ContextMenuItem("Empty Entity", nullptr, ICON_LC_CIRCLE_DOT))
         {
             entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Empty"));
         }
-        if (ImGui::MenuItem("Camera"))
+        if (UI::ContextMenuItem("Camera", nullptr, ICON_LC_CAMERA, false, true, UI::Accent::Camera))
         {
             entity = SetSelectedEntity(SceneManager::CreateCamera(m_Scene, "Camera"));
         }
-        if (ImGui::MenuItem("Widget"))
+        if (UI::ContextMenuItem("Widget", nullptr, ICON_LC_LAYOUT_TEMPLATE, false, true, UI::Accent::Widget))
         {
             entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Widget"));
             if (entity.IsValid() && !entity.HasComponent<WidgetComponent>())
@@ -675,47 +923,47 @@ namespace ignite
             }
         }
 
-        if (ImGui::BeginMenu("2D"))
+        if (UI::ContextMenuBeginSubMenu("2D", ICON_LC_IMAGE, true, UI::Accent::Material))
         {
-            if (ImGui::MenuItem("Sprite"))
+            if (UI::ContextMenuItem("Sprite", nullptr, ICON_LC_IMAGE, false, true, UI::Accent::Material))
             {
                 entity = SetSelectedEntity(SceneManager::CreateSprite(m_Scene, "Sprite"));
             }
-            if (ImGui::MenuItem("Circle"))
+            if (UI::ContextMenuItem("Circle", nullptr, ICON_LC_CIRCLE, false, true, UI::Accent::Material))
             {
                 entity = SetSelectedEntity(SceneManager::CreateCircle(m_Scene, "Circle"));
             }
-            if (ImGui::MenuItem("Point Light"))
+            if (UI::ContextMenuItem("Point Light", nullptr, ICON_LC_LIGHTBULB, false, true, UI::Accent::Folder))
             {
                 entity = SetSelectedEntity(SceneManager::CreatePointLight2D(m_Scene, "Point Light 2D"));
             }
-            ImGui::EndMenu();
+            UI::ContextMenuEndSubMenu();
         }
 
-        if (ImGui::BeginMenu("3D"))
+        if (UI::ContextMenuBeginSubMenu("3D", ICON_LC_BOX, true, UI::Accent::Mesh))
         {
-            if (ImGui::BeginMenu("Primitives"))
+            if (UI::ContextMenuBeginSubMenu("Primitives", ICON_LC_BOXES, true, UI::Accent::Mesh))
             {
-                if (ImGui::MenuItem("Cube"))
+                if (UI::ContextMenuItem("Cube", nullptr, ICON_LC_BOX, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CUBE, "Cube"));
-                if (ImGui::MenuItem("Sphere"))
+                if (UI::ContextMenuItem("Sphere", nullptr, ICON_LC_CIRCLE, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::SPHERE, "Sphere"));
-                if (ImGui::MenuItem("Icosphere"))
+                if (UI::ContextMenuItem("Icosphere", nullptr, ICON_LC_GLOBE, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::ICOSPHERE, "Icosphere"));
-                if (ImGui::MenuItem("Capsule"))
+                if (UI::ContextMenuItem("Capsule", nullptr, ICON_LC_PILL, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CAPSULE, "Capsule"));
-                if (ImGui::MenuItem("Cylinder"))
+                if (UI::ContextMenuItem("Cylinder", nullptr, ICON_LC_CYLINDER, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CYLINDER, "Cylinder"));
-                if (ImGui::MenuItem("Plane"))
+                if (UI::ContextMenuItem("Plane", nullptr, ICON_LC_SQUARE, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::PLANE, "Plane"));
-                if (ImGui::MenuItem("Cone"))
+                if (UI::ContextMenuItem("Cone", nullptr, ICON_LC_CONE, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::CONE, "Cone"));
-                if (ImGui::MenuItem("Torus"))
+                if (UI::ContextMenuItem("Torus", nullptr, ICON_LC_TORUS, false, true, UI::Accent::Mesh))
                     entity = SetSelectedEntity(SceneManager::CreatePrimitive(m_Scene, EMeshType::TORUS, "Torus"));
-                ImGui::EndMenu();
+                UI::ContextMenuEndSubMenu();
             }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Skeletal Mesh"))
+            UI::ContextMenuSeparator();
+            if (UI::ContextMenuItem("Skeletal Mesh", nullptr, ICON_LC_BONE, false, true, UI::Accent::Animation))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Skeletal Mesh"));
                 if (entity.IsValid() && !entity.HasComponent<SkeletalMeshComponent>())
@@ -723,7 +971,7 @@ namespace ignite
                     entity.AddComponent<SkeletalMeshComponent>();
                 }
             }
-            if (ImGui::MenuItem("Static Mesh"))
+            if (UI::ContextMenuItem("Static Mesh", nullptr, ICON_LC_BOX, false, true, UI::Accent::Mesh))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Static Mesh"));
                 if (entity.IsValid() && !entity.HasComponent<StaticMeshComponent>())
@@ -731,7 +979,8 @@ namespace ignite
                     entity.AddComponent<StaticMeshComponent>();
                 }
             }
-            if (ImGui::MenuItem("Directional Light"))
+            UI::ContextMenuSeparator();
+            if (UI::ContextMenuItem("Directional Light", nullptr, ICON_LC_SUN, false, true, UI::Accent::Folder))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Directional Light"));
                 if (entity.IsValid() && !entity.HasComponent<DirectionalLightComponent>())
@@ -739,7 +988,7 @@ namespace ignite
                     entity.AddComponent<DirectionalLightComponent>();
                 }
             }
-            if (ImGui::MenuItem("Point Light"))
+            if (UI::ContextMenuItem("Point Light", nullptr, ICON_LC_LIGHTBULB, false, true, UI::Accent::Folder))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Point Light"));
                 if (entity.IsValid() && !entity.HasComponent<PointLightComponent>())
@@ -747,7 +996,7 @@ namespace ignite
                     entity.AddComponent<PointLightComponent>();
                 }
             }
-            if (ImGui::MenuItem("Spot Light"))
+            if (UI::ContextMenuItem("Spot Light", nullptr, ICON_LC_FLASHLIGHT, false, true, UI::Accent::Folder))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Spot Light"));
                 if (entity.IsValid() && !entity.HasComponent<SpotLightComponent>())
@@ -755,11 +1004,12 @@ namespace ignite
                     entity.AddComponent<SpotLightComponent>();
                 }
             }
-            if (ImGui::MenuItem("World Environment"))
+            UI::ContextMenuSeparator();
+            if (UI::ContextMenuItem("World Environment", nullptr, ICON_LC_GLOBE, false, true, UI::Accent::Environment))
             {
                 entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene, "World Environment"));
             }
-            if (ImGui::MenuItem("Irradiance Volume"))
+            if (UI::ContextMenuItem("Irradiance Volume", nullptr, ICON_LC_BOXES, false, true, UI::Accent::Environment))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Irradiance Volume"));
                 if (entity.IsValid() && !entity.HasComponent<IrradianceVolumeComponent>())
@@ -767,7 +1017,7 @@ namespace ignite
                     entity.AddComponent<IrradianceVolumeComponent>();
                 }
             }
-            if (ImGui::MenuItem("Reflection Probe"))
+            if (UI::ContextMenuItem("Reflection Probe", nullptr, ICON_LC_RADAR, false, true, UI::Accent::Camera))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Reflection Probe"));
                 if (entity.IsValid() && !entity.HasComponent<ReflectionProbeComponent>())
@@ -775,7 +1025,7 @@ namespace ignite
                     entity.AddComponent<ReflectionProbeComponent>();
                 }
             }
-            if (ImGui::MenuItem("Terrain"))
+            if (UI::ContextMenuItem("Terrain", nullptr, ICON_LC_MOUNTAIN, false, true, UI::Accent::Environment))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Terrain"));
                 if (entity.IsValid() && !entity.HasComponent<TerrainComponent>())
@@ -783,7 +1033,7 @@ namespace ignite
                     entity.AddComponent<TerrainComponent>();
                 }
             }
-            if (ImGui::MenuItem("Physics Joint"))
+            if (UI::ContextMenuItem("Physics Joint", nullptr, ICON_LC_ANCHOR, false, true, UI::Accent::Physics))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Physics Joint"));
                 if (entity.IsValid())
@@ -794,12 +1044,12 @@ namespace ignite
                         entity.AddComponent<PhysicsJointComponent>();
                 }
             }
-            ImGui::EndMenu();
+            UI::ContextMenuEndSubMenu();
         }
 
-        if (ImGui::BeginMenu("Effects"))
+        if (UI::ContextMenuBeginSubMenu("Effects", ICON_LC_SPARKLES, true, UI::Accent::Audio))
         {
-            if (ImGui::MenuItem("Smoke Emitter"))
+            if (UI::ContextMenuItem("Smoke Emitter", nullptr, ICON_LC_WIND, false, true, UI::Accent::Audio))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Smoke Particle"));
                 if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
@@ -808,7 +1058,7 @@ namespace ignite
                     comp.settings = ParticleEmitterSettings::CreateSmoke();
                 }
             }
-            if (ImGui::MenuItem("Fire Emitter"))
+            if (UI::ContextMenuItem("Fire Emitter", nullptr, ICON_LC_FLAME, false, true, UI::Accent::Audio))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Fire Particle"));
                 if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
@@ -817,7 +1067,7 @@ namespace ignite
                     comp.settings = ParticleEmitterSettings::CreateFire();
                 }
             }
-            if (ImGui::MenuItem("Spark Emitter"))
+            if (UI::ContextMenuItem("Spark Emitter", nullptr, ICON_LC_ZAP, false, true, UI::Accent::Folder))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Spark Particle"));
                 if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
@@ -826,7 +1076,7 @@ namespace ignite
                     comp.settings = ParticleEmitterSettings::CreateSpark();
                 }
             }
-            if (ImGui::MenuItem("Particle System"))
+            if (UI::ContextMenuItem("Particle System", nullptr, ICON_LC_SPARKLES, false, true, UI::Accent::Audio))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene, "Particle System"));
                 if (entity.IsValid() && !entity.HasComponent<ParticleSystemComponent>())
@@ -834,7 +1084,7 @@ namespace ignite
                     entity.AddComponent<ParticleSystemComponent>();
                 }
             }
-            ImGui::EndMenu();
+            UI::ContextMenuEndSubMenu();
         }
 
         if (entity.IsValid())
@@ -845,7 +1095,27 @@ namespace ignite
         return entity;
     }
 
-    void ScenePanel::RenderEntityNode(Entity entity)
+    bool ScenePanel::HasSelectedDescendant(Entity current) const
+    {
+        if (!current.IsValid())
+            return false;
+
+        const IDComponent &currentID = current.GetComponent<IDComponent>();
+        for (size_t i = 0; i < currentID.children.size(); ++i)
+        {
+            const UUID childUuid = currentID.children[i];
+            if (m_SelectedEntities.contains(childUuid))
+                return true;
+
+            Entity child = SceneManager::GetEntity(m_Scene, childUuid);
+            if (child.IsValid() && HasSelectedDescendant(child))
+                return true;
+        }
+
+        return false;
+    }
+
+    void ScenePanel::RenderEntityNode(Entity entity, const std::string &filterLower)
     {
         IGN_PROFILE_FUNCTION();
         if (!entity.IsValid())
@@ -859,35 +1129,16 @@ namespace ignite
             s_LastAutoScrolledTarget = UUID(0);
         }
 
+        const auto &theme = UI::GetTheme();
         auto &idComp = entity.GetComponent<IDComponent>();
         bool isDeleting = false;
         const bool isPrefab = idComp.IsInType(EntityType_Prefab);
         const bool isFolder = idComp.IsInType(EntityType_Folder);
         const bool isSelected = m_SelectedEntities.contains(entity.GetUUID());
         const bool isRenaming = (m_RenamingEntityUUID == idComp.uuid);
+        const bool isEntityVisible = !entity.HasComponent<RenderingComponent>() || entity.GetComponent<RenderingComponent>().visible;
 
-        const std::function<bool(Entity)> hasSelectedDescendant = [&](Entity current) -> bool
-        {
-            if (!current.IsValid())
-                return false;
-
-            const IDComponent &currentID = current.GetComponent<IDComponent>();
-            for (const UUID childUuid : currentID.children)
-            {
-                if (m_SelectedEntities.contains(childUuid))
-                    return true;
-
-                Entity child = SceneManager::GetEntity(m_Scene, childUuid);
-                if (child.IsValid() && hasSelectedDescendant(child))
-                    return true;
-            }
-
-            return false;
-        };
-
-        if (m_TrackingSelectedEntity != UUID(0)
-            && m_LastAutoExpandedSelection != m_TrackingSelectedEntity
-            && hasSelectedDescendant(entity))
+        if (m_TrackingSelectedEntity != UUID(0) && m_LastAutoExpandedSelection != m_TrackingSelectedEntity && HasSelectedDescendant(entity))
         {
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         }
@@ -897,15 +1148,13 @@ namespace ignite
 
         const ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0)
             | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
-            | ImGuiTreeNodeFlags_OpenOnDoubleClick
-            | ImGuiTreeNodeFlags_SpanAvailWidth
-            | ImGuiTreeNodeFlags_OpenOnArrow
-            | ImGuiTreeNodeFlags_LabelSpanAllColumns;
+            | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen
+            | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_LabelSpanAllColumns;
 
         const auto imguiPushId = static_cast<intptr_t>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, { 0.435f, 0.287f, 0.000f, 1.000f });
-        ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, UI::ToImVec4(theme.secondary));
+        ImGui::PushStyleColor(ImGuiCol_Header, UI::ToImVec4(theme.secondaryHover));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, UI::ToImVec4(theme.secondaryActive));
 
         std::string nodeLabel;
         if (isRenaming)
@@ -915,16 +1164,22 @@ namespace ignite
         else if (isFolder)
         {
             nodeLabel = fmt::format("     {}{}", idComp.name, idComp.children.empty() ? std::string() : fmt::format(" ({})", idComp.children.size()));
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.82f, 0.45f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, UI::ToImVec4(UI::Accent::Folder));
         }
         else
         {
-            nodeLabel = idComp.name;
+            nodeLabel = fmt::format("     {}", idComp.name);
+            glm::vec4 textCol = isSelected ? theme.primary : (isPrefab ? UI::Accent::Mesh : theme.foreground);
+            if (!isEntityVisible)
+            {
+                textCol = UI::WithAlpha(textCol, 0.45f);
+            }
+            ImGui::PushStyleColor(ImGuiCol_Text, UI::ToImVec4(textCol));
         }
 
         const bool opened = ImGui::TreeNodeEx((void *)imguiPushId, flags, "%s", nodeLabel.c_str());
 
-        if (isFolder && !isRenaming)
+        if (!isRenaming)
         {
             ImGui::PopStyleColor();
         }
@@ -943,19 +1198,43 @@ namespace ignite
 
         ImGui::PopStyleColor(3);
 
+        // Draw crisp left selection indicator bar and semantic colored Lucide icon
+        if (!isRenaming)
+        {
+            ImDrawList *dl = ImGui::GetWindowDrawList();
+            if (isSelected)
+            {
+                dl->AddRectFilled(
+                    ImVec2(itemRectMin.x, itemRectMin.y + 1.0f),
+                    ImVec2(itemRectMin.x + 2.0f, itemRectMax.y - 1.0f),
+                    UI::ToU32(theme.primary));
+            }
+
+            const NodeVisual vis = GetEntityVisual(entity, opened);
+            const float rowHeight = (std::max)(1.0f, itemRectMax.y - itemRectMin.y);
+            const float iconX = itemRectMin.x + ImGui::GetTreeNodeToLabelSpacing();
+            const glm::vec4 iconCol = isEntityVisible ? vis.color : UI::WithAlpha(vis.color, 0.45f);
+            {
+                UI::ScopedFont smallFont(UI::FontVariant::Small);
+                const ImVec2 icSz = ImGui::CalcTextSize(vis.icon);
+                const float iconY = itemRectMin.y + std::round((rowHeight - icSz.y) * 0.5f);
+                dl->AddText(ImVec2(iconX, iconY), UI::ToU32(iconCol), vis.icon);
+            }
+        }
+
         if (!m_Scene->IsRunning())
         {
             ImGui::PushID((int)imguiPushId);
-            if (ImGui::BeginPopupContextItem(idComp.name.c_str()))
+            if (UI::BeginContextMenu(idComp.name.c_str()))
             {
-                if (ImGui::BeginMenu("Create Child"))
+                if (UI::ContextMenuBeginSubMenu("Create Child", ICON_LC_CIRCLE_PLUS, true, UI::Accent::Mesh))
                 {
-                    if (ImGui::MenuItem("Folder"))
+                    if (UI::ContextMenuItem("Folder", nullptr, ICON_LC_FOLDER_PLUS, false, true, UI::Accent::Folder))
                     {
                         ScopedCommandTransaction tx("Create Child Folder");
                         CreateFolderInHierarchy(entity);
                     }
-                    ImGui::Separator();
+                    UI::ContextMenuSeparator();
 
                     ScopedCommandTransaction tx("Create Child Entity");
                     if (const Entity e = ShowEntityContextMenu())
@@ -964,10 +1243,12 @@ namespace ignite
                         SetSelectedEntity(e);
                     }
 
-                    ImGui::EndMenu();
+                    UI::ContextMenuEndSubMenu();
                 }
 
-                if (ImGui::MenuItem("Rename", "F2"))
+                UI::ContextMenuSeparator();
+
+                if (UI::ContextMenuItem("Rename", "F2", ICON_LC_PENCIL))
                 {
                     m_RenamingEntityUUID = idComp.uuid;
                     std::memset(m_RenameBuffer, 0, sizeof(m_RenameBuffer));
@@ -975,7 +1256,7 @@ namespace ignite
                     m_FocusRenameInput = true;
                 }
 
-                if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
+                if (UI::ContextMenuItem("Duplicate", "Ctrl+D", ICON_LC_COPY, false, true, UI::Accent::Camera))
                 {
                     if (!m_SelectedEntities.contains(idComp.uuid))
                     {
@@ -984,7 +1265,7 @@ namespace ignite
                     DuplicateSelectedEntity();
                 }
 
-                if (ImGui::MenuItem("Group Selected in New Folder"))
+                if (UI::ContextMenuItem("Group Selected in New Folder", nullptr, ICON_LC_FOLDER_INPUT, false, true, UI::Accent::Folder))
                 {
                     if (!m_SelectedEntities.contains(idComp.uuid))
                     {
@@ -993,12 +1274,12 @@ namespace ignite
                     m_PendingGroupSelectionInFolder = true;
                 }
 
-                if (isFolder && ImGui::MenuItem("Ungroup Children"))
+                if (isFolder && UI::ContextMenuItem("Ungroup Children", nullptr, ICON_LC_FOLDER_OUTPUT, false, true, UI::Accent::Folder))
                 {
                     m_PendingUngroupFolderUUID = idComp.uuid;
                 }
 
-                ImGui::Separator();
+                UI::ContextMenuSeparator();
 
                 std::vector<UUID> deleteCandidates = GetOrderedSelectedUUIDs();
                 if (std::find(deleteCandidates.begin(), deleteCandidates.end(), idComp.uuid) == deleteCandidates.end())
@@ -1006,13 +1287,13 @@ namespace ignite
                     deleteCandidates.push_back(idComp.uuid);
                 }
                 const auto deletString = std::format("Delete ({})", deleteCandidates.size());
-                if (ImGui::MenuItem(deletString.c_str()))
+                if (UI::ContextMenuItem(deletString.c_str(), "Del", ICON_LC_TRASH_2, true))
                 {
                     m_PendingDeleteUUIDs = std::move(deleteCandidates);
                     isDeleting = true;
                 }
 
-                ImGui::EndPopup();
+                UI::EndContextMenu();
             }
             ImGui::PopID();
         }
@@ -1069,17 +1350,19 @@ namespace ignite
                         dropPos = HierarchyDropPosition::Below;
 
                     ImDrawList *drawList = ImGui::GetWindowDrawList();
+                    const ImU32 dropCol = UI::ToU32(UI::Accent::Camera);
                     if (dropPos == HierarchyDropPosition::Above)
                     {
-                        drawList->AddLine(ImVec2(itemRectMin.x, itemRectMin.y), ImVec2(itemRectMax.x, itemRectMin.y), IM_COL32(0, 210, 255, 255), 2.5f);
+                        drawList->AddLine(ImVec2(itemRectMin.x, itemRectMin.y), ImVec2(itemRectMax.x, itemRectMin.y), dropCol, 2.0f);
                     }
                     else if (dropPos == HierarchyDropPosition::Below)
                     {
-                        drawList->AddLine(ImVec2(itemRectMin.x, itemRectMax.y), ImVec2(itemRectMax.x, itemRectMax.y), IM_COL32(0, 210, 255, 255), 2.5f);
+                        drawList->AddLine(ImVec2(itemRectMin.x, itemRectMax.y), ImVec2(itemRectMax.x, itemRectMax.y), dropCol, 2.0f);
                     }
                     else
                     {
-                        drawList->AddRect(itemRectMin, itemRectMax, IM_COL32(0, 210, 255, 220), 2.0f, 0, 2.0f);
+                        drawList->AddRectFilled(itemRectMin, itemRectMax, UI::ToU32(UI::WithAlpha(UI::Accent::Camera, 0.14f)));
+                        drawList->AddRect(itemRectMin, itemRectMax, dropCol, 0.0f, 0, 1.5f);
                     }
 
                     if (payload->IsDelivery())
@@ -1133,28 +1416,6 @@ namespace ignite
             }
         }
 
-        // Draw folder icon cleanly over label leading padding
-        if (isFolder && !isRenaming)
-        {
-            if (auto iconIt = m_Icons.find("folder"); iconIt != m_Icons.end() && iconIt->second)
-            {
-                if (const ImTextureID texId = UI::GetTextureID(iconIt->second))
-                {
-                    const float rowHeight = (std::max)(1.0f, itemRectMax.y - itemRectMin.y);
-                    const float iconSize = (std::min)(14.0f, rowHeight - 2.0f);
-                    const float iconX = itemRectMin.x + ImGui::GetTreeNodeToLabelSpacing();
-                    const float iconY = itemRectMin.y + (rowHeight - iconSize) * 0.5f;
-                    ImGui::GetWindowDrawList()->AddImage(
-                        texId,
-                        ImVec2(iconX, iconY),
-                        ImVec2(iconX + iconSize, iconY + iconSize),
-                        ImVec2(0.0f, 0.0f),
-                        ImVec2(1.0f, 1.0f),
-                        IM_COL32(245, 210, 115, 255));
-                }
-            }
-        }
-
         // Inline rename input overlay
         if (isRenaming)
         {
@@ -1192,14 +1453,13 @@ namespace ignite
         {
             if (!isDeleting)
             {
-                const std::vector<UUID> childrenCopy = entity.GetComponent<IDComponent>().children;
-                const std::string filterLower = stringutils::ToLower(std::string(m_HierarchySearchBuffer));
-                for (UUID uuid : childrenCopy)
+                const auto &children = entity.GetComponent<IDComponent>().children;
+                for (size_t i = 0; i < children.size(); ++i)
                 {
-                    Entity childEntity = SceneManager::GetEntity(m_Scene, uuid);
+                    Entity childEntity = SceneManager::GetEntity(m_Scene, children[i]);
                     if (childEntity.IsValid() && MatchesHierarchyFilter(childEntity, filterLower))
                     {
-                        RenderEntityNode(childEntity);
+                        RenderEntityNode(childEntity, filterLower);
                     }
                 }
             }
@@ -1211,27 +1471,62 @@ namespace ignite
     void ScenePanel::RenderInspector()
     {
         IGN_PROFILE_FUNCTION();
+        const auto &theme = UI::GetTheme();
+        const float scale = std::max(UI::GetDpiScale(), 1.0f);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * scale, 8.0f * scale));
         ImGui::Begin("Inspector");
 
         Entity selectedEntity = GetSelectedEntity();
         if (selectedEntity.IsValid())
         {
+            UI::ScopedCompactInspector compactInspector;
             auto project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
             auto assetManager = AssetManager::GetInstance();
 
-            // Main Component
-            // ID Component
+            // Compact Entity Header
             auto &idComp = selectedEntity.GetComponent<IDComponent>();
+            const NodeVisual entityVis = GetEntityVisual(selectedEntity, true);
+            const float headerH = std::round(26.0f * scale);
+
+            {
+                const ImVec2 badgeMin = ImGui::GetCursorScreenPos();
+                const ImVec2 badgeMax(badgeMin.x + headerH, badgeMin.y + headerH);
+                ImGui::Dummy(ImVec2(headerH, headerH));
+                ImDrawList *dl = ImGui::GetWindowDrawList();
+                dl->AddRectFilled(badgeMin, badgeMax, UI::ToU32(theme.secondary));
+                dl->AddRect(badgeMin, badgeMax, UI::ToU32(theme.border), 0.0f, 0, 1.0f);
+                {
+                    UI::ScopedFont smallFont(UI::FontVariant::Small);
+                    const ImVec2 icSz = ImGui::CalcTextSize(entityVis.icon);
+                    dl->AddText(
+                        ImVec2(badgeMin.x + std::round((headerH - icSz.x) * 0.5f), badgeMin.y + std::round((headerH - icSz.y) * 0.5f)),
+                        UI::ToU32(entityVis.color),
+                        entityVis.icon);
+                }
+            }
+
+            ImGui::SameLine(0.0f, 6.0f * scale);
+
             char buffer[255] = {};
-            strncpy(buffer, idComp.name.c_str(), sizeof(buffer) - 1);
-            if (ImGui::InputText("##label", buffer, sizeof(buffer), ImGuiInputTextFlags_EnterReturnsTrue))
+            std::strncpy(buffer, idComp.name.c_str(), sizeof(buffer) - 1);
+            const bool isFolderEntity = idComp.IsInType(EntityType_Folder);
+            const float addBtnW = isFolderEntity ? 0.0f : std::round(66.0f * scale);
+            const float nameFieldW = isFolderEntity
+                ? -1.0f
+                : std::max(60.0f, ImGui::GetContentRegionAvail().x - addBtnW - 6.0f * scale);
+
+            if (UI::TextField("##label", buffer, sizeof(buffer), "Entity name...", ImVec2(nameFieldW, headerH), nullptr, false, ImGuiInputTextFlags_EnterReturnsTrue))
             {
                 std::string oldName = idComp.name;
                 std::string newName(buffer);
-                CommandManager::ExecuteCommand(CreateScope<EntityRenameCommand>(m_Scene, idComp.uuid, oldName, newName));
+                if (!newName.empty() && newName != oldName)
+                {
+                    CommandManager::ExecuteCommand(CreateScope<EntityRenameCommand>(m_Scene, idComp.uuid, oldName, newName));
+                }
             }
 
-            if (idComp.IsInType(EntityType_Folder))
+            if (isFolderEntity)
             {
                 ImGui::Spacing();
                 ImGui::SeparatorText("Folder");
@@ -1239,16 +1534,16 @@ namespace ignite
                 ImGui::Text("Direct Children: %zu", idComp.children.size());
                 ImGui::Text("Total Descendants: %zu", totalDescendants);
                 ImGui::Spacing();
-                if (ImGui::Button("Ungroup Children", ImVec2(-1.0f, 0.0f)))
+                if (UI::Button("Ungroup Children", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, headerH), ICON_LC_FOLDER_OUTPUT))
                 {
                     m_PendingUngroupFolderUUID = idComp.uuid;
                 }
             }
             else
             {
-                ImGui::SameLine();
+                ImGui::SameLine(0.0f, 6.0f * scale);
 
-                if (ImGui::Button("Add", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
+                if (UI::Button("Add", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(addBtnW, headerH), ICON_LC_PLUS))
                 {
                     ImGui::OpenPopup("##add_component_context");
                 }
@@ -1300,10 +1595,19 @@ namespace ignite
             RenderComponent<RenderingComponent>("Rendering", selectedEntity, [&]()
             {
                 auto &comp = selectedEntity.GetComponent<RenderingComponent>();
-                UI::DrawCheckbox("Visible", &comp.visible);
-                UI::DrawCheckbox("Contribute GI", &comp.contributeGI);
-                UI::DrawCheckbox("Receive GI", &comp.receiveGI);
+                UI::DrawSwitch("Visible", &comp.visible);
+                UI::DrawSwitch("Cast Shadow", &comp.castShadow);
+                UI::DrawSwitch("Receive Shadow", &comp.receiveShadow);
+                UI::DrawSwitch("Contribute GI", &comp.contributeGI);
+                UI::DrawSwitch("Receive GI", &comp.receiveGI);
 
+                const char *mobilityLabels[] = { "Static", "Movable" };
+                int mobilityIdx = static_cast<int>(comp.mobility);
+                if (UI::DrawComboBox("Mobility", mobilityLabels, IM_ARRAYSIZE(mobilityLabels), &mobilityIdx))
+                {
+                    comp.mobility = static_cast<EntityMobility>(std::clamp(mobilityIdx, 0, 1));
+                    if (m_Scene) m_Scene->SetDirtyFlag(true);
+                }
             }, false); // false: not allowed to remove the component
 
             // Network Identity component
@@ -1312,50 +1616,35 @@ namespace ignite
                 auto &comp = selectedEntity.GetComponent<NetworkIdentityComponent>();
 
                 // Prefab / Template Identifier
-                ImGui::PushID("NetPrefab_Control");
-                ImGui::BeginColumns("NetPrefab_Col", 2, ImGuiOldColumnFlags_GrowParentContentsSize);
-                ImGui::SetColumnWidth(0, UI::defColWidth);
-                ImGui::Text("Prefab");
-                ImGui::NextColumn();
-
-                char prefabBuf[256] = {};
-                strncpy(prefabBuf, comp.prefab.c_str(), sizeof(prefabBuf) - 1);
-                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
-                if (ImGui::InputText("##net_prefab_input", prefabBuf, sizeof(prefabBuf)))
+                UI::DrawTextControl("Prefab", comp.prefab, "Prefab name...", [&]()
                 {
-                    comp.prefab = prefabBuf;
-                }
-                ImGui::PopItemWidth();
-
-                if (ImGui::BeginDragDropTarget())
-                {
-                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        if (payload->DataSize == sizeof(AssetHandle))
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
-                            AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-                            if (metadata.type == AssetType::Prefab)
+                            if (payload->DataSize == sizeof(AssetHandle))
                             {
-                                comp.prefab = metadata.filepath.stem().string();
+                                AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::Prefab)
+                                {
+                                    comp.prefab = metadata.filepath.stem().string();
+                                }
                             }
                         }
+                        ImGui::EndDragDropTarget();
                     }
-                    ImGui::EndDragDropTarget();
-                }
+                });
 
-                ImGui::EndColumns();
-                ImGui::PopID();
-
-                UI::DrawCheckbox("Is Local", &comp.isLocalPlayer);
-                UI::DrawCheckbox("Replicate", &comp.replicate);
+                UI::DrawSwitch("Is Local", &comp.isLocalPlayer);
+                UI::DrawSwitch("Replicate", &comp.replicate);
 
                 if (ImGui::CollapsingHeader("Replicated Components", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    auto DrawCompMaskCheckbox = [&](const char *label, NetCompFlag flag)
+                    auto DrawCompMaskCheckbox = [ & ](const char *label, NetCompFlag flag)
                     {
                         bool enabled = (comp.syncComponentsMask & flag) != 0;
-                        if (UI::DrawCheckbox(label, &enabled))
+                        if (UI::DrawSwitch(label, &enabled))
                         {
                             if (enabled) comp.syncComponentsMask |= flag;
                             else comp.syncComponentsMask &= ~flag;
@@ -1375,20 +1664,20 @@ namespace ignite
                     DrawCompMaskCheckbox("Camera", NetComp_Camera);
                     DrawCompMaskCheckbox("Character Controller", NetComp_CharacterController);
 
-                    if (ImGui::Button("Sync Components to Clients"))
+                    if (UI::Button("Sync Components to Clients", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f), ICON_LC_REFRESH_CW))
                     {
                         comp.MarkDirty(comp.syncComponentsMask);
                     }
                 }
             });
 
-            RenderComponent<PrefabComponent>("Prefab", selectedEntity, [&]()
+            RenderComponent<PrefabComponent>("Prefab", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<PrefabComponent>();
                 const bool isPrefabValid = c.prefabHandle != AssetHandle(0);
                 std::string prefabName = isPrefabValid ? assetManager->GetAssetDisplayName(c.prefabHandle) : "Drag Prefab Asset Here";
 
-                UI::DrawButtonWithColumn("Prefab Asset", prefabName.c_str(), nullptr, [&]()
+                UI::DrawButtonWithColumn("Prefab Asset", prefabName.c_str(), nullptr, [ & ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -1410,69 +1699,68 @@ namespace ignite
 
                     if (c.prefabHandle != AssetHandle(0))
                     {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X##ClearPrefab"))
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearPrefab", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Prefab"))
                         {
                             c.prefabHandle = AssetHandle(0);
                         }
                     }
                 });
 
-                ImGui::Spacing();
-                if (UI::DrawButton("Apply to Prefab", { 120.0f, 28.0f }))
+                if (UI::Button("Apply", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_CHECK))
                 {
                     SceneManager::ApplyPrefabChanges(selectedEntity, m_Scene, m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr);
                 }
-                if (ImGui::IsItemHovered())
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
                 {
                     ImGui::SetTooltip("Save local changes to .ixprefab file and sync all scene instances.");
                 }
 
-                ImGui::SameLine();
-                if (UI::DrawButton("Revert", { 80.0f, 28.0f }))
+                ImGui::SameLine(0.0f, 4.0f);
+                if (UI::Button("Revert", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_ROTATE_CCW))
                 {
                     if (isPrefabValid)
                     {
                         SceneManager::SyncAllPrefabInstances(m_Scene, c.prefabHandle);
                     }
                 }
-                if (ImGui::IsItemHovered())
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
                 {
                     ImGui::SetTooltip("Discard local changes and reload from .ixprefab asset.");
                 }
 
-                ImGui::SameLine();
-                if (UI::DrawButton("Unpack", { 80.0f, 28.0f }))
+                ImGui::SameLine(0.0f, 4.0f);
+                if (UI::Button("Unpack", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_UNLINK))
                 {
                     selectedEntity.RemoveComponent<PrefabComponent>();
                     SetSelectedEntity(selectedEntity);
                 }
-                if (ImGui::IsItemHovered())
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
                 {
                     ImGui::SetTooltip("Break link to prefab asset and turn entity into normal scene object.");
                 }
 
-                ImGui::SameLine();
-                if (UI::DrawButton("Open", { 60.0f, 28.0f }))
+                ImGui::SameLine(0.0f, 4.0f);
+                if (UI::Button("Open", UI::ButtonVariant::Secondary, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_EXTERNAL_LINK))
                 {
                     if (isPrefabValid && m_EditorLayer)
                     {
                         m_EditorLayer->EnterPrefabIsolation(c.prefabHandle);
                     }
                 }
-                if (ImGui::IsItemHovered())
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
                 {
                     ImGui::SetTooltip("Open prefab asset in Isolation Mode editor.");
                 }
             });
 
-            RenderComponent<WidgetComponent>("Widget", selectedEntity, [&]()
+            RenderComponent<WidgetComponent>("Widget", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<WidgetComponent>();
 
                 const bool isWidgetLoaded = c.widgetHandle != AssetHandle(0);
                 std::string label = isWidgetLoaded ? assetManager->GetAssetDisplayName(c.widgetHandle) : "Drag Here";
-                UI::DrawButtonWithColumn("Widget", label.c_str(), nullptr, [&, this]()
+                UI::DrawButtonWithColumn("Widget", label.c_str(), nullptr, [ &, this ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -1492,8 +1780,8 @@ namespace ignite
 
                     if (isWidgetLoaded)
                     {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X##ClearWidget"))
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearWidget", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Widget"))
                         {
                             c.widgetHandle = AssetHandle(0);
                             c.dirty = true;
@@ -1502,19 +1790,19 @@ namespace ignite
                 });
             });
 
-            RenderComponent<WorldEnvironment>("World Environment", selectedEntity, [&]()
+            RenderComponent<WorldEnvironment>("World Environment", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<WorldEnvironment>();
 
                 const char *skyTypes[] = { "HDRI", "Procedural Sky" };
                 int currentType = static_cast<int>(c.skyType);
-                if (ImGui::Combo("Sky Type", &currentType, skyTypes, 2))
+                if (UI::DrawComboBox("Sky Type", skyTypes, 2, &currentType))
                 {
                     c.skyType = static_cast<SkyType>(currentType);
                     c.dirtyEnvironment = true;
                 }
 
-                UI::DrawCheckbox("IBL Environment Lighting", &c.enableIBL);
+                UI::DrawSwitch("IBL Environment Lighting", &c.enableIBL);
                 UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.1f, 4.0f);
                 UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 1.4f, 2.8f);
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
@@ -1532,36 +1820,36 @@ namespace ignite
                 {
                     const bool hasHDR = c.hdrHandle != AssetHandle(0);
                     std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
-                    UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, assetManager, this, &hasHDR]()
+                    UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [ &c, assetManager, this, &hasHDR ]()
+                    {
+                        if (ImGui::BeginDragDropTarget())
                         {
-                            if (ImGui::BeginDragDropTarget())
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                             {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
                                 {
-                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                    if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
-                                    {
-                                        c.hdrHandle = handle;
-                                        c.dirtyEnvironment = true;
-                                        c.gpuInitialized = false;
-                                    }
-                                }
-                                ImGui::EndDragDropTarget();
-                            }
-
-                            if (hasHDR)
-                            {
-                                ImGui::SameLine();
-                                if (ImGui::Button("X"))
-                                {
-                                    c.hdrHandle = AssetHandle(0);
+                                    c.hdrHandle = handle;
                                     c.dirtyEnvironment = true;
                                     c.gpuInitialized = false;
                                 }
                             }
-                        });
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        if (hasHDR)
+                        {
+                            ImGui::SameLine(0.0f, 4.0f);
+                            if (UI::IconButton("##ClearHDR", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear HDR"))
+                            {
+                                c.hdrHandle = AssetHandle(0);
+                                c.dirtyEnvironment = true;
+                                c.gpuInitialized = false;
+                            }
+                        }
+                    });
                 }
                 else if (c.skyType == SkyType::ProceduralSky)
                 {
@@ -1579,12 +1867,12 @@ namespace ignite
                         modified |= UI::DrawFloatControl("Planet Radius (km)", &atmo.planetRadius, 10.0f, 100.0f, 100000.0f);
                         modified |= UI::DrawFloatControl("Atmosphere Radius (km)", &atmo.atmosphereRadius, 10.0f, 100.0f, 100000.0f);
 
-                        if (ImGui::ColorEdit3("Ground Albedo", &atmo.groundAlbedo.r))
+                        if (UI::DrawColorVec3("Ground Albedo", atmo.groundAlbedo))
                         {
                             modified = true;
                         }
 
-                        if (ImGui::Button("Reset to Earth Default"))
+                        if (UI::Button("Reset to Earth Default", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f), ICON_LC_ROTATE_CCW))
                         {
                             atmo = AtmosphereParams();
                             modified = true;
@@ -1600,7 +1888,7 @@ namespace ignite
                 }
             });
 
-            RenderComponent<DirectionalLightComponent>("Directional Light", selectedEntity, [&]()
+            RenderComponent<DirectionalLightComponent>("Directional Light", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<DirectionalLightComponent>();
                 auto &tr = selectedEntity.GetComponent<TransformComponent>();
@@ -1617,12 +1905,12 @@ namespace ignite
                 ImGui::TextDisabled("Elevation: %.3f rad", elevation);
 
                 ImGui::SeparatorText("Shadow");
-                UI::DrawCheckbox("Cascade Shadow", &c.cascadeShadow);
-                UI::DrawCheckbox("Bake Indirect", &c.bakeIndirect);
+                UI::DrawSwitch("Cascade Shadow", &c.cascadeShadow);
+                UI::DrawSwitch("Bake Indirect", &c.bakeIndirect);
 
                 ImGui::BeginDisabled(!c.cascadeShadow);
                 {
-                    UI::DrawCheckbox("Soft Shadow Maps", &c.softShadows);
+                    UI::DrawSwitch("Soft Shadow Maps", &c.softShadows);
                     UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
                     UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
                     UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
@@ -1653,12 +1941,12 @@ namespace ignite
                 ImGui::EndDisabled();
             });
 
-            RenderComponent<PointLightComponent>("Point Light", selectedEntity, [&]()
+            RenderComponent<PointLightComponent>("Point Light", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<PointLightComponent>();
 
-                UI::DrawCheckbox("Enabled", &c.enabled);
-                UI::DrawCheckbox("Bake Indirect", &c.bakeIndirect);
+                UI::DrawSwitch("Enabled", &c.enabled);
+                UI::DrawSwitch("Bake Indirect", &c.bakeIndirect);
                 UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
@@ -1667,14 +1955,24 @@ namespace ignite
                 UI::DrawFloatControl("Constant", &c.constantAttenuation, 0.01f, 0.0f, 10.0f);
                 UI::DrawFloatControl("Linear", &c.linearAttenuation, 0.001f, 0.0f, 10.0f);
                 UI::DrawFloatControl("Quadratic", &c.quadraticAttenuation, 0.0001f, 0.0f, 10.0f);
+
+                ImGui::SeparatorText("Shadow");
+                UI::DrawSwitch("Cast Shadow", &c.castShadow);
+                ImGui::BeginDisabled(!c.castShadow);
+                UI::DrawSwitch("Bake Static Shadow", &c.bakeStaticShadow);
+                UI::DrawSwitch("Soft Shadows", &c.softShadows);
+                UI::DrawFloatControl("Shadow Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                UI::DrawFloatControl("Shadow Bias", &c.shadowBias, 0.0005f, 0.0f, 0.1f);
+                UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.001f, 0.0f, 0.15f);
+                ImGui::EndDisabled();
             });
 
-            RenderComponent<SpotLightComponent>("Spot Light", selectedEntity, [&]()
+            RenderComponent<SpotLightComponent>("Spot Light", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<SpotLightComponent>();
 
-                UI::DrawCheckbox("Enabled", &c.enabled);
-                UI::DrawCheckbox("Bake Indirect", &c.bakeIndirect);
+                UI::DrawSwitch("Enabled", &c.enabled);
+                UI::DrawSwitch("Bake Indirect", &c.bakeIndirect);
                 UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
@@ -1687,9 +1985,19 @@ namespace ignite
                 ImGui::SeparatorText("Cone angles");
                 UI::DrawFloatControl("Inner Angle", &c.innerConeAngle, 0.1f, 0.0f, 90.0f);
                 UI::DrawFloatControl("Outer Angle", &c.outerConeAngle, 0.1f, 0.0f, 90.0f);
+
+                ImGui::SeparatorText("Shadow");
+                UI::DrawSwitch("Cast Shadow", &c.castShadow);
+                ImGui::BeginDisabled(!c.castShadow);
+                UI::DrawSwitch("Bake Static Shadow", &c.bakeStaticShadow);
+                UI::DrawSwitch("Soft Shadows", &c.softShadows);
+                UI::DrawFloatControl("Shadow Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                UI::DrawFloatControl("Shadow Bias", &c.shadowBias, 0.0005f, 0.0f, 0.1f);
+                UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.001f, 0.0f, 0.15f);
+                ImGui::EndDisabled();
             });
 
-            RenderComponent<IrradianceVolumeComponent>("Irradiance Volume", selectedEntity, [&]()
+            RenderComponent<IrradianceVolumeComponent>("Irradiance Volume", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<IrradianceVolumeComponent>();
                 const auto &tr = selectedEntity.GetComponent<TransformComponent>();
@@ -1702,10 +2010,11 @@ namespace ignite
 
                 const char *modeNames[] = { "Off", "Fast", "Leak Resistant" };
                 int modeIdx = std::clamp(c.runtimeMode, 0, 2);
-                if (ImGui::Combo("Runtime Mode", &modeIdx, modeNames, 3))
+                if (UI::DrawComboBox("Runtime Mode", modeNames, 3, &modeIdx))
                 {
                     c.runtimeMode = modeIdx;
                 }
+                UI::DrawSwitch("Sky Visibility Split", &c.skyVisibilitySplit);
 
                 UI::DrawFloatControl("Normal Bias", &c.normalBias, 0.01f, 0.0f, 2.0f);
                 UI::DrawFloatControl("View Bias", &c.viewBias, 0.01f, 0.0f, 2.0f);
@@ -1728,26 +2037,47 @@ namespace ignite
                     bakeOutOfDate ? "GI out of date" : "GI up to date");
             });
 
-            RenderComponent<ReflectionProbeComponent>("Reflection Probe", selectedEntity, [&]()
+            RenderComponent<ReflectionProbeComponent>("Reflection Probe", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<ReflectionProbeComponent>();
                 UI::DrawVec3Control("Influence Extents", c.influenceExtents, 0.1f, 5.0f);
                 UI::DrawVec3Control("Projection Extents", c.projectionExtents, 0.1f, 5.0f);
+                if (UI::Button("Fit Projection to Influence", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f)))
+                {
+                    c.projectionExtents = c.influenceExtents;
+                }
                 UI::DrawVec3Control("Capture Offset", c.captureOffset, 0.05f, 0.0f);
                 UI::DrawFloatControl("Blend Distance (m)", &c.blendDistance, 0.05f, 0.0f, 32.0f);
+                UI::DrawFloatControl("Exclude Self Radius (m)", &c.excludeRadius, 0.05f, 0.0f, 10.0f);
                 UI::DrawIntControl("Resolution", &c.resolution, 16, 32, 256);
                 UI::DrawIntControl("Priority", &c.priority, 1, -100, 100);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.05f, 0.0f, 10.0f);
-                ImGui::Checkbox("Box Projection", &c.boxProjection);
-                ImGui::Checkbox("Normalize To GI", &c.normalize);
+                UI::DrawSwitch("Box Projection", &c.boxProjection);
+                UI::DrawSwitch("Normalize To GI", &c.normalize);
                 if (c.normalize)
                 {
                     UI::DrawFloatControl("Normalization Strength", &c.normalizationStrength, 0.05f, 0.0f, 1.0f);
                 }
                 ImGui::TextWrapped("Baked Cube: %s", c.bakedAssetPath.empty() ? "(not baked)" : c.bakedAssetPath.c_str());
+
+                bool hasBakedFile = false;
+                if (!c.bakedAssetPath.empty())
+                {
+                    std::filesystem::path resolved(c.bakedAssetPath);
+                    if (resolved.is_relative() && m_Scene && m_Scene->GetProject())
+                    {
+                        resolved = m_Scene->GetProject()->GetDirectory() / resolved;
+                    }
+                    std::error_code ec;
+                    hasBakedFile = std::filesystem::exists(resolved, ec);
+                }
+                const uint64_t sceneHash = ComputeSceneBakeHash(m_Scene);
+                const bool upToDate = hasBakedFile && c.bakeHash != 0 && c.bakeHash == sceneHash;
+                ImGui::TextColored(upToDate ? ImVec4(0.35f, 0.9f, 0.4f, 1.0f) : ImVec4(1.0f, 0.55f, 0.2f, 1.0f),
+                    upToDate ? "Reflection probe up to date" : (hasBakedFile ? "Reflection probe out of date" : "Reflection probe not baked"));
             });
 
-            RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
+            RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<Sprite2DComponent>();
 
@@ -1756,36 +2086,36 @@ namespace ignite
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
                 std::string mat2dLabel = isMat2dLoaded ? assetManager->GetAssetDisplayName(c.materialHandle) : "Drag Here";
-                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, assetManager, this]()
+                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [ &c, &selectedEntity, &isMat2dLoaded, assetManager, this ]()
+                {
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        if (ImGui::BeginDragDropTarget())
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                            {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                AssetType type = assetManager->GetAssetType(handle);
-                                if (type == AssetType::Material2D)
-                                {
-                                    Sprite2DComponent before = c;
-                                    c.materialHandle = handle;
-                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-
-                        if (isMat2dLoaded)
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            AssetType type = assetManager->GetAssetType(handle);
+                            if (type == AssetType::Material2D)
                             {
                                 Sprite2DComponent before = c;
-                                c.materialHandle = AssetHandle(0);
+                                c.materialHandle = handle;
                                 CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
                             }
                         }
-                    });
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    if (isMat2dLoaded)
+                    {
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearMat2D", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material 2D"))
+                        {
+                            Sprite2DComponent before = c;
+                            c.materialHandle = AssetHandle(0);
+                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
+                        }
+                    }
+                });
 
                 // Get material 2d
                 Ref<Material2D> mat2d = nullptr;
@@ -1799,48 +2129,48 @@ namespace ignite
                     // Texture on sprite 2d
                     const bool isTextureLoaded = c.handle != AssetHandle(0);
                     const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, assetManager, &selectedEntity]()
+                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [ &c, &isTextureLoaded, this, assetManager, &selectedEntity ]()
+                    {
+                        if (ImGui::BeginDragDropTarget())
                         {
-                            if (ImGui::BeginDragDropTarget())
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                             {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                AssetType type = assetManager->GetAssetType(handle);
+                                if (type == AssetType::Texture)
                                 {
-                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    AssetType type = assetManager->GetAssetType(handle);
-                                    if (type == AssetType::Texture)
-                                    {
-                                        c.handle = handle;
-                                    }
-                                }
-                                else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM))
-                                {
-                                    if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
-                                    {
-                                        auto dropped = *static_cast<const SpriteSheetSpritePayload *>(payload->Data);
-                                        std::swap(dropped.uv0.y, dropped.uv1.y);
-
-                                        Sprite2DComponent before = c;
-                                        c.handle = dropped.textureHandle;
-                                        c.uv0 = dropped.uv0;
-                                        c.uv1 = dropped.uv1;
-                                        c.materialHandle = AssetHandle(0);
-                                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                    }
-                                }
-
-                                ImGui::EndDragDropTarget();
-                            }
-
-                            if (isTextureLoaded)
-                            {
-                                ImGui::SameLine();
-                                if (ImGui::Button("X##ClearTexture"))
-                                {
-                                    c.handle = AssetHandle(0);
+                                    c.handle = handle;
                                 }
                             }
-                        });
+                            else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM))
+                            {
+                                if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
+                                {
+                                    auto dropped = *static_cast<const SpriteSheetSpritePayload *>(payload->Data);
+                                    std::swap(dropped.uv0.y, dropped.uv1.y);
+
+                                    Sprite2DComponent before = c;
+                                    c.handle = dropped.textureHandle;
+                                    c.uv0 = dropped.uv0;
+                                    c.uv1 = dropped.uv1;
+                                    c.materialHandle = AssetHandle(0);
+                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
+                                }
+                            }
+
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        if (isTextureLoaded)
+                        {
+                            ImGui::SameLine(0.0f, 4.0f);
+                            if (UI::IconButton("##ClearTexture", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Texture"))
+                            {
+                                c.handle = AssetHandle(0);
+                            }
+                        }
+                    });
 
                     UI::State tilingState = UI::DrawVec2Control("Tiling", c.tilingFactor, 0.025f, 1.0f);
                     if (tilingState.isItemActivated)            s_Sprite2DBefore = c;
@@ -1867,26 +2197,26 @@ namespace ignite
                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                         selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
-                UI::State flipXState = UI::DrawCheckbox("Flip X", &c.flipX);
+                UI::State flipXState = UI::DrawSwitch("Flip X", &c.flipX);
                 if (flipXState.isItemActivated)            s_Sprite2DBefore = c;
                 if (flipXState.isItemDeactivatedAfterEdit)
                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                         selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
-                UI::State flipYState = UI::DrawCheckbox("Flip Y", &c.flipY);
+                UI::State flipYState = UI::DrawSwitch("Flip Y", &c.flipY);
                 if (flipYState.isItemActivated)            s_Sprite2DBefore = c;
                 if (flipYState.isItemDeactivatedAfterEdit)
                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene,
                         selectedEntity.GetUUID(), s_Sprite2DBefore, c));
             });
 
-            RenderComponent<Animator2DComponent>("Animator 2D", selectedEntity, [&]()
+            RenderComponent<Animator2DComponent>("Animator 2D", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<Animator2DComponent>();
 
                 bool isAnimatorLoaded = c.controllerHandle != AssetHandle(0);
                 std::string animDropLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.controllerHandle) : "Drop Here";
-                UI::DrawButtonWithColumn("Controller", animDropLabel.c_str(), nullptr, [&c]()
+                UI::DrawButtonWithColumn("Controller", animDropLabel.c_str(), nullptr, [ &c ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -1932,16 +2262,16 @@ namespace ignite
                 }
             });
 
-            RenderComponent<PointLight2DComponent>("Point Light 2D", selectedEntity, [&]()
+            RenderComponent<PointLight2DComponent>("Point Light 2D", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<PointLight2DComponent>();
-                UI::DrawCheckbox("Enabled", &c.enabled);
+                UI::DrawSwitch("Enabled", &c.enabled);
                 UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.0f, 10000.0f);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.025f, 0.0f, 10000.0f);
             });
 
-            RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [&]()
+            RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<Circle2DComponent>();
 
@@ -1955,47 +2285,120 @@ namespace ignite
                     CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene, selectedEntity.GetUUID(), compBefore, c));
             });
 
-            RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
+            RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
+                Ref<Project> project = assetManager->LockActiveProject();
 
-                bool isMeshLoaded = c.handle != AssetHandle(0);
-
-                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Static Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, assetManager, &isMeshLoaded, &selectedEntity]()
+                auto drawAssetSlotWithThumbnail = [&](const char *label, AssetHandle handle, const char *emptyLabel,
+                    const char *fallbackIcon, const glm::vec4 &accentColor,
+                    const std::function<void(AssetHandle)> &onDrop, const std::function<void()> &onClear,
+                    const char *clearTooltip, const char *uniqueSuffix)
                 {
+                    const auto &theme = UI::GetTheme();
+                    const float scale = std::max(UI::GetDpiScale(), 1.0f);
+                    const float thumbSize = std::round(36.0f * scale);
+
+                    ImGui::PushID(uniqueSuffix);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(label);
+                    ImGui::SameLine(UI::defColWidth);
+
+                    const ImVec2 wellMin = ImGui::GetCursorScreenPos();
+                    const ImVec2 wellMax(wellMin.x + thumbSize, wellMin.y + thumbSize);
+                    ImDrawList *drawList = ImGui::GetWindowDrawList();
+
+                    ImGui::InvisibleButton("##thumb_btn", ImVec2(thumbSize, thumbSize));
+                    const bool thumbHovered = ImGui::IsItemHovered();
+                    if (thumbHovered && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
+                        {
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+
+                    drawList->AddRectFilled(wellMin, wellMax, UI::ToU32(theme.inputBg), 2.0f);
+                    drawList->AddRect(wellMin, wellMax, UI::ToU32(thumbHovered ? theme.primary : theme.border), 2.0f, 0, 1.0f);
+
+                    Ref<Texture> thumb = ContentBrowserPanel::GetAssetThumbnail(handle, assetManager, project.get());
+                    if (thumb && thumb->GetShaderResourceView())
+                    {
+                        const float pad = 2.0f;
+                        drawList->AddImage(UI::GetTextureID(thumb),
+                            ImVec2(wellMin.x + pad, wellMin.y + pad),
+                            ImVec2(wellMax.x - pad, wellMax.y - pad));
+                    }
+                    else
+                    {
+                        const ImVec2 icSz = ImGui::CalcTextSize(fallbackIcon);
+                        drawList->AddText(
+                            ImVec2(wellMin.x + (thumbSize - icSz.x) * 0.5f, wellMin.y + (thumbSize - icSz.y) * 0.5f),
+                            UI::ToU32(accentColor), fallbackIcon);
+                    }
+                    drawList->AddRectFilled(ImVec2(wellMin.x, wellMax.y - 2.0f), wellMax, UI::ToU32(accentColor, 0.85f));
+
                     if (ImGui::BeginDragDropTarget())
                     {
                         if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
                             LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-                            if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
-                            {
-                                metadata.type = AssetType::StaticMesh;
-                                assetManager->AssignMetaData(handle, metadata);
-                                assetManager->UnloadAsset(handle);
-                                c.handle = handle;
-                                if (selectedEntity.HasComponent<MeshColliderComponent>())
-                                {
-                                    auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
-                                    mc.vertices.clear();
-                                    mc.indices.clear();
-                                    mc.dirty = true;
-                                }
-                            }
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
                         }
                         ImGui::EndDragDropTarget();
                     }
 
-                    if (isMeshLoaded)
+                    ImGui::SameLine(0.0f, 8.0f);
+                    ImGui::BeginGroup();
+                    const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X"))
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
                         {
-                            c.handle = AssetHandle(0); // reset the mesh
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    if (handle != AssetHandle(0))
+                    {
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
+                        {
+                            onClear();
+                        }
+                    }
+                    ImGui::EndGroup();
+                    ImGui::PopID();
+                };
+
+                drawAssetSlotWithThumbnail("Static Mesh Asset", c.handle, "Drag Mesh Here",
+                    ICON_LC_BOX, UI::Accent::Mesh,
+                    [&](AssetHandle handle)
+                    {
+                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                        if (metadata.type == AssetType::Mesh || metadata.type == AssetType::StaticMesh)
+                        {
+                            metadata.type = AssetType::StaticMesh;
+                            assetManager->AssignMetaData(handle, metadata);
+                            assetManager->UnloadAsset(handle);
+                            c.handle = handle;
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2004,16 +2407,26 @@ namespace ignite
                                 mc.dirty = true;
                             }
                         }
-                    }
-                });
+                    },
+                    [&]()
+                    {
+                        c.handle = AssetHandle(0);
+                        if (selectedEntity.HasComponent<MeshColliderComponent>())
+                        {
+                            auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                            mc.vertices.clear();
+                            mc.indices.clear();
+                            mc.dirty = true;
+                        }
+                    },
+                    "Clear Static Mesh", "StaticMeshSlot");
 
-                if (isMeshLoaded)
+                if (c.handle != AssetHandle(0))
                 {
                     Ref<StaticMesh> sm = assetManager->GetAsset<StaticMesh>(c.handle);
                     if (sm)
                     {
-                        // Override Materials
-                        if (ImGui::CollapsingHeader("Override Materials"))
+                        if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen))
                         {
                             const auto &instances = sm->GetMeshInstances();
                             for (size_t i = 0; i < instances.size(); ++i)
@@ -2021,101 +2434,149 @@ namespace ignite
                                 const auto &instance = instances[i];
                                 std::string submeshName = instance->GetName();
                                 if (submeshName.empty())
-                                {
                                     submeshName = "Submesh " + std::to_string(i);
-                                }
                                 else
-                                {
-                                    submeshName = std::format("{} (Submesh {})", submeshName, i);
-                                }
+                                    submeshName = std::format("{} ({})", submeshName, i);
 
-                                AssetHandle overrideMaterialHandle = AssetHandle(0);
-                                auto it = c.overrideMaterials.find(static_cast<int>(i));
-                                if (it != c.overrideMaterials.end())
-                                {
-                                    overrideMaterialHandle = it->second;
-                                }
-
-                                bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
-                                std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
-
-                                UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, assetManager, &selectedEntity]()
-                                {
-                                    if (ImGui::BeginDragDropTarget())
+                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const std::string slotId = std::format("StaticMat_{}", i);
+                                drawAssetSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
+                                    ICON_LC_PALETTE, UI::Accent::Material,
+                                    [&](AssetHandle handle)
                                     {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                        if (metadata.type == AssetType::Material)
                                         {
-                                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                            if (metadata.type == AssetType::Material)
-                                            {
-                                                StaticMeshComponent before = c;
-                                                c.overrideMaterials[static_cast<int>(i)] = handle;
-                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                            }
+                                            instance->SetMaterial(handle);
+                                            sm->SetDirtyFlag(true);
                                         }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (isOverrideLoaded)
+                                    },
+                                    [&]()
                                     {
-                                        ImGui::SameLine();
-                                        if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
-                                        {
-                                            StaticMeshComponent before = c;
-                                            c.overrideMaterials.erase(static_cast<int>(i));
-                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<StaticMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                        }
-                                    }
-                                });
+                                        instance->SetMaterial(AssetHandle(0));
+                                        sm->SetDirtyFlag(true);
+                                    },
+                                    "Reset to Default Material", slotId.c_str());
                             }
                         }
                     }
                 }
             });
 
-            RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
+            RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
+                Ref<Project> project = assetManager->LockActiveProject();
 
-                bool isMeshLoaded = c.handle != AssetHandle(0);
-
-                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Skeletal Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, assetManager, &isMeshLoaded, &selectedEntity]()
+                auto drawSkelSlotWithThumbnail = [&](const char *label, AssetHandle handle, const char *emptyLabel,
+                    const char *fallbackIcon, const glm::vec4 &accentColor,
+                    const std::function<void(AssetHandle)> &onDrop, const std::function<void()> &onClear,
+                    const char *clearTooltip, const char *uniqueSuffix)
                 {
+                    const auto &theme = UI::GetTheme();
+                    const float scale = std::max(UI::GetDpiScale(), 1.0f);
+                    const float thumbSize = std::round(36.0f * scale);
+
+                    ImGui::PushID(uniqueSuffix);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(label);
+                    ImGui::SameLine(UI::defColWidth);
+
+                    const ImVec2 wellMin = ImGui::GetCursorScreenPos();
+                    const ImVec2 wellMax(wellMin.x + thumbSize, wellMin.y + thumbSize);
+                    ImDrawList *drawList = ImGui::GetWindowDrawList();
+
+                    ImGui::InvisibleButton("##thumb_btn", ImVec2(thumbSize, thumbSize));
+                    const bool thumbHovered = ImGui::IsItemHovered();
+                    if (thumbHovered && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
+                        {
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+
+                    drawList->AddRectFilled(wellMin, wellMax, UI::ToU32(theme.inputBg), 2.0f);
+                    drawList->AddRect(wellMin, wellMax, UI::ToU32(thumbHovered ? theme.primary : theme.border), 2.0f, 0, 1.0f);
+
+                    Ref<Texture> thumb = ContentBrowserPanel::GetAssetThumbnail(handle, assetManager, project.get());
+                    if (thumb && thumb->GetShaderResourceView())
+                    {
+                        const float pad = 2.0f;
+                        drawList->AddImage(UI::GetTextureID(thumb),
+                            ImVec2(wellMin.x + pad, wellMin.y + pad),
+                            ImVec2(wellMax.x - pad, wellMax.y - pad));
+                    }
+                    else
+                    {
+                        const ImVec2 icSz = ImGui::CalcTextSize(fallbackIcon);
+                        drawList->AddText(
+                            ImVec2(wellMin.x + (thumbSize - icSz.x) * 0.5f, wellMin.y + (thumbSize - icSz.y) * 0.5f),
+                            UI::ToU32(accentColor), fallbackIcon);
+                    }
+                    drawList->AddRectFilled(ImVec2(wellMin.x, wellMax.y - 2.0f), wellMax, UI::ToU32(accentColor, 0.85f));
+
                     if (ImGui::BeginDragDropTarget())
                     {
                         if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
                             LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-                            if (metadata.type == AssetType::Mesh || metadata.type == AssetType::SkeletalMesh)
-                            {
-                                metadata.type = AssetType::SkeletalMesh;
-                                assetManager->AssignMetaData(handle, metadata);
-                                assetManager->UnloadAsset(handle);
-                                c.handle = handle;
-                                if (selectedEntity.HasComponent<MeshColliderComponent>())
-                                {
-                                    auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
-                                    mc.vertices.clear();
-                                    mc.indices.clear();
-                                    mc.dirty = true;
-                                }
-                            }
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
                         }
                         ImGui::EndDragDropTarget();
                     }
 
-                    if (isMeshLoaded)
+                    ImGui::SameLine(0.0f, 8.0f);
+                    ImGui::BeginGroup();
+                    const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X"))
+                        AssetMetaData meta = assetManager->GetMetaData(handle);
+                        if (meta.type != AssetType::Invalid)
                         {
-                            c.handle = AssetHandle(0); // reset the mesh
+                            Application::SubmitToMainThread([handle, meta]()
+                            {
+                                SignalBus::Emit(AssetEditorOpenSignal{ handle, meta });
+                            });
+                        }
+                    }
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            onDrop(*static_cast<AssetHandle *>(payload->Data));
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    if (handle != AssetHandle(0))
+                    {
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
+                        {
+                            onClear();
+                        }
+                    }
+                    ImGui::EndGroup();
+                    ImGui::PopID();
+                };
+
+                drawSkelSlotWithThumbnail("Skeletal Mesh Asset", c.handle, "Drag Mesh Here",
+                    ICON_LC_BOX, UI::Accent::Mesh,
+                    [&](AssetHandle handle)
+                    {
+                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                        if (metadata.type == AssetType::Mesh || metadata.type == AssetType::SkeletalMesh)
+                        {
+                            metadata.type = AssetType::SkeletalMesh;
+                            assetManager->AssignMetaData(handle, metadata);
+                            assetManager->UnloadAsset(handle);
+                            c.handle = handle;
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2124,16 +2585,26 @@ namespace ignite
                                 mc.dirty = true;
                             }
                         }
-                    }
-                });
+                    },
+                    [&]()
+                    {
+                        c.handle = AssetHandle(0);
+                        if (selectedEntity.HasComponent<MeshColliderComponent>())
+                        {
+                            auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
+                            mc.vertices.clear();
+                            mc.indices.clear();
+                            mc.dirty = true;
+                        }
+                    },
+                    "Clear Skeletal Mesh", "SkelMeshSlot");
 
-                if (isMeshLoaded)
+                if (c.handle != AssetHandle(0))
                 {
                     Ref<SkeletalMesh> sm = assetManager->GetAsset<SkeletalMesh>(c.handle);
                     if (sm)
                     {
-                        // Override Materials
-                        if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
+                        if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen))
                         {
                             const auto &instances = sm->GetMeshInstances();
                             for (size_t i = 0; i < instances.size(); ++i)
@@ -2141,62 +2612,36 @@ namespace ignite
                                 const auto &instance = instances[i];
                                 std::string submeshName = instance->GetName();
                                 if (submeshName.empty())
-                                {
                                     submeshName = "Submesh " + std::to_string(i);
-                                }
                                 else
-                                {
-                                    submeshName = std::format("{} (Submesh {})", submeshName, i);
-                                }
+                                    submeshName = std::format("{} ({})", submeshName, i);
 
-                                AssetHandle overrideMaterialHandle = AssetHandle(0);
-                                auto it = c.overrideMaterials.find(static_cast<int>(i));
-                                if (it != c.overrideMaterials.end())
-                                {
-                                    overrideMaterialHandle = it->second;
-                                }
-
-                                bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
-                                std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
-
-                                UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, assetManager, &selectedEntity]()
-                                {
-                                    if (ImGui::BeginDragDropTarget())
+                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const std::string slotId = std::format("SkelMat_{}", i);
+                                drawSkelSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
+                                    ICON_LC_PALETTE, UI::Accent::Material,
+                                    [&](AssetHandle handle)
                                     {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                        if (metadata.type == AssetType::Material)
                                         {
-                                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                            AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-                                            if (metadata.type == AssetType::Material)
-                                            {
-                                                SkeletalMeshComponent before = c;
-                                                c.overrideMaterials[static_cast<int>(i)] = handle;
-                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                            }
+                                            instance->SetMaterial(handle);
+                                            sm->SetDirtyFlag(true);
                                         }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (isOverrideLoaded)
+                                    },
+                                    [&]()
                                     {
-                                        ImGui::SameLine();
-                                        if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
-                                        {
-                                            SkeletalMeshComponent before = c;
-                                            c.overrideMaterials.erase(static_cast<int>(i));
-                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<SkeletalMeshComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
-                                        }
-                                    }
-                                });
+                                        instance->SetMaterial(AssetHandle(0));
+                                        sm->SetDirtyFlag(true);
+                                    },
+                                    "Reset to Default Material", slotId.c_str());
                             }
                         }
 
                         // Animator
                         bool isAnimatorLoaded = c.runtimeAnimatorHandle != AssetHandle(0);
                         std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.runtimeAnimatorHandle) : "Drag Here";
-                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &sm, &isAnimatorLoaded, assetManager]()
+                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [ &c, this, &sm, &isAnimatorLoaded, assetManager ]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -2225,8 +2670,8 @@ namespace ignite
 
                             if (isAnimatorLoaded)
                             {
-                                ImGui::SameLine();
-                                if (ImGui::Button("X"))
+                                ImGui::SameLine(0.0f, 4.0f);
+                                if (UI::IconButton("##ClearAnimator", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Animator"))
                                 {
                                     sm->SetAnimator(AssetHandle(0)); // reset animator
                                     c.runtimeAnimatorHandle = AssetHandle(0);
@@ -2242,7 +2687,7 @@ namespace ignite
 
                         if (isAnimatorLoaded)
                         {
-                            if (UI::DrawCheckbox("Unique", &c.uniqueAnimator))
+                            if (UI::DrawSwitch("Unique", &c.uniqueAnimator))
                             {
                                 c.currentStateName.clear();
                                 c.stateElapsed = 0.0f;
@@ -2272,7 +2717,7 @@ namespace ignite
                                         bool isAttached = attachedMeshHandle != AssetHandle(0);
                                         const std::string socketMeshLabel = assetManager->GetAssetDisplayName(attachedMeshHandle);
 
-                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [this, &c, socketName = socket.name, assetManager, isAttached, &selectedEntity]()
+                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [ this, &c, socketName = socket.name, assetManager, isAttached, &selectedEntity ]()
                                         {
                                             if (ImGui::BeginDragDropTarget())
                                             {
@@ -2294,8 +2739,9 @@ namespace ignite
 
                                             if (isAttached)
                                             {
-                                                ImGui::SameLine();
-                                                if (ImGui::Button((std::string("X##socket_") + socketName).c_str()))
+                                                ImGui::SameLine(0.0f, 4.0f);
+                                                const std::string clearSockId = std::format("##ClearSocket_{}", socketName);
+                                                if (UI::IconButton(clearSockId.c_str(), ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Socket Mesh"))
                                                 {
                                                     SkeletalMeshComponent before = c;
                                                     c.socketAttachments.erase(socketName);
@@ -2311,7 +2757,7 @@ namespace ignite
                 }
             });
 
-            RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
+            RenderComponent<CameraComponent>("Camera", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<CameraComponent>();
                 static CameraComponent s_CameraBefore;
@@ -2377,7 +2823,7 @@ namespace ignite
 
                 {
                     CameraComponent before = c;
-                    if (UI::DrawCheckbox("Primary", &c.primary).isItemEdited)
+                    if (UI::DrawSwitch("Primary", &c.primary).isItemEdited)
                     {
                         c.dirty = true;
                         CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene, selectedEntity.GetUUID(), before, c));
@@ -2392,14 +2838,14 @@ namespace ignite
                     {
                         if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            c.dirty |= UI::DrawCheckbox("Enable", &pp.taaProperties.enable);
+                            c.dirty |= UI::DrawSwitch("Enable", &pp.taaProperties.enable);
                             c.dirty |= UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
                             ImGui::TreePop();
                         }
 
                         if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            c.dirty |= UI::DrawCheckbox("Enable", &pp.msaaProperties.enable);
+                            c.dirty |= UI::DrawSwitch("Enable", &pp.msaaProperties.enable);
                             c.dirty |= UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16);
                             ImGui::TreePop();
                         }
@@ -2438,7 +2884,7 @@ namespace ignite
                         }
 
                         // Depth of Field
-                        c.dirty |= UI::DrawCheckbox("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
+                        c.dirty |= UI::DrawSwitch("Enable DOF", &c.camera.lens.enabledDOF).isItemEdited;
                         ImGui::BeginDisabled(!c.camera.lens.enabledDOF);
                         {
                             c.dirty |= UI::DrawFloatControl("Focal Length", &c.camera.lens.focalLength, 0.1f, 0.0f, FLT_MAX).isItemEdited;
@@ -2450,7 +2896,7 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         // Bloom
-                        c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
+                        c.dirty |= UI::DrawSwitch("Enable Bloom", &pp.enableBloom).isItemEdited;
                         ImGui::BeginDisabled(!pp.enableBloom);
                         {
                             c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
@@ -2462,7 +2908,7 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         // Vignette
-                        c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
+                        c.dirty |= UI::DrawSwitch("Enable Vignette", &pp.enableVignette).isItemEdited;
                         ImGui::BeginDisabled(!pp.enableVignette);
                         {
                             c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
@@ -2473,7 +2919,7 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         // Chromatic Aberration
-                        c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
+                        c.dirty |= UI::DrawSwitch("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
                         ImGui::BeginDisabled(!pp.enableChromAb);
                         {
                             c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
@@ -2482,7 +2928,7 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         // Ambient Occlusion (GTAO / Legacy SSAO)
-                        c.dirty |= UI::DrawCheckbox("Enable Ambient Occlusion", &pp.enableSSAO).isItemEdited;
+                        c.dirty |= UI::DrawSwitch("Enable Ambient Occlusion", &pp.enableSSAO).isItemEdited;
                         ImGui::BeginDisabled(!pp.enableSSAO);
                         {
                             static const char *kAOModes[] = { "Off", "Legacy SSAO", "GTAO" };
@@ -2514,7 +2960,7 @@ namespace ignite
                 }
             });
 
-            RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
+            RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
 
@@ -2530,18 +2976,18 @@ namespace ignite
                 UI::DrawFloatControl("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
                 UI::DrawFloatControl("Linear Damping", &c.linearDamping, 0.025f, 0.0f, FLT_MAX);
                 UI::DrawFloatControl("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
-                UI::DrawCheckbox("Awake", &c.isAwake);
-                UI::DrawCheckbox("Enabled", &c.isEnabled);
-                UI::DrawCheckbox("Enable Sleeping", &c.enableSleeping);
-                UI::DrawCheckbox("Fixed Rotation", &c.fixedRotation);
+                UI::DrawSwitch("Awake", &c.isAwake);
+                UI::DrawSwitch("Enabled", &c.isEnabled);
+                UI::DrawSwitch("Enable Sleeping", &c.enableSleeping);
+                UI::DrawSwitch("Fixed Rotation", &c.fixedRotation);
 
                 if (!c.fixedRotation)
                 {
-                    UI::DrawCheckbox("Fast Rotation", &c.allowFastRotation);
+                    UI::DrawSwitch("Fast Rotation", &c.allowFastRotation);
                 }
             });
 
-            RenderComponent<BoxCollider2DComponent>("Box Collider 2D", selectedEntity, [&]()
+            RenderComponent<BoxCollider2DComponent>("Box Collider 2D", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<BoxCollider2DComponent>();
                 c.dirty = UI::DrawVec2Control("Size", c.size, 0.025f, 1.0f);
@@ -2549,10 +2995,10 @@ namespace ignite
                 c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f, 0.0f, FLT_MAX);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f, 0.0f, FLT_MAX);
                 c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
-                c.dirty |= UI::DrawCheckbox("Is Sensor", &c.isSensor);
+                c.dirty |= UI::DrawSwitch("Is Sensor", &c.isSensor);
             });
 
-            RenderComponent<CircleCollider2DComponent>("Circle Collider 2D", selectedEntity, [&]()
+            RenderComponent<CircleCollider2DComponent>("Circle Collider 2D", selectedEntity, [ & ]()
             {
                 auto &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
                 cc.dirty = UI::DrawVec2Control("Center", cc.center, 0.025f);
@@ -2560,10 +3006,10 @@ namespace ignite
                 cc.dirty |= UI::DrawFloatControl("Restitution", &cc.restitution, 0.025f, 0.0f, FLT_MAX);
                 cc.dirty |= UI::DrawFloatControl("Friction", &cc.friction, 0.025f, 0.0f, FLT_MAX);
                 cc.dirty |= UI::DrawFloatControl("Density", &cc.density, 0.025f);
-                cc.dirty |= UI::DrawCheckbox("Is Sensor", &cc.isSensor);
+                cc.dirty |= UI::DrawSwitch("Is Sensor", &cc.isSensor);
             });
 
-            RenderComponent<RigidbodyComponent>("Rigid Body", selectedEntity, [&]()
+            RenderComponent<RigidbodyComponent>("Rigid Body", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<RigidbodyComponent>();
 
@@ -2645,14 +3091,14 @@ namespace ignite
                     ImGui::TreePop();
                 }
 
-                c.dirty |= UI::DrawCheckbox("Is Sensor", &c.isSensor);
-                c.dirty |= UI::DrawCheckbox("Use Gravity", &c.useGravity);
-                c.dirty |= UI::DrawCheckbox("Allow sleeping", &c.allowSleeping);
-                c.dirty |= UI::DrawCheckbox("Retain Acceleration", &c.retainAcceleration);
-                c.dirty |= UI::DrawCheckbox("Apply Gyroscopic Force", &c.applyGyroscopicForce);
+                c.dirty |= UI::DrawSwitch("Is Sensor", &c.isSensor);
+                c.dirty |= UI::DrawSwitch("Use Gravity", &c.useGravity);
+                c.dirty |= UI::DrawSwitch("Allow sleeping", &c.allowSleeping);
+                c.dirty |= UI::DrawSwitch("Retain Acceleration", &c.retainAcceleration);
+                c.dirty |= UI::DrawSwitch("Apply Gyroscopic Force", &c.applyGyroscopicForce);
             });
 
-            RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
+            RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<BoxColliderComponent>();
                 c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
@@ -2660,7 +3106,7 @@ namespace ignite
                 // TODO: Collider Edit from UI (TOGGLES)
             });
 
-            RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [&]()
+            RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<SphereColliderComponent>();
                 c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
@@ -2669,7 +3115,7 @@ namespace ignite
                 // TODO: Collider Edit from UI (TOGGLES)
             });
 
-            RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [&]()
+            RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
                 c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
@@ -2679,7 +3125,7 @@ namespace ignite
                 // TODO: Collider Edit from UI (TOGGLES)
             });
 
-            RenderComponent<CharacterControllerComponent>("Character Controller", selectedEntity, [&]()
+            RenderComponent<CharacterControllerComponent>("Character Controller", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<CharacterControllerComponent>();
 
@@ -2700,14 +3146,14 @@ namespace ignite
                 }
             });
 
-            RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [&]()
+            RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<MeshColliderComponent>();
                 c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
-                c.dirty |= UI::DrawCheckbox("Convex", &c.convex);
+                c.dirty |= UI::DrawSwitch("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
-                if (ImGui::Button("Rebuild From Mesh"))
+                if (UI::Button("Rebuild From Mesh", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_REFRESH_CW))
                 {
                     c.vertices.clear();
                     c.indices.clear();
@@ -2735,8 +3181,8 @@ namespace ignite
                     }
                     c.dirty = true;
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Clear Mesh Data"))
+                ImGui::SameLine(0.0f, 4.0f);
+                if (UI::Button("Clear Mesh Data", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_X))
                 {
                     c.dirty = true;
                     c.vertices.clear();
@@ -2744,14 +3190,14 @@ namespace ignite
                 }
             });
 
-            RenderComponent<PlaneColliderComponent>("Plane Collider", selectedEntity, [&]()
+            RenderComponent<PlaneColliderComponent>("Plane Collider", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<PlaneColliderComponent>();
                 c.dirty |= UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
                 // TODO: Collider Edit from UI (TOGGLES)
             });
 
-            RenderComponent<HeightFieldColliderComponent>("HeightField Collider", selectedEntity, [&]()
+            RenderComponent<HeightFieldColliderComponent>("HeightField Collider", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<HeightFieldColliderComponent>();
                 c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
@@ -2760,7 +3206,7 @@ namespace ignite
                 ImGui::Text("Heights Size: %zu", c.heights.size());
             });
 
-            RenderComponent<PhysicsJointComponent>("Physics Joint", selectedEntity, [&]()
+            RenderComponent<PhysicsJointComponent>("Physics Joint", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<PhysicsJointComponent>();
                 auto &d = c.desc;
@@ -2785,7 +3231,7 @@ namespace ignite
                     }
                 }
 
-                UI::DrawButtonWithColumn("Connected Entity", connectedLabel.c_str(), nullptr, [&, this]()
+                UI::DrawButtonWithColumn("Connected Entity", connectedLabel.c_str(), nullptr, [ &, this ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -2811,7 +3257,7 @@ namespace ignite
 
                 if (c.connectedEntity != UUID(0))
                 {
-                    if (ImGui::SmallButton("Clear Connected Entity"))
+                    if (UI::Button("Clear Connected Entity", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f), ICON_LC_UNLINK))
                     {
                         PhysicsJointComponent beforeSnap = c;
                         c.connectedEntity = UUID(0);
@@ -2843,8 +3289,8 @@ namespace ignite
                     c.dirty = true;
                 }
 
-                c.dirty |= UI::DrawCheckbox("Enabled", &d.enabled);
-                c.dirty |= UI::DrawCheckbox("Auto Configure Connected", &d.autoConfigureConnected);
+                c.dirty |= UI::DrawSwitch("Enabled", &d.enabled);
+                c.dirty |= UI::DrawSwitch("Auto Configure Connected", &d.autoConfigureConnected);
 
                 if (auto rtJoint = c.runtimeJoint.lock())
                 {
@@ -2888,7 +3334,7 @@ namespace ignite
                     ImGui::SeparatorText("Distance Settings");
                     c.dirty |= UI::DrawFloatControl("Min Distance", &d.minDistance, 0.025f, 0.0f, 10000.0f);
                     c.dirty |= UI::DrawFloatControl("Max Distance (-1 = Auto)", &d.maxDistance, 0.025f, -1.0f, 10000.0f, -1.0f);
-                    c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
+                    c.dirty |= UI::DrawSwitch("Enable Spring", &d.enableSpring);
                     ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
@@ -2900,7 +3346,7 @@ namespace ignite
                 {
                     ImGui::SeparatorText("Hinge Limits & Spring");
 
-                    c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
+                    c.dirty |= UI::DrawSwitch("Enable Limits", &d.enableLimits);
                     ImGui::BeginDisabled(!d.enableLimits);
                     {
                         c.dirty |= UI::DrawFloatControl("Min Angle (deg)", &d.limitsMin, 0.5f, -180.0f, 0.0f, -45.0f);
@@ -2908,7 +3354,7 @@ namespace ignite
                     }
                     ImGui::EndDisabled();
 
-                    c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
+                    c.dirty |= UI::DrawSwitch("Enable Spring", &d.enableSpring);
                     ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
@@ -2944,7 +3390,7 @@ namespace ignite
                 {
                     ImGui::SeparatorText("Slider Limits & Spring");
 
-                    c.dirty |= UI::DrawCheckbox("Enable Limits", &d.enableLimits);
+                    c.dirty |= UI::DrawSwitch("Enable Limits", &d.enableLimits);
                     ImGui::BeginDisabled(!d.enableLimits);
                     {
                         c.dirty |= UI::DrawFloatControl("Min Limit (m)", &d.limitsMin, 0.05f, -10000.0f, 0.0f, -1.0f);
@@ -2952,7 +3398,7 @@ namespace ignite
                     }
                     ImGui::EndDisabled();
 
-                    c.dirty |= UI::DrawCheckbox("Enable Spring", &d.enableSpring);
+                    c.dirty |= UI::DrawSwitch("Enable Spring", &d.enableSpring);
                     ImGui::BeginDisabled(!d.enableSpring);
                     {
                         c.dirty |= UI::DrawFloatControl("Spring Frequency (Hz)", &d.springFrequency, 0.05f, 0.0f, 100.0f, 2.0f);
@@ -2996,121 +3442,116 @@ namespace ignite
                 c.dirty |= UI::DrawFloatControl("Break Torque (0 = Unbreakable)", &d.breakTorque, 1.0f, 0.0f, 10000000.0f);
             });
 
-            RenderComponent<TextComponent>("Text", selectedEntity, [&]()
+            RenderComponent<TextComponent>("Text", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<TextComponent>();
 
                 const bool isFontLoaded = c.fontHandle != AssetHandle(0);
                 std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Here";
-                UI::DrawButtonWithColumn("Font", fontLabel.c_str(), nullptr, [&, this]()
+                UI::DrawButtonWithColumn("Font", fontLabel.c_str(), nullptr, [ &, this ]()
+                {
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        if (ImGui::BeginDragDropTarget())
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            if (assetManager->GetAssetType(handle) == AssetType::Font)
                             {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                if (assetManager->GetAssetType(handle) == AssetType::Font)
-                                {
-                                    c.fontHandle = handle;
-                                }
+                                c.fontHandle = handle;
                             }
-                            ImGui::EndDragDropTarget();
                         }
+                        ImGui::EndDragDropTarget();
+                    }
 
-                        if (isFontLoaded)
+                    if (isFontLoaded)
+                    {
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearTextFont", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Font"))
                         {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X##ClearTextFont"))
-                            {
-                                c.fontHandle = AssetHandle(0);
-                            }
+                            c.fontHandle = AssetHandle(0);
                         }
-                    });
+                    }
+                });
 
                 const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
                 std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
-                UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, this, assetManager, &isMaterialLoaded]()
-                    {
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                            {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                if (assetManager->GetAssetType(handle) == AssetType::Material2D)
-                                {
-                                    c.material2dHandle = handle;
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-
-                        if (isMaterialLoaded)
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X##ClearTextMaterial"))
-                            {
-                                c.material2dHandle = AssetHandle(0);
-                            }
-                        }
-                    });
-
-                char textBuffer[2048] = {};
-                strncpy(textBuffer, c.text.c_str(), sizeof(textBuffer) - 1);
-                if (ImGui::InputTextMultiline("Text", textBuffer, sizeof(textBuffer), ImVec2{0.0f, 0.0f}))
+                UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [ &c, this, assetManager, &isMaterialLoaded ]()
                 {
-                    c.text = textBuffer;
-                }
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            if (assetManager->GetAssetType(handle) == AssetType::Material2D)
+                            {
+                                c.material2dHandle = handle;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    if (isMaterialLoaded)
+                    {
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearTextMaterial", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material"))
+                        {
+                            c.material2dHandle = AssetHandle(0);
+                        }
+                    }
+                });
+
+                UI::TextArea("##text_component_area", c.text, "Text content...", ImVec2(-1.0f, 68.0f));
 
                 UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Font Size", &c.fontSize, 0.25f, 4.0f, 256.0f);
                 UI::DrawFloatControl("Kerning", &c.kerning, 0.001f, -10.0f, 10.0f);
                 UI::DrawFloatControl("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
-                UI::DrawCheckbox("Screen Space", &c.screenSpace);
-                UI::DrawCheckbox("Billboard", &c.billboard);
-                UI::DrawCheckbox("Center Align", &c.centerAlign);
+                UI::DrawSwitch("Screen Space", &c.screenSpace);
+                UI::DrawSwitch("Billboard", &c.billboard);
+                UI::DrawSwitch("Center Align", &c.centerAlign);
             });
 
-            RenderComponent<AudioSourceComponent>("Audio Source", selectedEntity, [&]()
+            RenderComponent<AudioSourceComponent>("Audio Source", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<AudioSourceComponent>();
 
                 const bool isLoaded = c.handle != AssetHandle(0);
                 std::string label = isLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 
-                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded, assetManager]()
+                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [ &c, this, &isLoaded, assetManager ]()
+                {
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        if (ImGui::BeginDragDropTarget())
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            if (payload->DataSize == sizeof(AssetHandle))
                             {
-                                if (payload->DataSize == sizeof(AssetHandle))
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                if (handle != AssetHandle(0))
                                 {
-                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    if (handle != AssetHandle(0))
+                                    AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                    if (metadata.type == AssetType::Audio)
                                     {
-                                        AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                        if (metadata.type == AssetType::Audio)
-                                        {
-                                            c.handle = handle;
-                                            Ref<FmodSound> sound = assetManager->GetAsset<FmodSound>(handle);
-                                        }
+                                        c.handle = handle;
+                                        Ref<FmodSound> sound = assetManager->GetAsset<FmodSound>(handle);
                                     }
                                 }
                             }
-                            ImGui::EndDragDropTarget();
                         }
+                        ImGui::EndDragDropTarget();
+                    }
 
-                        if (isLoaded)
+                    if (isLoaded)
+                    {
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearAudio", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Audio"))
                         {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
-                            {
-                                c.handle = AssetHandle(0);
-                            }
+                            c.handle = AssetHandle(0);
                         }
-                    });;
+                    }
+                });
 
                 if (isLoaded)
                 {
@@ -3120,7 +3561,7 @@ namespace ignite
 
                         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
                         ImGui::BeginGroup();
-                        if (ImGui::Button("Play"))
+                        if (UI::Button("Play", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_PLAY))
                         {
                             sound->Stop();
                             sound->Play();
@@ -3130,8 +3571,8 @@ namespace ignite
                             sound->SetMode(c.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
                         }
 
-                        ImGui::SameLine();
-                        if (ImGui::Button("Stop"))
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::Button("Stop", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_SQUARE))
                         {
                             sound->Stop();
                         }
@@ -3139,17 +3580,16 @@ namespace ignite
                         const bool isPlaying = sound->IsPlaying();
                         const bool isPaused = sound->IsPaused();
 
-                        ImGui::BeginDisabled(!isPlaying && !isPaused);
-                        std::string pauseLabel = !isPaused ? "Pause" : "Resume";
-                        ImGui::SameLine();
-                        if (ImGui::Button(pauseLabel.c_str()))
+                        ImGui::SameLine(0.0f, 4.0f);
+                        const char *pauseLabel = !isPaused ? "Pause" : "Resume";
+                        const char *pauseIcon = !isPaused ? ICON_LC_PAUSE : ICON_LC_PLAY;
+                        if (UI::Button(pauseLabel, UI::ButtonVariant::Secondary, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), pauseIcon, false, !isPlaying && !isPaused))
                         {
                             if (sound->IsPaused())
                                 sound->Resume();
                             else if (isPlaying)
                                 sound->Pause();
                         }
-                        ImGui::EndDisabled();
 
                         ImGui::EndGroup();
 
@@ -3167,11 +3607,11 @@ namespace ignite
                             sound->SetPan(c.pan);
                         }
 
-                        if (UI::DrawCheckbox("Play On Start", &c.playOnStart))
+                        if (UI::DrawSwitch("Play On Start", &c.playOnStart))
                         {
                         }
 
-                        if (UI::DrawCheckbox("Loop", &c.loop))
+                        if (UI::DrawSwitch("Loop", &c.loop))
                         {
                             if (c.loop)
                                 sound->SetMode(FMOD_LOOP_NORMAL);
@@ -3181,42 +3621,44 @@ namespace ignite
 
                         bool dspChainChanged = false;
 
-                        if (ImGui::Button("Add DSP"))
+                        if (UI::Button("Add DSP", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_PLUS))
                         {
-                            ImGui::OpenPopup("##add_audio_dsp_popup");
+                            UI::OpenPopupMenu("##add_audio_dsp_popup");
                         }
 
-                        if (ImGui::BeginPopup("##add_audio_dsp_popup"))
+                        if (UI::BeginPopupMenu("##add_audio_dsp_popup"))
                         {
-                            if (ImGui::MenuItem("Reverb"))
+                            UI::ContextMenuLabel("Audio DSP Effects");
+                            UI::ContextMenuSeparator();
+                            if (UI::ContextMenuItem("Reverb", nullptr, ICON_LC_AUDIO_LINES, false, true, UI::Accent::Audio))
                             {
                                 AudioSourceComponent::DspSettings dsp;
                                 dsp.type = AudioSourceComponent::DspType::Reverb;
                                 c.dsps.push_back(dsp);
                                 dspChainChanged = true;
                             }
-                            if (ImGui::MenuItem("Distortion"))
+                            if (UI::ContextMenuItem("Distortion", nullptr, ICON_LC_ZAP, false, true, UI::Accent::Audio))
                             {
                                 AudioSourceComponent::DspSettings dsp;
                                 dsp.type = AudioSourceComponent::DspType::Distortion;
                                 c.dsps.push_back(dsp);
                                 dspChainChanged = true;
                             }
-                            if (ImGui::MenuItem("Chorus"))
+                            if (UI::ContextMenuItem("Chorus", nullptr, ICON_LC_AUDIO_WAVEFORM, false, true, UI::Accent::Audio))
                             {
                                 AudioSourceComponent::DspSettings dsp;
                                 dsp.type = AudioSourceComponent::DspType::Chorus;
                                 c.dsps.push_back(dsp);
                                 dspChainChanged = true;
                             }
-                            if (ImGui::MenuItem("Compressor"))
+                            if (UI::ContextMenuItem("Compressor", nullptr, ICON_LC_SLIDERS_HORIZONTAL, false, true, UI::Accent::Audio))
                             {
                                 AudioSourceComponent::DspSettings dsp;
                                 dsp.type = AudioSourceComponent::DspType::Compressor;
                                 c.dsps.push_back(dsp);
                                 dspChainChanged = true;
                             }
-                            if (ImGui::MenuItem("Delay"))
+                            if (UI::ContextMenuItem("Delay", nullptr, ICON_LC_TIMER, false, true, UI::Accent::Audio))
                             {
                                 AudioSourceComponent::DspSettings dsp;
                                 dsp.type = AudioSourceComponent::DspType::Delay;
@@ -3224,7 +3666,7 @@ namespace ignite
                                 dspChainChanged = true;
                             }
 
-                            ImGui::EndPopup();
+                            UI::EndContextMenu();
                         }
 
                         if (!c.dsps.empty())
@@ -3244,56 +3686,55 @@ namespace ignite
                                     const char *dspTypeName = "DSP";
                                     switch (dsp.type)
                                     {
-                                        case AudioSourceComponent::DspType::Reverb: dspTypeName = "Reverb"; break;
-                                        case AudioSourceComponent::DspType::Distortion: dspTypeName = "Distortion"; break;
-                                        case AudioSourceComponent::DspType::Chorus: dspTypeName = "Chorus"; break;
-                                        case AudioSourceComponent::DspType::Compressor: dspTypeName = "Compressor"; break;
-                                        case AudioSourceComponent::DspType::Delay: dspTypeName = "Delay"; break;
+                                    case AudioSourceComponent::DspType::Reverb: dspTypeName = "Reverb"; break;
+                                    case AudioSourceComponent::DspType::Distortion: dspTypeName = "Distortion"; break;
+                                    case AudioSourceComponent::DspType::Chorus: dspTypeName = "Chorus"; break;
+                                    case AudioSourceComponent::DspType::Compressor: dspTypeName = "Compressor"; break;
+                                    case AudioSourceComponent::DspType::Delay: dspTypeName = "Delay"; break;
                                     }
 
                                     const std::string header = std::format("{} ##{}", dspTypeName, i);
                                     if (ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
                                     {
-                                        dspChainChanged |= UI::DrawCheckbox("Enabled", &dsp.enabled);
-                                        ImGui::SameLine();
-                                        if (ImGui::Button("Remove"))
+                                        dspChainChanged |= UI::DrawSwitch("Enabled", &dsp.enabled);
+                                        if (UI::Button("Remove DSP", UI::ButtonVariant::Destructive, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_TRASH_2))
                                         {
                                             removeIndex = i;
                                         }
 
                                         switch (dsp.type)
                                         {
-                                            case AudioSourceComponent::DspType::Reverb:
-                                                dspChainChanged |= UI::DrawFloatControl("Decay Time", &dsp.reverbDecayTime, 1.0f, 100.0f, 2000.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Early Delay", &dsp.reverbEarlyDelay, 0.1f, 0.0f, 300.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Late Delay", &dsp.reverbLateDelay, 0.1f, 0.0f, 300.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("HF Reference", &dsp.reverbHighFrequencyReference, 1.0f, 20.0f, 20000.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Diffusion", &dsp.reverbDiffusion, 0.1f, 10.0f, 100.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Density", &dsp.reverbDensity, 0.1f, 10.0f, 100.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Low Shelf Gain", &dsp.reverbLowShelfGain, 1.0f, 20.0f, 1000.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("High Cut", &dsp.reverbHighCut, 1.0f, 20.0f, 20000.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Dry Level", &dsp.reverbDryLevel, 0.1f, -80.0f, 20.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Wet Level", &dsp.reverbWetLevel, 0.1f, -80.0f, 20.0f);
-                                                break;
-                                            case AudioSourceComponent::DspType::Distortion:
-                                                dspChainChanged |= UI::DrawFloatControl("Distortion", &dsp.distortionLevel, 0.01f, 0.0f, 1.0f);
-                                                break;
-                                            case AudioSourceComponent::DspType::Chorus:
-                                                dspChainChanged |= UI::DrawFloatControl("Mix", &dsp.chorusMix, 0.1f, 0.0f, 100.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Rate", &dsp.chorusRate, 0.01f, 0.0f, 20.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Depth", &dsp.chorusDepth, 0.1f, 0.0f, 100.0f);
-                                                break;
-                                            case AudioSourceComponent::DspType::Compressor:
-                                                dspChainChanged |= UI::DrawFloatControl("Threshold", &dsp.compressorThreshold, 0.1f, -60.0f, 0.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Ratio", &dsp.compressorRatio, 0.01f, 0.0f, 5.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Release", &dsp.compressorRelease, 1.0f, 10.0f, 5000.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Gain Makeup", &dsp.compressorGainMakeup, 0.1f, -30.0f, 30.0f);
-                                                dspChainChanged |= UI::DrawCheckbox("Use Sidechain", &dsp.compressorUseSidechain);
-                                                break;
-                                            case AudioSourceComponent::DspType::Delay:
-                                                dspChainChanged |= UI::DrawFloatControl("Delay (ms)", &dsp.delayMs, 1.0f, 0.0f, 10000.0f);
-                                                dspChainChanged |= UI::DrawFloatControl("Feedback", &dsp.delayFeedback, 0.1f, 0.0f, 100.0f);
-                                                break;
+                                        case AudioSourceComponent::DspType::Reverb:
+                                            dspChainChanged |= UI::DrawFloatControl("Decay Time", &dsp.reverbDecayTime, 1.0f, 100.0f, 2000.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Early Delay", &dsp.reverbEarlyDelay, 0.1f, 0.0f, 300.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Late Delay", &dsp.reverbLateDelay, 0.1f, 0.0f, 300.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("HF Reference", &dsp.reverbHighFrequencyReference, 1.0f, 20.0f, 20000.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Diffusion", &dsp.reverbDiffusion, 0.1f, 10.0f, 100.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Density", &dsp.reverbDensity, 0.1f, 10.0f, 100.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Low Shelf Gain", &dsp.reverbLowShelfGain, 1.0f, 20.0f, 1000.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("High Cut", &dsp.reverbHighCut, 1.0f, 20.0f, 20000.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Dry Level", &dsp.reverbDryLevel, 0.1f, -80.0f, 20.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Wet Level", &dsp.reverbWetLevel, 0.1f, -80.0f, 20.0f);
+                                            break;
+                                        case AudioSourceComponent::DspType::Distortion:
+                                            dspChainChanged |= UI::DrawFloatControl("Distortion", &dsp.distortionLevel, 0.01f, 0.0f, 1.0f);
+                                            break;
+                                        case AudioSourceComponent::DspType::Chorus:
+                                            dspChainChanged |= UI::DrawFloatControl("Mix", &dsp.chorusMix, 0.1f, 0.0f, 100.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Rate", &dsp.chorusRate, 0.01f, 0.0f, 20.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Depth", &dsp.chorusDepth, 0.1f, 0.0f, 100.0f);
+                                            break;
+                                        case AudioSourceComponent::DspType::Compressor:
+                                            dspChainChanged |= UI::DrawFloatControl("Threshold", &dsp.compressorThreshold, 0.1f, -60.0f, 0.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Ratio", &dsp.compressorRatio, 0.01f, 0.0f, 5.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Release", &dsp.compressorRelease, 1.0f, 10.0f, 5000.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Gain Makeup", &dsp.compressorGainMakeup, 0.1f, -30.0f, 30.0f);
+                                            dspChainChanged |= UI::DrawSwitch("Use Sidechain", &dsp.compressorUseSidechain);
+                                            break;
+                                        case AudioSourceComponent::DspType::Delay:
+                                            dspChainChanged |= UI::DrawFloatControl("Delay (ms)", &dsp.delayMs, 1.0f, 0.0f, 10000.0f);
+                                            dspChainChanged |= UI::DrawFloatControl("Feedback", &dsp.delayFeedback, 0.1f, 0.0f, 100.0f);
+                                            break;
                                         }
                                     }
 
@@ -3319,11 +3760,11 @@ namespace ignite
 
                                 switch (dspSettings.type)
                                 {
-                                    case AudioSourceComponent::DspType::Reverb: dspType = FMOD_DSP_TYPE_SFXREVERB; break;
-                                    case AudioSourceComponent::DspType::Distortion: dspType = FMOD_DSP_TYPE_DISTORTION; break;
-                                    case AudioSourceComponent::DspType::Chorus: dspType = FMOD_DSP_TYPE_CHORUS; break;
-                                    case AudioSourceComponent::DspType::Compressor: dspType = FMOD_DSP_TYPE_COMPRESSOR; break;
-                                    case AudioSourceComponent::DspType::Delay: dspType = FMOD_DSP_TYPE_ECHO; break;
+                                case AudioSourceComponent::DspType::Reverb: dspType = FMOD_DSP_TYPE_SFXREVERB; break;
+                                case AudioSourceComponent::DspType::Distortion: dspType = FMOD_DSP_TYPE_DISTORTION; break;
+                                case AudioSourceComponent::DspType::Chorus: dspType = FMOD_DSP_TYPE_CHORUS; break;
+                                case AudioSourceComponent::DspType::Compressor: dspType = FMOD_DSP_TYPE_COMPRESSOR; break;
+                                case AudioSourceComponent::DspType::Delay: dspType = FMOD_DSP_TYPE_ECHO; break;
                                 }
 
                                 if (dspType == FMOD_DSP_TYPE_UNKNOWN)
@@ -3338,37 +3779,37 @@ namespace ignite
 
                                 switch (dspSettings.type)
                                 {
-                                    case AudioSourceComponent::DspType::Reverb:
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DECAYTIME, dspSettings.reverbDecayTime);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_EARLYDELAY, dspSettings.reverbEarlyDelay);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LATEDELAY, dspSettings.reverbLateDelay);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HFREFERENCE, dspSettings.reverbHighFrequencyReference);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DIFFUSION, dspSettings.reverbDiffusion);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DENSITY, dspSettings.reverbDensity);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LOWSHELFFREQUENCY, dspSettings.reverbLowShelfGain);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HIGHCUT, dspSettings.reverbHighCut);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DRYLEVEL, dspSettings.reverbDryLevel);
-                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_WETLEVEL, dspSettings.reverbWetLevel);
-                                        break;
-                                    case AudioSourceComponent::DspType::Distortion:
-                                        dsp->setParameterFloat(FMOD_DSP_DISTORTION_LEVEL, dspSettings.distortionLevel);
-                                        break;
-                                    case AudioSourceComponent::DspType::Chorus:
-                                        dsp->setParameterFloat(FMOD_DSP_CHORUS_MIX, dspSettings.chorusMix);
-                                        dsp->setParameterFloat(FMOD_DSP_CHORUS_RATE, dspSettings.chorusRate);
-                                        dsp->setParameterFloat(FMOD_DSP_CHORUS_DEPTH, dspSettings.chorusDepth);
-                                        break;
-                                    case AudioSourceComponent::DspType::Compressor:
-                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_THRESHOLD, dspSettings.compressorThreshold);
-                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RATIO, dspSettings.compressorRatio);
-                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RELEASE, dspSettings.compressorRelease);
-                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_GAINMAKEUP, dspSettings.compressorGainMakeup);
-                                        dsp->setParameterBool(FMOD_DSP_COMPRESSOR_USESIDECHAIN, dspSettings.compressorUseSidechain);
-                                        break;
-                                    case AudioSourceComponent::DspType::Delay:
-                                        dsp->setParameterFloat(FMOD_DSP_ECHO_DELAY, dspSettings.delayMs);
-                                        dsp->setParameterFloat(FMOD_DSP_ECHO_FEEDBACK, dspSettings.delayFeedback);
-                                        break;
+                                case AudioSourceComponent::DspType::Reverb:
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DECAYTIME, dspSettings.reverbDecayTime);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_EARLYDELAY, dspSettings.reverbEarlyDelay);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LATEDELAY, dspSettings.reverbLateDelay);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HFREFERENCE, dspSettings.reverbHighFrequencyReference);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DIFFUSION, dspSettings.reverbDiffusion);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DENSITY, dspSettings.reverbDensity);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LOWSHELFFREQUENCY, dspSettings.reverbLowShelfGain);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HIGHCUT, dspSettings.reverbHighCut);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DRYLEVEL, dspSettings.reverbDryLevel);
+                                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_WETLEVEL, dspSettings.reverbWetLevel);
+                                    break;
+                                case AudioSourceComponent::DspType::Distortion:
+                                    dsp->setParameterFloat(FMOD_DSP_DISTORTION_LEVEL, dspSettings.distortionLevel);
+                                    break;
+                                case AudioSourceComponent::DspType::Chorus:
+                                    dsp->setParameterFloat(FMOD_DSP_CHORUS_MIX, dspSettings.chorusMix);
+                                    dsp->setParameterFloat(FMOD_DSP_CHORUS_RATE, dspSettings.chorusRate);
+                                    dsp->setParameterFloat(FMOD_DSP_CHORUS_DEPTH, dspSettings.chorusDepth);
+                                    break;
+                                case AudioSourceComponent::DspType::Compressor:
+                                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_THRESHOLD, dspSettings.compressorThreshold);
+                                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RATIO, dspSettings.compressorRatio);
+                                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RELEASE, dspSettings.compressorRelease);
+                                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_GAINMAKEUP, dspSettings.compressorGainMakeup);
+                                    dsp->setParameterBool(FMOD_DSP_COMPRESSOR_USESIDECHAIN, dspSettings.compressorUseSidechain);
+                                    break;
+                                case AudioSourceComponent::DspType::Delay:
+                                    dsp->setParameterFloat(FMOD_DSP_ECHO_DELAY, dspSettings.delayMs);
+                                    dsp->setParameterFloat(FMOD_DSP_ECHO_FEEDBACK, dspSettings.delayFeedback);
+                                    break;
                                 }
 
                                 dsp->setActive(dspSettings.enabled);
@@ -3380,7 +3821,7 @@ namespace ignite
                 }
             });
 
-            RenderComponent<ScriptComponent>("C# Script", selectedEntity, [&]()
+            RenderComponent<ScriptComponent>("C# Script", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<ScriptComponent>();
                 ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
@@ -3416,7 +3857,7 @@ namespace ignite
                         currentScriptClasses = scriptStorage[static_cast<size_t>(scriptClassIndex)];
                         c.className = currentScriptClasses;
                     }
-                    if (ImGui::Button("Detach", { -1.0f, 0.0f }))
+                    if (UI::Button("Detach Script", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f), ICON_LC_UNLINK))
                         c.className = "Detached";
                     ImGui::EndDisabled();
                 }
@@ -3466,363 +3907,346 @@ namespace ignite
 
                                 switch (field.Type)
                                 {
-                                    case ScriptFieldType::Bool:
+                                case ScriptFieldType::Bool:
+                                {
+                                    auto data = dummy.GetValue<bool>();
+                                    if (UI::DrawSwitch(name.c_str(), &data))
                                     {
-                                        auto data = dummy.GetValue<bool>();
-                                        if (UI::DrawCheckbox(name.c_str(), &data))
-                                        {
-                                            dummy.SetValue<bool>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<bool>(name, data);
-                                        }
-                                        break;
+                                        dummy.SetValue<bool>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<bool>(name, data);
                                     }
-                                    case ScriptFieldType::String:
-                                    {
-                                        auto data = dummy.GetValue<std::string>();
-                                        char buffer[256];
-                                        memset(buffer, 0, sizeof(buffer));
-                                        strncpy(buffer, data.c_str(), sizeof(buffer) - 1);
+                                    break;
+                                }
+                                case ScriptFieldType::String:
+                                {
+                                    auto data = dummy.GetValue<std::string>();
+                                    char buffer[256];
+                                    memset(buffer, 0, sizeof(buffer));
+                                    strncpy(buffer, data.c_str(), sizeof(buffer) - 1);
 
-                                        ImGui::BeginColumns(name.c_str(), 2);
-                                        ImGui::SetColumnWidth(0, 100.0f);
-                                        ImGui::Text("%s", name.c_str());
-                                        ImGui::NextColumn();
+                                    ImGui::BeginColumns(name.c_str(), 2);
+                                    ImGui::SetColumnWidth(0, 100.0f);
+                                    ImGui::Text("%s", name.c_str());
+                                    ImGui::NextColumn();
 
-                                        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
-                                        if (ImGui::InputText("##StringControl", buffer, sizeof(buffer)))
-                                        {
-                                            std::string newData(buffer);
-                                            dummy.SetValue<std::string>(newData);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<std::string>(name, newData);
-                                        }
-                                        ImGui::PopItemWidth();
-                                        ImGui::EndColumns();
-                                        break;
-                                    }
-                                    case ScriptFieldType::Float:
+                                    ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                                    if (ImGui::InputText("##StringControl", buffer, sizeof(buffer)))
                                     {
-                                        auto data = dummy.GetValue<float>();
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
-                                            : UI::DrawFloatControl(name.c_str(), &data, field.speed, -FLT_MAX, FLT_MAX);
-                                        if (changed)
-                                        {
-                                            dummy.SetValue<float>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<float>(name, data);
-                                        }
-                                        break;
+                                        std::string newData(buffer);
+                                        dummy.SetValue<std::string>(newData);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<std::string>(name, newData);
                                     }
-                                    case ScriptFieldType::Int:
+                                    ImGui::PopItemWidth();
+                                    ImGui::EndColumns();
+                                    break;
+                                }
+                                case ScriptFieldType::Float:
+                                {
+                                    auto data = dummy.GetValue<float>();
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
+                                        : UI::DrawFloatControl(name.c_str(), &data, field.speed, -FLT_MAX, FLT_MAX);
+                                    if (changed)
                                     {
-                                        auto data = dummy.GetValue<int>();
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX);
-                                        if (changed)
-                                        {
-                                            dummy.SetValue<int>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<int>(name, data);
-                                        }
-                                        break;
+                                        dummy.SetValue<float>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<float>(name, data);
                                     }
-                                    case ScriptFieldType::UInt:
+                                    break;
+                                }
+                                case ScriptFieldType::Int:
+                                {
+                                    auto data = dummy.GetValue<int>();
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX);
+                                    if (changed)
                                     {
-                                        auto val = dummy.GetValue<uint32_t>();
-                                        int data = static_cast<int>(val);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX);
-                                        if (changed)
-                                        {
-                                            val = static_cast<uint32_t>(data);
-                                            dummy.SetValue<uint32_t>(val);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<uint32_t>(name, val);
-                                        }
-                                        break;
+                                        dummy.SetValue<int>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<int>(name, data);
                                     }
-                                    case ScriptFieldType::Byte:
+                                    break;
+                                }
+                                case ScriptFieldType::UInt:
+                                {
+                                    auto val = dummy.GetValue<uint32_t>();
+                                    int data = static_cast<int>(val);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX);
+                                    if (changed)
                                     {
-                                        auto val = dummy.GetValue<uint8_t>();
-                                        int data = static_cast<int>(val);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, 255);
-                                        if (changed)
-                                        {
-                                            val = static_cast<uint8_t>(data);
-                                            dummy.SetValue<uint8_t>(val);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<uint8_t>(name, val);
-                                        }
-                                        break;
+                                        val = static_cast<uint32_t>(data);
+                                        dummy.SetValue<uint32_t>(val);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<uint32_t>(name, val);
                                     }
-                                    case ScriptFieldType::SByte:
+                                    break;
+                                }
+                                case ScriptFieldType::Byte:
+                                {
+                                    auto val = dummy.GetValue<uint8_t>();
+                                    int data = static_cast<int>(val);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, 255);
+                                    if (changed)
                                     {
-                                        auto val = dummy.GetValue<int8_t>();
-                                        int data = static_cast<int>(val);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, -128, 127);
-                                        if (changed)
-                                        {
-                                            val = static_cast<int8_t>(data);
-                                            dummy.SetValue<int8_t>(val);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<int8_t>(name, val);
-                                        }
-                                        break;
+                                        val = static_cast<uint8_t>(data);
+                                        dummy.SetValue<uint8_t>(val);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<uint8_t>(name, val);
                                     }
-                                    case ScriptFieldType::Short:
+                                    break;
+                                }
+                                case ScriptFieldType::SByte:
+                                {
+                                    auto val = dummy.GetValue<int8_t>();
+                                    int data = static_cast<int>(val);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, -128, 127);
+                                    if (changed)
                                     {
-                                        auto val = dummy.GetValue<int16_t>();
-                                        int data = static_cast<int>(val);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, SHRT_MIN, SHRT_MAX);
-                                        if (changed)
-                                        {
-                                            val = static_cast<int16_t>(data);
-                                            dummy.SetValue<int16_t>(val);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<int16_t>(name, val);
-                                        }
-                                        break;
+                                        val = static_cast<int8_t>(data);
+                                        dummy.SetValue<int8_t>(val);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<int8_t>(name, val);
                                     }
-                                    case ScriptFieldType::UShort:
+                                    break;
+                                }
+                                case ScriptFieldType::Short:
+                                {
+                                    auto val = dummy.GetValue<int16_t>();
+                                    int data = static_cast<int>(val);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, SHRT_MIN, SHRT_MAX);
+                                    if (changed)
                                     {
-                                        auto val = dummy.GetValue<uint16_t>();
-                                        int data = static_cast<int>(val);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, USHRT_MAX);
-                                        if (changed)
-                                        {
-                                            val = static_cast<uint16_t>(data);
-                                            dummy.SetValue<uint16_t>(val);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<uint16_t>(name, val);
-                                        }
-                                        break;
+                                        val = static_cast<int16_t>(data);
+                                        dummy.SetValue<int16_t>(val);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<int16_t>(name, val);
                                     }
-                                    case ScriptFieldType::Long:
+                                    break;
+                                }
+                                case ScriptFieldType::UShort:
+                                {
+                                    auto val = dummy.GetValue<uint16_t>();
+                                    int data = static_cast<int>(val);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, USHRT_MAX);
+                                    if (changed)
                                     {
-                                        auto val = dummy.GetValue<int64_t>();
-                                        int data = static_cast<int>(val);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX);
-                                        if (changed)
-                                        {
-                                            val = static_cast<int64_t>(data);
-                                            dummy.SetValue<int64_t>(val);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<int64_t>(name, val);
-                                        }
-                                        break;
+                                        val = static_cast<uint16_t>(data);
+                                        dummy.SetValue<uint16_t>(val);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<uint16_t>(name, val);
                                     }
-                                    case ScriptFieldType::ULong:
+                                    break;
+                                }
+                                case ScriptFieldType::Long:
+                                {
+                                    auto val = dummy.GetValue<int64_t>();
+                                    int data = static_cast<int>(val);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX);
+                                    if (changed)
                                     {
-                                        auto val = dummy.GetValue<uint64_t>();
-                                        int data = static_cast<int>(val);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
-                                            : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX);
-                                        if (changed)
-                                        {
-                                            val = static_cast<uint64_t>(data);
-                                            dummy.SetValue<uint64_t>(val);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, val);
-                                        }
-                                        break;
+                                        val = static_cast<int64_t>(data);
+                                        dummy.SetValue<int64_t>(val);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<int64_t>(name, val);
                                     }
-                                    case ScriptFieldType::Enum:
+                                    break;
+                                }
+                                case ScriptFieldType::ULong:
+                                {
+                                    auto val = dummy.GetValue<uint64_t>();
+                                    int data = static_cast<int>(val);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderInt(name.c_str(), &data, static_cast<int>(field.minValue), static_cast<int>(field.maxValue))
+                                        : UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX);
+                                    if (changed)
                                     {
-                                        auto data = dummy.GetValue<int>();
-                                        const auto &enumNames = field.EnumNames;
-                                        const auto &enumValues = field.EnumValues;
+                                        val = static_cast<uint64_t>(data);
+                                        dummy.SetValue<uint64_t>(val);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, val);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Enum:
+                                {
+                                    auto data = dummy.GetValue<int>();
+                                    const auto &enumNames = field.EnumNames;
+                                    const auto &enumValues = field.EnumValues;
 
-                                        int selectedIndex = -1;
-                                        for (int i = 0; i < (int)enumValues.size(); ++i)
+                                    int selectedIndex = -1;
+                                    for (int i = 0; i < (int)enumValues.size(); ++i)
+                                    {
+                                        if (enumValues[i] == data)
                                         {
-                                            if (enumValues[i] == data)
+                                            selectedIndex = i;
+                                            break;
+                                        }
+                                    }
+
+                                    std::vector<const char *> labels;
+                                    for (const auto &n : enumNames)
+                                        labels.push_back(n.c_str());
+
+                                    if (UI::DrawComboBox(name.c_str(), labels.data(), (int)labels.size(), &selectedIndex))
+                                    {
+                                        data = enumValues[selectedIndex];
+                                        dummy.SetValue<int>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<int>(name, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Double:
+                                {
+                                    auto dData = dummy.GetValue<double>();
+                                    float data = static_cast<float>(dData);
+                                    bool changed = (field.uiType == FieldUIType::Slider)
+                                        ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
+                                        : UI::DrawFloatControl(name.c_str(), &data, field.speed, -FLT_MAX, FLT_MAX);
+                                    if (changed)
+                                    {
+                                        dData = static_cast<double>(data);
+                                        dummy.SetValue<double>(dData);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<double>(name, dData);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Vector2:
+                                {
+                                    auto data = dummy.GetValue<glm::vec2>();
+                                    if (UI::DrawVec2Control(name.c_str(), data, field.speed))
+                                    {
+                                        dummy.SetValue<glm::vec2>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<glm::vec2>(name, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Vector3:
+                                {
+                                    auto data = dummy.GetValue<glm::vec3>();
+                                    if (UI::DrawVec3Control(name.c_str(), data, field.speed))
+                                    {
+                                        dummy.SetValue<glm::vec3>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<glm::vec3>(name, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Vector4:
+                                {
+                                    auto data = dummy.GetValue<glm::vec4>();
+                                    if (UI::DrawVec4Control(name.c_str(), data, field.speed))
+                                    {
+                                        dummy.SetValue<glm::vec4>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<glm::vec4>(name, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Quat:
+                                {
+                                    auto data = dummy.GetValue<glm::quat>();
+                                    glm::vec4 vec = { data.x, data.y, data.z, data.w };
+                                    if (UI::DrawVec4Control(name.c_str(), vec, field.speed))
+                                    {
+                                        data = { vec.w, vec.x, vec.y, vec.z };
+                                        dummy.SetValue<glm::quat>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<glm::quat>(name, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Color:
+                                {
+                                    auto data = dummy.GetValue<glm::vec4>();
+                                    if (UI::DrawColorVec4(name.c_str(), data))
+                                    {
+                                        dummy.SetValue<glm::vec4>(data);
+                                        (*classRegisteredInstanceField)[name] = dummy;
+                                        if (c.runtimeScriptInstance)
+                                            c.runtimeScriptInstance->SetFieldValue<glm::vec4>(name, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Entity:
+                                case ScriptFieldType::Asset:
+                                {
+                                    auto handle = dummy.GetValue<uint64_t>();
+                                    std::string label = "Drag Here";
+
+                                    if (field.Type == ScriptFieldType::Entity)
+                                    {
+                                        if (handle)
+                                        {
+                                            Entity e = SceneManager::GetEntity(m_Scene, UUID(handle));
+                                            if (e)
+                                                label = e.GetName();
+                                        }
+                                    }
+                                    else if (field.Type == ScriptFieldType::Asset)
+                                    {
+                                        if (handle)
+                                        {
+                                            label = assetManager->GetAssetDisplayName(AssetHandle(handle));
+                                        }
+                                    }
+
+                                    ImGui::BeginDisabled(isRunning);
+                                    UI::DrawButtonWithColumn(name.c_str(), label.c_str(), nullptr, [ this, &name, &dummy, &classRegisteredInstanceField, &c, handle, assetManager, &field ]()
+                                    {
+                                        if (ImGui::BeginDragDropTarget())
+                                        {
+                                            if (field.Type == ScriptFieldType::Entity)
                                             {
-                                                selectedIndex = i;
-                                                break;
-                                            }
-                                        }
-
-                                        std::vector<const char*> labels;
-                                        for (const auto& n : enumNames)
-                                            labels.push_back(n.c_str());
-
-                                        if (UI::DrawComboBox(name.c_str(), labels.data(), (int)labels.size(), &selectedIndex))
-                                        {
-                                            data = enumValues[selectedIndex];
-                                            dummy.SetValue<int>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<int>(name, data);
-                                        }
-                                        break;
-                                    }
-                                    case ScriptFieldType::Double:
-                                    {
-                                        auto dData = dummy.GetValue<double>();
-                                        float data = static_cast<float>(dData);
-                                        bool changed = (field.uiType == FieldUIType::Slider)
-                                            ? UI::DrawSliderFloat(name.c_str(), &data, field.minValue, field.maxValue)
-                                            : UI::DrawFloatControl(name.c_str(), &data, field.speed, -FLT_MAX, FLT_MAX);
-                                        if (changed)
-                                        {
-                                            dData = static_cast<double>(data);
-                                            dummy.SetValue<double>(dData);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<double>(name, dData);
-                                        }
-                                        break;
-                                    }
-                                    case ScriptFieldType::Vector2:
-                                    {
-                                        auto data = dummy.GetValue<glm::vec2>();
-                                        if (UI::DrawVec2Control(name.c_str(), data, field.speed))
-                                        {
-                                            dummy.SetValue<glm::vec2>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<glm::vec2>(name, data);
-                                        }
-                                        break;
-                                    }
-                                    case ScriptFieldType::Vector3:
-                                    {
-                                        auto data = dummy.GetValue<glm::vec3>();
-                                        if (UI::DrawVec3Control(name.c_str(), data, field.speed))
-                                        {
-                                            dummy.SetValue<glm::vec3>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<glm::vec3>(name, data);
-                                        }
-                                        break;
-                                    }
-                                    case ScriptFieldType::Vector4:
-                                    {
-                                        auto data = dummy.GetValue<glm::vec4>();
-                                        if (UI::DrawVec4Control(name.c_str(), data, field.speed))
-                                        {
-                                            dummy.SetValue<glm::vec4>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<glm::vec4>(name, data);
-                                        }
-                                        break;
-                                    }
-                                    case ScriptFieldType::Quat:
-                                    {
-                                        auto data = dummy.GetValue<glm::quat>();
-                                        glm::vec4 vec = { data.x, data.y, data.z, data.w };
-                                        if (UI::DrawVec4Control(name.c_str(), vec, field.speed))
-                                        {
-                                            data = { vec.w, vec.x, vec.y, vec.z };
-                                            dummy.SetValue<glm::quat>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<glm::quat>(name, data);
-                                        }
-                                        break;
-                                    }
-                                    case ScriptFieldType::Color:
-                                    {
-                                        auto data = dummy.GetValue<glm::vec4>();
-                                        if (UI::DrawColorVec4(name.c_str(), data))
-                                        {
-                                            dummy.SetValue<glm::vec4>(data);
-                                            (*classRegisteredInstanceField)[name] = dummy;
-                                            if (c.runtimeScriptInstance)
-                                                c.runtimeScriptInstance->SetFieldValue<glm::vec4>(name, data);
-                                        }
-                                        break;
-                                    }
-                                    case ScriptFieldType::Entity:
-                                    case ScriptFieldType::Asset:
-                                    {
-                                        auto handle = dummy.GetValue<uint64_t>();
-                                        std::string label = "Drag Here";
-
-                                        if (field.Type == ScriptFieldType::Entity)
-                                        {
-                                            if (handle)
-                                            {
-                                                Entity e = SceneManager::GetEntity(m_Scene, UUID(handle));
-                                                if (e)
-                                                    label = e.GetName();
-                                            }
-                                        }
-                                        else if (field.Type == ScriptFieldType::Asset)
-                                        {
-                                            if (handle)
-                                            {
-                                                label = assetManager->GetAssetDisplayName(AssetHandle(handle));
-                                            }
-                                        }
-
-                                        ImGui::BeginDisabled(isRunning);
-                                        UI::DrawButtonWithColumn(name.c_str(), label.c_str(), nullptr, [this, &name, &dummy, &classRegisteredInstanceField, &c, handle, assetManager, &field]()
-                                        {
-                                            if (ImGui::BeginDragDropTarget())
-                                            {
-                                                if (field.Type == ScriptFieldType::Entity)
+                                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                                                 {
-                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
-                                                    {
-                                                        const size_t count = payload->DataSize / sizeof(UUID);
-                                                        auto UUIDs = static_cast<UUID *>(payload->Data);
+                                                    const size_t count = payload->DataSize / sizeof(UUID);
+                                                    auto UUIDs = static_cast<UUID *>(payload->Data);
 
-                                                        // TODO: Support multiple entities drag and drop
+                                                    // TODO: Support multiple entities drag and drop
 
-                                                        // Get first entity from the payload
-                                                        if (count > 0)
-                                                        {
-                                                            UUID entityUUID = UUIDs[0];
-                                                            Entity src{ SceneManager::GetEntity(m_Scene, entityUUID) };
-                                                            if (src)
-                                                            {
-                                                                uint64_t id = (uint64_t)src.GetUUID();
-                                                                dummy.SetValue<uint64_t>(id);
-                                                                (*classRegisteredInstanceField)[name] = dummy;
-                                                                if (c.runtimeScriptInstance)
-                                                                    c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                else if (field.Type == ScriptFieldType::Asset)
-                                                {
-                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                    // Get first entity from the payload
+                                                    if (count > 0)
                                                     {
-                                                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ASSET ITEM");
-                                                        if (payload->DataSize == sizeof(AssetHandle))
+                                                        UUID entityUUID = UUIDs[0];
+                                                        Entity src { SceneManager::GetEntity(m_Scene, entityUUID) };
+                                                        if (src)
                                                         {
-                                                            AssetHandle h = *static_cast<AssetHandle *>(payload->Data);
-                                                            uint64_t id = (uint64_t)h;
+                                                            uint64_t id = (uint64_t)src.GetUUID();
                                                             dummy.SetValue<uint64_t>(id);
                                                             (*classRegisteredInstanceField)[name] = dummy;
                                                             if (c.runtimeScriptInstance)
@@ -3830,59 +4254,76 @@ namespace ignite
                                                         }
                                                     }
                                                 }
-                                                ImGui::EndDragDropTarget();
+                                            }
+                                            else if (field.Type == ScriptFieldType::Asset)
+                                            {
+                                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                {
+                                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ASSET ITEM");
+                                                    if (payload->DataSize == sizeof(AssetHandle))
+                                                    {
+                                                        AssetHandle h = *static_cast<AssetHandle *>(payload->Data);
+                                                        uint64_t id = (uint64_t)h;
+                                                        dummy.SetValue<uint64_t>(id);
+                                                        (*classRegisteredInstanceField)[name] = dummy;
+                                                        if (c.runtimeScriptInstance)
+                                                            c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                    }
+                                                }
+                                            }
+                                            ImGui::EndDragDropTarget();
+                                        }
+
+                                        if (ImGui::IsItemHovered())
+                                        {
+                                            if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                                            {
+                                                uint64_t id = 0;
+                                                dummy.SetValue<uint64_t>(id);
+                                                (*classRegisteredInstanceField)[name] = dummy;
+                                                if (c.runtimeScriptInstance)
+                                                    c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
                                             }
 
-                                            if (ImGui::IsItemHovered())
+                                            ImGui::BeginTooltip();
+                                            if (handle)
                                             {
-                                                if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                                                if (field.Type == ScriptFieldType::Entity)
                                                 {
-                                                    uint64_t id = 0;
-                                                    dummy.SetValue<uint64_t>(id);
-                                                    (*classRegisteredInstanceField)[name] = dummy;
-                                                    if (c.runtimeScriptInstance)
-                                                        c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
-                                                }
-
-                                                ImGui::BeginTooltip();
-                                                if (handle)
-                                                {
-                                                    if (field.Type == ScriptFieldType::Entity)
-                                                    {
-                                                        Entity e = SceneManager::GetEntity(m_Scene, UUID(handle));
-                                                        if (e) ImGui::Text("Entity Name : %s\nEntity ID : %llu", e.GetName().c_str(), handle);
-                                                        else ImGui::Text("Invalid Entity");
-                                                    }
-                                                    else
-                                                    {
-                                                        AssetMetaData metadata = assetManager->GetMetaData(AssetHandle(handle));
-                                                        ImGui::Text("Asset Name : %s\nAsset ID : %llu\nType : %s", assetManager->GetAssetDisplayName(AssetHandle(handle)).c_str(), handle, AssetTypeToString(metadata.type).c_str());
-                                                    }
+                                                    Entity e = SceneManager::GetEntity(m_Scene, UUID(handle));
+                                                    if (e) ImGui::Text("Entity Name : %s\nEntity ID : %llu", e.GetName().c_str(), handle);
+                                                    else ImGui::Text("Invalid Entity");
                                                 }
                                                 else
                                                 {
-                                                    ImGui::Text(field.Type == ScriptFieldType::Entity ? "Empty Entity" : "Empty Asset");
+                                                    AssetMetaData metadata = assetManager->GetMetaData(AssetHandle(handle));
+                                                    ImGui::Text("Asset Name : %s\nAsset ID : %llu\nType : %s", assetManager->GetAssetDisplayName(AssetHandle(handle)).c_str(), handle, AssetTypeToString(metadata.type).c_str());
                                                 }
-                                                ImGui::EndTooltip();
                                             }
-                                        });
-                                        if (handle)
-                                        {
-                                            ImGui::SameLine();
-                                            if (ImGui::Button("X"))
+                                            else
                                             {
-                                                dummy.SetValue<uint64_t>(0);
-                                                (*classRegisteredInstanceField)[name] = dummy;
-                                                if (c.runtimeScriptInstance)
-                                                {
-                                                    c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, 0);
-                                                }
+                                                ImGui::Text(field.Type == ScriptFieldType::Entity ? "Empty Entity" : "Empty Asset");
+                                            }
+                                            ImGui::EndTooltip();
+                                        }
+                                    });
+                                    if (handle)
+                                    {
+                                        ImGui::SameLine(0.0f, 4.0f);
+                                        if (UI::IconButton("##ClearCSScriptField", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear"))
+                                        {
+                                            dummy.SetValue<uint64_t>(0);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                            {
+                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, 0);
                                             }
                                         }
-                                        ImGui::EndDisabled();
-
-                                        break;
                                     }
+                                    ImGui::EndDisabled();
+
+                                    break;
+                                }
                                 }
                                 ImGui::PopID();
                             }
@@ -3897,7 +4338,7 @@ namespace ignite
                 }
             });
 
-            RenderComponent<LuaScriptComponent>("Lua Script", selectedEntity, [&]()
+            RenderComponent<LuaScriptComponent>("Lua Script", selectedEntity, [ & ]()
             {
                 auto &component = selectedEntity.GetComponent<LuaScriptComponent>();
                 const bool isRunning = m_Scene && m_Scene->IsRunning();
@@ -3917,7 +4358,7 @@ namespace ignite
                     label = component.scriptPath.filename().generic_string();
                 }
 
-                UI::DrawButtonWithColumn("Script Asset", label.c_str(), nullptr, [&]()
+                UI::DrawButtonWithColumn("Script Asset", label.c_str(), nullptr, [ & ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -3946,8 +4387,8 @@ namespace ignite
 
                     if (isLoaded)
                     {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X"))
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearLuaScript", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Script"))
                         {
                             component.scriptHandle = AssetHandle(0);
                             component.scriptPath.clear();
@@ -4026,10 +4467,10 @@ namespace ignite
                         }
                         curValue = ClampLuaFieldValue(desc, curValue);
 
-                        auto commitValue = [&](const LuaFieldValue &newValue)
+                        auto commitValue = [ & ](const LuaFieldValue &newValue)
                         {
                             const LuaFieldValue clamped = ClampLuaFieldValue(desc, newValue);
-                            component.fields[desc.name] = LuaSerializedField{ desc.type, clamped };
+                            component.fields[desc.name] = LuaSerializedField { desc.type, clamped };
                             m_Scene->SetDirtyFlag(true);
                             if (isRunning && m_Scene->GetLuaScriptRuntime())
                             {
@@ -4039,196 +4480,185 @@ namespace ignite
 
                         switch (desc.type)
                         {
-                            case ScriptFieldType::Bool:
+                        case ScriptFieldType::Bool:
+                        {
+                            bool data = std::holds_alternative<bool>(curValue) ? std::get<bool>(curValue) : false;
+                            if (UI::DrawSwitch(desc.name.c_str(), &data))
+                                commitValue(data);
+                            break;
+                        }
+                        case ScriptFieldType::Int:
+                        {
+                            int data = std::holds_alternative<int32_t>(curValue) ? std::get<int32_t>(curValue) : 0;
+                            const int minV = desc.hasMin ? static_cast<int>(desc.minValue) : INT_MIN;
+                            const int maxV = desc.hasMax ? static_cast<int>(desc.maxValue) : INT_MAX;
+                            const int defV = std::holds_alternative<int32_t>(desc.defaultValue) ? std::get<int32_t>(desc.defaultValue) : 0;
+                            bool changed = (desc.uiType == FieldUIType::Slider)
+                                ? UI::DrawSliderInt(desc.name.c_str(), &data, desc.hasMin ? minV : 0, desc.hasMax ? maxV : 100)
+                                : UI::DrawIntControl(desc.name.c_str(), &data, std::max(1.0f, desc.speed), minV, maxV, defV);
+                            if (changed)
+                                commitValue(static_cast<int32_t>(data));
+                            break;
+                        }
+                        case ScriptFieldType::Float:
+                        {
+                            float data = std::holds_alternative<float>(curValue) ? std::get<float>(curValue) : 0.0f;
+                            const float minV = desc.hasMin ? desc.minValue : -FLT_MAX;
+                            const float maxV = desc.hasMax ? desc.maxValue : FLT_MAX;
+                            const float defV = std::holds_alternative<float>(desc.defaultValue) ? std::get<float>(desc.defaultValue) : 0.0f;
+                            bool changed = (desc.uiType == FieldUIType::Slider)
+                                ? UI::DrawSliderFloat(desc.name.c_str(), &data, desc.hasMin ? minV : 0.0f, desc.hasMax ? maxV : 1.0f)
+                                : UI::DrawFloatControl(desc.name.c_str(), &data, desc.speed, minV, maxV, defV);
+                            if (changed)
+                                commitValue(data);
+                            break;
+                        }
+                        case ScriptFieldType::String:
+                        {
+                            std::string data = std::holds_alternative<std::string>(curValue) ? std::get<std::string>(curValue) : std::string();
+                            if (UI::DrawTextControl(desc.name.c_str(), data))
                             {
-                                bool data = std::holds_alternative<bool>(curValue) ? std::get<bool>(curValue) : false;
-                                if (UI::DrawCheckbox(desc.name.c_str(), &data))
-                                    commitValue(data);
-                                break;
+                                commitValue(data);
                             }
-                            case ScriptFieldType::Int:
+                            break;
+                        }
+                        case ScriptFieldType::Vector2:
+                        {
+                            glm::vec2 data = std::holds_alternative<glm::vec2>(curValue) ? std::get<glm::vec2>(curValue) : glm::vec2(0.0f);
+                            if (UI::DrawVec2Control(desc.name.c_str(), data, desc.speed))
+                                commitValue(data);
+                            break;
+                        }
+                        case ScriptFieldType::Vector3:
+                        {
+                            glm::vec3 data = std::holds_alternative<glm::vec3>(curValue) ? std::get<glm::vec3>(curValue) : glm::vec3(0.0f);
+                            if (UI::DrawVec3Control(desc.name.c_str(), data, desc.speed))
+                                commitValue(data);
+                            break;
+                        }
+                        case ScriptFieldType::Vector4:
+                        {
+                            glm::vec4 data = std::holds_alternative<glm::vec4>(curValue) ? std::get<glm::vec4>(curValue) : glm::vec4(0.0f);
+                            if (UI::DrawVec4Control(desc.name.c_str(), data, desc.speed))
+                                commitValue(data);
+                            break;
+                        }
+                        case ScriptFieldType::Color:
+                        {
+                            glm::vec4 data = std::holds_alternative<glm::vec4>(curValue) ? std::get<glm::vec4>(curValue) : glm::vec4(1.0f);
+                            if (UI::DrawColorVec4(desc.name.c_str(), data))
+                                commitValue(data);
+                            break;
+                        }
+                        case ScriptFieldType::Enum:
+                        {
+                            if (!desc.enumNames.empty())
                             {
-                                int data = std::holds_alternative<int32_t>(curValue) ? std::get<int32_t>(curValue) : 0;
-                                const int minV = desc.hasMin ? static_cast<int>(desc.minValue) : INT_MIN;
-                                const int maxV = desc.hasMax ? static_cast<int>(desc.maxValue) : INT_MAX;
-                                const int defV = std::holds_alternative<int32_t>(desc.defaultValue) ? std::get<int32_t>(desc.defaultValue) : 0;
-                                bool changed = (desc.uiType == FieldUIType::Slider)
-                                    ? UI::DrawSliderInt(desc.name.c_str(), &data, desc.hasMin ? minV : 0, desc.hasMax ? maxV : 100)
-                                    : UI::DrawIntControl(desc.name.c_str(), &data, std::max(1.0f, desc.speed), minV, maxV, defV);
-                                if (changed)
-                                    commitValue(static_cast<int32_t>(data));
-                                break;
-                            }
-                            case ScriptFieldType::Float:
-                            {
-                                float data = std::holds_alternative<float>(curValue) ? std::get<float>(curValue) : 0.0f;
-                                const float minV = desc.hasMin ? desc.minValue : -FLT_MAX;
-                                const float maxV = desc.hasMax ? desc.maxValue : FLT_MAX;
-                                const float defV = std::holds_alternative<float>(desc.defaultValue) ? std::get<float>(desc.defaultValue) : 0.0f;
-                                bool changed = (desc.uiType == FieldUIType::Slider)
-                                    ? UI::DrawSliderFloat(desc.name.c_str(), &data, desc.hasMin ? minV : 0.0f, desc.hasMax ? maxV : 1.0f)
-                                    : UI::DrawFloatControl(desc.name.c_str(), &data, desc.speed, minV, maxV, defV);
-                                if (changed)
-                                    commitValue(data);
-                                break;
-                            }
-                            case ScriptFieldType::String:
-                            {
-                                std::string data = std::holds_alternative<std::string>(curValue) ? std::get<std::string>(curValue) : std::string();
-                                char buffer[512];
-                                memset(buffer, 0, sizeof(buffer));
-                                strncpy(buffer, data.c_str(), sizeof(buffer) - 1);
-
-                                ImGui::BeginColumns(desc.name.c_str(), 2);
-                                ImGui::SetColumnWidth(0, 100.0f);
-                                ImGui::Text("%s", desc.name.c_str());
-                                ImGui::NextColumn();
-                                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
-                                if (ImGui::InputText("##LuaStringControl", buffer, sizeof(buffer)))
+                                int selectedIndex = 0;
+                                if (std::holds_alternative<std::string>(curValue))
                                 {
-                                    commitValue(std::string(buffer));
-                                }
-                                ImGui::PopItemWidth();
-                                ImGui::EndColumns();
-                                break;
-                            }
-                            case ScriptFieldType::Vector2:
-                            {
-                                glm::vec2 data = std::holds_alternative<glm::vec2>(curValue) ? std::get<glm::vec2>(curValue) : glm::vec2(0.0f);
-                                if (UI::DrawVec2Control(desc.name.c_str(), data, desc.speed))
-                                    commitValue(data);
-                                break;
-                            }
-                            case ScriptFieldType::Vector3:
-                            {
-                                glm::vec3 data = std::holds_alternative<glm::vec3>(curValue) ? std::get<glm::vec3>(curValue) : glm::vec3(0.0f);
-                                if (UI::DrawVec3Control(desc.name.c_str(), data, desc.speed))
-                                    commitValue(data);
-                                break;
-                            }
-                            case ScriptFieldType::Vector4:
-                            {
-                                glm::vec4 data = std::holds_alternative<glm::vec4>(curValue) ? std::get<glm::vec4>(curValue) : glm::vec4(0.0f);
-                                if (UI::DrawVec4Control(desc.name.c_str(), data, desc.speed))
-                                    commitValue(data);
-                                break;
-                            }
-                            case ScriptFieldType::Color:
-                            {
-                                glm::vec4 data = std::holds_alternative<glm::vec4>(curValue) ? std::get<glm::vec4>(curValue) : glm::vec4(1.0f);
-                                if (UI::DrawColorVec4(desc.name.c_str(), data))
-                                    commitValue(data);
-                                break;
-                            }
-                            case ScriptFieldType::Enum:
-                            {
-                                if (!desc.enumNames.empty())
-                                {
-                                    int selectedIndex = 0;
-                                    if (std::holds_alternative<std::string>(curValue))
+                                    const std::string &curStr = std::get<std::string>(curValue);
+                                    for (int i = 0; i < static_cast<int>(desc.enumNames.size()); ++i)
                                     {
-                                        const std::string &curStr = std::get<std::string>(curValue);
-                                        for (int i = 0; i < static_cast<int>(desc.enumNames.size()); ++i)
+                                        if (desc.enumNames[static_cast<size_t>(i)] == curStr)
                                         {
-                                            if (desc.enumNames[static_cast<size_t>(i)] == curStr)
-                                            {
-                                                selectedIndex = i;
-                                                break;
-                                            }
+                                            selectedIndex = i;
+                                            break;
                                         }
                                     }
-                                    else if (std::holds_alternative<int32_t>(curValue))
-                                    {
-                                        const int idx = std::get<int32_t>(curValue) - 1;
-                                        if (idx >= 0 && idx < static_cast<int>(desc.enumNames.size()))
-                                            selectedIndex = idx;
-                                    }
-
-                                    std::vector<const char *> labels;
-                                    labels.reserve(desc.enumNames.size());
-                                    for (const auto &opt : desc.enumNames)
-                                        labels.push_back(opt.c_str());
-
-                                    if (UI::DrawComboBox(desc.name.c_str(), labels.data(), static_cast<int>(labels.size()), &selectedIndex))
-                                    {
-                                        if (std::holds_alternative<int32_t>(desc.defaultValue))
-                                            commitValue(static_cast<int32_t>(selectedIndex + 1));
-                                        else
-                                            commitValue(desc.enumNames[static_cast<size_t>(selectedIndex)]);
-                                    }
                                 }
-                                break;
+                                else if (std::holds_alternative<int32_t>(curValue))
+                                {
+                                    const int idx = std::get<int32_t>(curValue) - 1;
+                                    if (idx >= 0 && idx < static_cast<int>(desc.enumNames.size()))
+                                        selectedIndex = idx;
+                                }
+
+                                std::vector<const char *> labels;
+                                labels.reserve(desc.enumNames.size());
+                                for (const auto &opt : desc.enumNames)
+                                    labels.push_back(opt.c_str());
+
+                                if (UI::DrawComboBox(desc.name.c_str(), labels.data(), static_cast<int>(labels.size()), &selectedIndex))
+                                {
+                                    if (std::holds_alternative<int32_t>(desc.defaultValue))
+                                        commitValue(static_cast<int32_t>(selectedIndex + 1));
+                                    else
+                                        commitValue(desc.enumNames[static_cast<size_t>(selectedIndex)]);
+                                }
                             }
-                            case ScriptFieldType::Entity:
-                            case ScriptFieldType::Asset:
+                            break;
+                        }
+                        case ScriptFieldType::Entity:
+                        case ScriptFieldType::Asset:
+                        {
+                            const uint64_t handle = std::holds_alternative<uint64_t>(curValue) ? std::get<uint64_t>(curValue) : 0ULL;
+                            std::string refLabel = desc.type == ScriptFieldType::Entity ? "Drag Entity Here" : "Drag Asset Here";
+                            if (handle != 0)
                             {
-                                const uint64_t handle = std::holds_alternative<uint64_t>(curValue) ? std::get<uint64_t>(curValue) : 0ULL;
-                                std::string refLabel = desc.type == ScriptFieldType::Entity ? "Drag Entity Here" : "Drag Asset Here";
-                                if (handle != 0)
+                                if (desc.type == ScriptFieldType::Entity)
+                                {
+                                    Entity refEntity = SceneManager::GetEntity(m_Scene, UUID(handle));
+                                    refLabel = refEntity ? refEntity.GetName() : "Missing Entity";
+                                }
+                                else if (assetManager)
+                                {
+                                    refLabel = assetManager->GetAssetDisplayName(AssetHandle(handle));
+                                }
+                            }
+
+                            UI::DrawButtonWithColumn(desc.name.c_str(), refLabel.c_str(), nullptr, [ & ]()
+                            {
+                                if (ImGui::BeginDragDropTarget())
                                 {
                                     if (desc.type == ScriptFieldType::Entity)
                                     {
-                                        Entity refEntity = SceneManager::GetEntity(m_Scene, UUID(handle));
-                                        refLabel = refEntity ? refEntity.GetName() : "Missing Entity";
+                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                                        {
+                                            const size_t count = payload->DataSize / sizeof(UUID);
+                                            auto *uuids = static_cast<const UUID *>(payload->Data);
+                                            if (count > 0)
+                                            {
+                                                Entity src = SceneManager::GetEntity(m_Scene, uuids[0]);
+                                                if (src)
+                                                    commitValue(static_cast<uint64_t>(src.GetUUID()));
+                                            }
+                                        }
                                     }
                                     else if (assetManager)
                                     {
-                                        refLabel = assetManager->GetAssetDisplayName(AssetHandle(handle));
+                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        {
+                                            if (payload->DataSize == sizeof(AssetHandle))
+                                            {
+                                                const AssetHandle h = *static_cast<const AssetHandle *>(payload->Data);
+                                                bool accept = true;
+                                                if (!desc.assetTypeFilter.empty())
+                                                {
+                                                    const AssetMetaData meta = assetManager->GetMetaData(h);
+                                                    const std::string actual = stringutils::ToLower(AssetTypeToString(meta.type));
+                                                    const std::string expected = stringutils::ToLower(desc.assetTypeFilter);
+                                                    accept = (actual == expected);
+                                                }
+                                                if (accept)
+                                                    commitValue(static_cast<uint64_t>(h));
+                                            }
+                                        }
                                     }
+                                    ImGui::EndDragDropTarget();
                                 }
 
-                                UI::DrawButtonWithColumn(desc.name.c_str(), refLabel.c_str(), nullptr, [&]()
+                                if (handle != 0)
                                 {
-                                    if (ImGui::BeginDragDropTarget())
-                                    {
-                                        if (desc.type == ScriptFieldType::Entity)
-                                        {
-                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
-                                            {
-                                                const size_t count = payload->DataSize / sizeof(UUID);
-                                                auto *uuids = static_cast<const UUID *>(payload->Data);
-                                                if (count > 0)
-                                                {
-                                                    Entity src = SceneManager::GetEntity(m_Scene, uuids[0]);
-                                                    if (src)
-                                                        commitValue(static_cast<uint64_t>(src.GetUUID()));
-                                                }
-                                            }
-                                        }
-                                        else if (assetManager)
-                                        {
-                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                            {
-                                                if (payload->DataSize == sizeof(AssetHandle))
-                                                {
-                                                    const AssetHandle h = *static_cast<const AssetHandle *>(payload->Data);
-                                                    bool accept = true;
-                                                    if (!desc.assetTypeFilter.empty())
-                                                    {
-                                                        const AssetMetaData meta = assetManager->GetMetaData(h);
-                                                        const std::string actual = stringutils::ToLower(AssetTypeToString(meta.type));
-                                                        const std::string expected = stringutils::ToLower(desc.assetTypeFilter);
-                                                        accept = (actual == expected);
-                                                    }
-                                                    if (accept)
-                                                        commitValue(static_cast<uint64_t>(h));
-                                                }
-                                            }
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (handle != 0)
-                                    {
-                                        ImGui::SameLine();
-                                        if (ImGui::Button("X"))
-                                            commitValue(uint64_t(0));
-                                    }
-                                });
-                                break;
-                            }
-                            default:
-                                break;
+                                    ImGui::SameLine(0.0f, 4.0f);
+                                    if (UI::IconButton("##ClearLuaRef", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear"))
+                                        commitValue(uint64_t(0));
+                                }
+                            });
+                            break;
+                        }
+                        default:
+                            break;
                         }
 
                         if (!desc.tooltip.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
@@ -4236,9 +4666,9 @@ namespace ignite
                             ImGui::SetTooltip("%s", desc.tooltip.c_str());
                         }
 
-                        if (ImGui::BeginPopupContextItem("##LuaFieldResetCtx"))
+                        if (UI::BeginContextMenu("##LuaFieldResetCtx"))
                         {
-                            if (ImGui::MenuItem("Reset to Default"))
+                            if (UI::ContextMenuItem("Reset to Default", nullptr, ICON_LC_ROTATE_CCW))
                             {
                                 component.fields.erase(desc.name);
                                 m_Scene->SetDirtyFlag(true);
@@ -4247,14 +4677,14 @@ namespace ignite
                                     m_Scene->GetLuaScriptRuntime()->SetFieldValue(selectedEntity.GetUUID(), desc.name, desc.defaultValue);
                                 }
                             }
-                            ImGui::EndPopup();
+                            UI::EndContextMenu();
                         }
 
                         ImGui::PopID();
                     }
                 }
 
-                if (ImGui::Button("Reload", {-1.0, 0.0f}))
+                if (UI::Button("Reload Script", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f), ICON_LC_REFRESH_CW))
                 {
                     lua::Script::InvalidateFieldCache(resolvedScriptPath);
                     if (isRunning && m_Scene->GetLuaScriptRuntime())
@@ -4270,7 +4700,7 @@ namespace ignite
                 }
             });
 
-            RenderComponent<TerrainComponent>("Terrain", selectedEntity, [&]()
+            RenderComponent<TerrainComponent>("Terrain", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<TerrainComponent>();
                 TerrainComponent compBefore = c;
@@ -4286,7 +4716,7 @@ namespace ignite
                         label = "None (Embedded / Procedural)";
                     }
 
-                    UI::DrawButtonWithColumn("Heightmap Data / Texture", label.c_str(), nullptr, [&, this]()
+                    UI::DrawButtonWithColumn("Heightmap Data / Texture", label.c_str(), nullptr, [ &, this ]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -4322,8 +4752,8 @@ namespace ignite
 
                         if (hasExternalHeightmap)
                         {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X##ClearHeightmap"))
+                            ImGui::SameLine(0.0f, 4.0f);
+                            if (UI::IconButton("##ClearHeightmap", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Heightmap"))
                             {
                                 c.heightmapHandle = AssetHandle(0);
                                 rebuildGPU = true;
@@ -4395,7 +4825,7 @@ namespace ignite
                         ImGui::BeginDisabled();
                     }
 
-                    if (ImGui::Button("Rebuild Flat Terrain", ImVec2(-1.0f, 0.0f)))
+                    if (UI::Button("Rebuild Flat Terrain", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f), ICON_LC_REFRESH_CW))
                     {
                         if (!c.data)
                         {
@@ -4408,7 +4838,7 @@ namespace ignite
                     UI::DrawFloatControl("Noise Frequency", &c.noiseFrequency, 0.05f, 0.001f, 5.0f);
                     UI::DrawIntControl("Noise Seed", &c.noiseSeed, 1, 0, 99999);
 
-                    if (ImGui::Button("Generate Noise Terrain", ImVec2(-1.0f, 0.0f)))
+                    if (UI::Button("Generate Noise Terrain", UI::ButtonVariant::Secondary, UI::ButtonSize::Small, ImVec2(-1.0f, 22.0f), ICON_LC_SPARKLES))
                     {
                         TerrainBuilder::GenerateProcedural(c, c.noiseFrequency, c.noiseSeed);
                         rebuildGPU = true;
@@ -4426,7 +4856,7 @@ namespace ignite
                 {
                     const bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
                     std::string label = assetManager->GetAssetDisplayName(c.materialHandle);
-                    UI::DrawButtonWithColumn("Material", label.c_str(), nullptr, [&, this]()
+                    UI::DrawButtonWithColumn("Material", label.c_str(), nullptr, [ &, this ]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -4446,8 +4876,8 @@ namespace ignite
 
                         if (isMaterialLoaded)
                         {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X##ClearMaterial"))
+                            ImGui::SameLine(0.0f, 4.0f);
+                            if (UI::IconButton("##ClearMaterial", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material"))
                             {
                                 c.materialHandle = AssetHandle(0);
                                 c.dirty = true;
@@ -4469,33 +4899,31 @@ namespace ignite
                 }
             });
 
-            RenderComponent<ParticleSystemComponent>("Particle System", selectedEntity, [&]()
+            RenderComponent<ParticleSystemComponent>("Particle System", selectedEntity, [ & ]()
             {
                 auto &c = selectedEntity.GetComponent<ParticleSystemComponent>();
 
                 // Playback & Controls
-                UI::DrawCheckbox("Playing", &c.isPlaying);
-                ImGui::SameLine();
-                if (UI::DrawButton("Reset", { 60.0f, 26.0f }))
+                UI::DrawSwitch("Playing", &c.isPlaying);
+                if (UI::Button("Reset", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_ROTATE_CCW))
                 {
                     c.system = nullptr;
                 }
 
-                ImGui::Spacing();
-                ImGui::SeparatorText("Presets");
-                if (UI::DrawButton("Smoke", { 75.0f, 26.0f }))
+                ImGui::SameLine(0.0f, 6.0f);
+                if (UI::Button("Smoke", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_WIND))
                 {
                     c.settings = ParticleEmitterSettings::CreateSmoke();
                     c.system = nullptr;
                 }
-                ImGui::SameLine();
-                if (UI::DrawButton("Fire", { 75.0f, 26.0f }))
+                ImGui::SameLine(0.0f, 4.0f);
+                if (UI::Button("Fire", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_FLAME))
                 {
                     c.settings = ParticleEmitterSettings::CreateFire();
                     c.system = nullptr;
                 }
-                ImGui::SameLine();
-                if (UI::DrawButton("Spark", { 75.0f, 26.0f }))
+                ImGui::SameLine(0.0f, 4.0f);
+                if (UI::Button("Spark", UI::ButtonVariant::Outline, UI::ButtonSize::Small, ImVec2(0.0f, 22.0f), ICON_LC_ZAP))
                 {
                     c.settings = ParticleEmitterSettings::CreateSpark();
                     c.system = nullptr;
@@ -4580,8 +5008,8 @@ namespace ignite
 
                     if (isTextureLoaded)
                     {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X##ClearParticleTex"))
+                        ImGui::SameLine(0.0f, 4.0f);
+                        if (UI::IconButton("##ClearParticleTex", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Texture"))
                         {
                             c.settings.textureHandle = AssetHandle(0);
                         }
@@ -4591,12 +5019,15 @@ namespace ignite
 
             static bool focusComponentInput = true;
 
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, UI::ToImVec4(theme.popover));
+            ImGui::PushStyleColor(ImGuiCol_Border, UI::ToImVec4(theme.border));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * scale, 8.0f * scale));
+            ImGui::SetNextWindowSize(ImVec2(std::round(260.0f * scale), 0.0f), ImGuiCond_Always);
             if (ImGui::BeginPopup("##add_component_context", ImGuiWindowFlags_NoDecoration))
             {
                 static char buffer[256] = { 0 };
                 static std::string compNameFilterResultStr;
 
-                // Non static to re-create empty set
                 std::set<std::pair<std::string, CompType>> filteredCompName;
 
                 if (focusComponentInput)
@@ -4605,7 +5036,14 @@ namespace ignite
                     focusComponentInput = false;
                 }
 
-                ImGui::InputTextWithHint("##component_name", "Component", buffer, sizeof(buffer) + 1,
+                UI::TextField(
+                    "##component_name",
+                    buffer,
+                    sizeof(buffer),
+                    "Search components...",
+                    ImVec2(-1.0f, std::round(26.0f * scale)),
+                    ICON_LC_SEARCH,
+                    true,
                     ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
                 compNameFilterResultStr = std::string(buffer);
 
@@ -4680,29 +5118,35 @@ namespace ignite
                     }
                 };
 
+                UI::ContextMenuSeparator();
+
                 ImGui::BeginChildEx("##component_list", ImGui::GetCurrentWindow()->GetID("##component_list"),
-                    ImVec2(-1, 128.0f), ImGuiChildFlags_None, ImGuiWindowFlags_None);
+                    ImVec2(-1, std::round(240.0f * scale)), ImGuiChildFlags_None, ImGuiWindowFlags_None);
+
+                auto renderCompChoice = [&](const std::string &strName, CompType type)
+                {
+                    const NodeVisual compVis = GetComponentVisual(type);
+                    const bool alreadyPresent = EntityHasCompType(selectedEntity, type);
+                    if (UI::ContextMenuItem(strName.c_str(), alreadyPresent ? "Added" : nullptr, compVis.icon, false, !alreadyPresent, compVis.color))
+                    {
+                        addCompFunc(Entity{ selectedEntity, m_Scene }, type, strName);
+                        buffer[0] = '\0';
+                        ImGui::CloseCurrentPopup();
+                    }
+                };
 
                 if (compNameFilterResultStr.empty())
                 {
                     for (const auto &[strName, type] : s_ComponentsName)
                     {
-                        if (ImGui::Selectable(strName.c_str()))
-                        {
-                            addCompFunc(Entity{ selectedEntity, m_Scene }, type, strName);
-                            ImGui::CloseCurrentPopup();
-                        }
+                        renderCompChoice(strName, type);
                     }
                 }
                 else
                 {
                     for (const auto &[strName, type] : filteredCompName)
                     {
-                        if (ImGui::Selectable(strName.c_str()))
-                        {
-                            addCompFunc(Entity{ selectedEntity, m_Scene }, type, strName);
-                            ImGui::CloseCurrentPopup();
-                        }
+                        renderCompChoice(strName, type);
                     }
                 }
 
@@ -4714,10 +5158,13 @@ namespace ignite
             {
                 focusComponentInput = true;
             }
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
             } // end else (!Folder)
         }
 
         ImGui::End();
+        ImGui::PopStyleVar();
     }
 
     void ScenePanel::RenderSceneEditViewport()
@@ -4730,6 +5177,8 @@ namespace ignite
             windowFlags |= ImGuiWindowFlags_UnsavedDocument;
         }
 
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
         m_Data.sceneViewportEditorVisible = ImGui::Begin("Viewport", nullptr, windowFlags);
         if (m_Data.sceneViewportEditorVisible)
         {
@@ -4758,13 +5207,7 @@ namespace ignite
                 m_IsFocused = ImGui::IsWindowFocused();
                 m_IsHovered = ImGui::IsWindowHovered();
 
-                if (m_EditorLayer && m_EditorLayer->IsInPrefabIsolation())
-                {
-                    if (UI::DrawButton("Back to scene", { 96.0f, 28.0f }))
-                        m_EditorLayer->ExitPrefabIsolation(true);
-                }
-
-                // Calculating Scene Viewport location
+                // Calculating Scene Viewport location (0px edge-to-edge padding)
                 const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
                 const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
@@ -4802,12 +5245,22 @@ namespace ignite
 
                 if (target)
                 {
-                    // Render scene texture to imgui
+                    // Render scene texture edge-to-edge across the viewport
                     ImTextureID editorViewImage = UI::GetTextureID(target->compositeRT->GetColorAttachment(0));
                     ImGui::Image(editorViewImage, canvasSize);
                 }
 
-                const bool imageHovered = ImGui::IsItemHovered();
+                bool imageHovered = ImGui::IsItemHovered();
+
+                if (m_EditorLayer && m_EditorLayer->IsInPrefabIsolation())
+                {
+                    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x + 12.0f, canvasPos.y + 12.0f));
+                    if (UI::Button("Back to Scene", UI::ButtonVariant::Secondary, UI::ButtonSize::Small, ImVec2(0.0f, 26.0f), ICON_LC_ARROW_LEFT))
+                        m_EditorLayer->ExitPrefabIsolation(true);
+                    if (ImGui::IsItemHovered())
+                        imageHovered = false;
+                }
+
                 const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
                 const bool mouseDoubleDown = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 
@@ -4861,7 +5314,7 @@ namespace ignite
                                 ImVec2 iconMax = { screenPos.x + size * 0.5f, screenPos.y + size * 0.5f };
                                 drawList->AddImage(UI::GetTextureID(texture), iconMin, iconMax);
 
-                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
                                 {
                                     if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
                                         mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
@@ -4920,7 +5373,7 @@ namespace ignite
                                 );
                                 drawList->AddImage(UI::GetTextureID(texture), iconMin, iconMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
 
-                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                                if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
                                 {
                                     if (mousePos.x >= iconMin.x && mousePos.x <= iconMax.x &&
                                         mousePos.y >= iconMin.y && mousePos.y <= iconMax.y)
@@ -4959,7 +5412,7 @@ namespace ignite
                 // Mouse picking from viewport object-id attachment (on mouse down only)
                 if (!m_Scene->IsPlaying())
                 {
-                    if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+                    if (imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
                     {
                         if (clickedIconEntity.IsValid())
                         {
@@ -4989,12 +5442,19 @@ namespace ignite
                             else
                             {
                                 SetSelectedEntity(targetSelection);
+                                if (m_Gizmo.GetOperation() != GizmoOperation::NONE)
+                                {
+                                    m_Data.blockGizmoUntilMouseRelease = true;
+                                    m_Gizmo.ResetInteraction();
+                                }
                             }
                         }
                         else // invalid entity
                         {
-                            Ref<Texture> objectIdTexture = target->sceneRT->GetColorAttachment(1);
-                            if (objectIdTexture && objectIdTexture->GetHandle())
+                            Ref<Texture> objectIdTexture = (target->msaaSampleCount > 1)
+                                ? (target->objectIdResolveRT ? target->objectIdResolveRT->GetColorAttachment(0) : nullptr)
+                                : target->sceneRT->GetColorAttachment(1);
+                            if (objectIdTexture && objectIdTexture->GetHandle() && objectIdTexture->GetCreateInfo().sampleCount <= 1)
                             {
                                 const int texWidth = objectIdTexture->GetWidth();
                                 const int texHeight = objectIdTexture->GetHeight();
@@ -5006,7 +5466,6 @@ namespace ignite
 
                                     const uint32_t pickedObjectId = objectIdTexture->ReadPixel(pixelX, pixelY);
                                     {
-
                                         Entity pickedEntity = {};
                                         if (pickedObjectId != 0xFFFFFFFFu)
                                         {
@@ -5054,6 +5513,11 @@ namespace ignite
                                             else
                                             {
                                                 SetSelectedEntity(targetSelection);
+                                                if (m_Gizmo.GetOperation() != GizmoOperation::NONE)
+                                                {
+                                                    m_Data.blockGizmoUntilMouseRelease = true;
+                                                    m_Gizmo.ResetInteraction();
+                                                }
                                             }
                                         }
                                         else if (!m_EditorLayer->GetState().multiSelect)
@@ -5122,8 +5586,8 @@ namespace ignite
                     auto view = m_EditorCamera.GetView();
                     auto &projection = m_EditorCamera.GetProjection();
 
-                    // Draw orientation just for Perspective projection
-                    if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
+                    // Draw orientation gizmo for both Perspective and 3D/2.5D Orthographic views (not Mode2D)
+                    if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D)
                     {
                         constexpr float orientationSize = 80.0f;
                         ImGuiOrientation::internal::config.mSize = orientationSize;
@@ -5138,9 +5602,8 @@ namespace ignite
 
                         if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
                         {
-                            glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
-                            m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
-                            m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
+                            m_EditorCamera.SetOrientationFromView(view);
+                            m_EditorCamera3D = m_EditorCamera;
                         }
                     }
 
@@ -5148,109 +5611,115 @@ namespace ignite
                     GizmoInfo gizmoInfo;
                     gizmoInfo.cameraView = view;
                     gizmoInfo.cameraProjection = projection;
+                    gizmoInfo.cameraPosition = m_EditorCamera.position;
+                    gizmoInfo.cameraForward = m_EditorCamera.GetForwardDirection();
                     gizmoInfo.cameraType = m_EditorCamera.projectionType;
                     gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
+                    gizmoInfo.isSnapping = ImGui::GetIO().KeyCtrl;
                     switch (m_Gizmo.GetOperation())
                     {
                         default:
-                        case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
-                        case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
-                        case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
+                        case GizmoOperation::TRANSLATE:
+                            gizmoInfo.snapValue = m_ViewportData.snapValues[0];
+                            break;
+                        case GizmoOperation::ROTATE:
+                            gizmoInfo.snapValue = m_ViewportData.snapValues[1];
+                            break;
+                        case GizmoOperation::SCALE:
+                        case GizmoOperation::BOUND_SIZING_2D:
+                        case GizmoOperation::BOUND_SIZING_3D:
+                            gizmoInfo.snapValue = m_ViewportData.snapValues[2];
+                            break;
                     }
 
                     m_Gizmo.SetInfo(gizmoInfo);
 
-                    Render2DBoundsSizing();
-
-                    // Start manipulation: Fired only on the first frame of interaction
-                    const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
-                    bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
-
                     static std::unordered_map<UUID, TransformComponent> initialTransforms;
+                    static glm::vec3 initialPivot(0.0f);
+                    static AABB initialSharedBounds(glm::vec3(0.0f), glm::vec3(1.0f));
 
-                    if (isManipulatingNow && !m_Data.isGizmoManipulating)
+                    const bool wasManipulating = m_Data.isGizmoManipulating;
+                    if (!wasManipulating && !m_SelectedEntities.empty())
                     {
                         initialTransforms.clear();
                         for (const auto &[uuid, entity] : m_SelectedEntities)
                         {
-                            // Store the original transform of each selected entity
                             initialTransforms[uuid] = entity.GetTransform();
+                        }
+                        if (m_SelectedEntities.size() > 1)
+                        {
+                            ComputeSharedGizmoPivotAndBounds(this, m_SelectedEntities, initialPivot, initialSharedBounds);
                         }
                     }
 
-                    // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
-                    bool wasManipulating = m_Data.isGizmoManipulating;
-                    m_Data.isGizmoManipulating = isManipulatingNow;
-                    m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
+                    bool isManipulatingNow = false;
 
-                    if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
+                    if (m_Data.blockGizmoUntilMouseRelease)
                     {
-                        // Step 1: Compute shared pivot (center of all selected entities)
-                        glm::vec3 pivot(0.0f);
-                        for (Entity entity : m_SelectedEntities | std::views::values)
+                        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
                         {
-                            pivot += entity.GetTransform().world.translation;
+                            m_Data.blockGizmoUntilMouseRelease = false;
                         }
-                        pivot /= static_cast<float>(m_SelectedEntities.size());
+                        m_Data.isGizmoManipulating = false;
+                        m_Data.isGizmoBeingUse = false;
+                    }
+                    else if (m_SelectedEntities.size() > 1)
+                    {
+                        glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), initialPivot);
+                        glm::mat4 manipulatedTransform = gizmoTransform;
 
-                        // Step 2: create a transform matrix for the gizmo at the pivot point
-                        glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
-                        glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
+                        isManipulatingNow = m_Gizmo.Manipulate(manipulatedTransform, initialSharedBounds);
+                        m_Data.isGizmoManipulating = isManipulatingNow;
+                        m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
 
-                        // Step 3: Manipulate the matrix
-                        m_Gizmo.Manipulate(manipulatedTransform);
-
-                        if (m_Data.isGizmoManipulating)
+                        if (isManipulatingNow)
                         {
-                            // THis delta is now the TOTAL change from the moment of manipulation began
-                            glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
+                            const glm::mat4 gizmoDelta = glm::inverse(gizmoTransform) * manipulatedTransform;
 
-                            // Decompose the total delta
                             glm::vec3 deltaTranslation, deltaScale, deltaRotation;
                             Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
+                            const GizmoOperation op = m_Gizmo.GetOperation();
+                            const bool applyScale = (op == GizmoOperation::SCALE || op == GizmoOperation::BOUND_SIZING_2D || op == GizmoOperation::BOUND_SIZING_3D);
+
+                            const glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -initialPivot);
+                            const glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), initialPivot);
+                            const glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
 
                             for (auto &[uuid, entity] : m_SelectedEntities)
                             {
-                                // Get the live transform component to apply changes to it
+                                auto itInit = initialTransforms.find(uuid);
+                                if (itInit == initialTransforms.end())
+                                    continue;
+
                                 auto &tr = entity.GetTransform();
+                                const auto &initialTransform = itInit->second;
+                                const glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
 
-                                // Get the ORIGINAL transform we stored at the beginning of the manipulation
-                                const auto &initialTransform = initialTransforms.at(uuid);
-                                glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
+                                const glm::vec3 newWorldPos = glm::vec3(fromPivot * gizmoDelta * toPivot * glm::vec4(initialTransform.world.translation, 1.0f));
+                                glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * initialWorldMatrix;
+                                newWorldMatrix[3] = glm::vec4(newWorldPos, 1.0f);
 
-                                // Apply Translation and Rotation around the shared pivot
-                                glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
-                                glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), pivot);
-                                glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
-
-                                // Apply the total delta to the ORIGINAL world matrix
-                                glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
                                 glm::vec3 newTranslation, newRotationEuler, newScale;
                                 Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
 
-                                // ----- Apply Scale and Update Local Transform -----
                                 if (entity.GetParentUUID() != UUID(0))
                                 {
                                     Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
                                     const auto &parentTr = parent.GetTransform();
-                                    glm::mat4 parentWorld = parentTr.world.GetMatrix();
-                                    glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
+                                    const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
                                     glm::vec3 localTranslation, localEuler, localScale;
                                     Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
                                     tr.local.translation = localTranslation;
                                     tr.local.rotation = glm::quat(localEuler);
-
-                                    // Apply the total scale delta to the ORIGINAL local scale
-                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                    tr.local.scale = applyScale ? (initialTransform.local.scale * deltaScale) : initialTransform.local.scale;
                                 }
                                 else
                                 {
                                     tr.local.translation = newTranslation;
                                     tr.local.rotation = glm::quat(newRotationEuler);
-
-                                    // Apply the total scale delta to the ORIGINAL local scale
-                                    tr.local.scale = initialTransform.local.scale * deltaScale;
+                                    tr.local.scale = applyScale ? (initialTransform.local.scale * deltaScale) : initialTransform.local.scale;
                                 }
 
                                 tr.dirty = true;
@@ -5332,120 +5801,109 @@ namespace ignite
                     }
                     else if (Entity entity = GetSelectedEntity())
                     {
-                        if (allowGizmoManipulation)
+                        auto &tr = entity.GetTransform();
+                        glm::mat4 transformMatrix = tr.world.GetMatrix();
+                        const AABB localBounds = ComputeEntityLocalBounds(entity);
+
+                        isManipulatingNow = m_Gizmo.Manipulate(transformMatrix, localBounds);
+                        m_Data.isGizmoManipulating = isManipulatingNow;
+                        m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
+
+                        if (isManipulatingNow)
                         {
-                            auto &tr = entity.GetTransform();
-                            glm::mat4 transformMatrix = tr.world.GetMatrix();
+                            const glm::vec3 preservedLocalScale = tr.local.scale;
+                            glm::vec3 translation, rotation, scale;
+                            Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+                            const GizmoOperation op = m_Gizmo.GetOperation();
+                            const bool applyScale = (op == GizmoOperation::SCALE || op == GizmoOperation::BOUND_SIZING_2D || op == GizmoOperation::BOUND_SIZING_3D);
 
-                            m_Gizmo.Manipulate(transformMatrix);
-
-                            if (m_Gizmo.IsManipulating())
+                            if (entity.GetParentUUID() != UUID(0))
                             {
-                                const glm::vec3 preservedLocalScale = tr.local.scale;
-                                glm::vec3 translation, rotation, scale;
-                                Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
-                                const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
+                                Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
+                                const auto &parentTr = parent.GetTransform();
+                                const glm::mat4 parentWorld = parentTr.world.GetMatrix();
+                                const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
 
-                                if (entity.GetParentUUID() != UUID(0))
-                                {
-                                    Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
-                                    const auto &parentTr = parent.GetTransform();
-                                    const glm::mat4 parentWorld = parentTr.world.GetMatrix();
-                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
-
-                                    glm::vec3 localTranslation, localEuler, localScale;
-                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                    tr.local.translation = localTranslation;
-                                    tr.local.rotation = glm::quat(localEuler);
-
-                                    if (op == ImGuizmo::SCALE)
-                                    {
-                                        tr.local.scale = localScale;
-                                    }
-                                    else
-                                    {
-                                        tr.local.scale = preservedLocalScale;
-                                    }
-                                }
-                                else
-                                {
-                                    tr.local.translation = translation;
-                                    tr.local.rotation = glm::quat(rotation);
-
-                                    if (op == ImGuizmo::SCALE)
-                                    {
-                                        tr.local.scale = scale;
-                                    }
-                                    else
-                                    {
-                                        tr.local.scale = preservedLocalScale;
-                                    }
-                                }
-                                tr.dirty = true;
-
-                                // check if the entity has rigidbody and update its position and rotation in the physics engine
-                                if (isPlayOrSimulate)
-                                {
-                                    Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
-                                        if (entity.IsValid())
-                                        {
-                                            if (entity.HasComponent<RigidbodyComponent>())
-                                            {
-                                                auto &rb = entity.GetComponent<RigidbodyComponent>();
-                                                rb.isGizmoDragging = true;
-                                                if (auto dynActor = rb.dynamicActor.lock())
-                                                {
-                                                    dynActor->SetPosition(translation, true);
-                                                    dynActor->SetRotation(rotation, true);
-                                                    dynActor->SetLinearVelocity(glm::vec3(0.0f));
-                                                    dynActor->SetAngularVelocity(glm::vec3(0.0f));
-                                                }
-                                                else if (auto statActor = rb.staticActor.lock())
-                                                {
-                                                    statActor->SetPosition(translation, true);
-                                                    statActor->SetRotation(rotation, true);
-                                                }
-                                            }
-                                            if (entity.HasComponent<Rigidbody2DComponent>())
-                                            {
-                                                auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
-                                                rb2D.isGizmoDragging = true;
-                                                if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
-                                                {
-                                                    scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
-                                                    scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
-                                                    scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
-                                                    scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
-                                                    scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
-                                                }
-                                            }
-                                        }
-                                    });
-                                }
+                                glm::vec3 localTranslation, localEuler, localScale;
+                                Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                tr.local.translation = localTranslation;
+                                tr.local.rotation = glm::quat(localEuler);
+                                tr.local.scale = applyScale ? localScale : preservedLocalScale;
                             }
-
-                            // Commit a single command when the gizmo is released (single entity)
-                            if (!isManipulatingNow && wasManipulating)
+                            else
                             {
-                                if (isPlayOrSimulate)
-                                {
-                                    Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
-                                        if (entity.IsValid())
-                                        {
-                                            if (entity.HasComponent<RigidbodyComponent>())
-                                                entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
-                                            if (entity.HasComponent<Rigidbody2DComponent>())
-                                                entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
-                                        }
-                                    });
-                                }
+                                tr.local.translation = translation;
+                                tr.local.rotation = glm::quat(rotation);
+                                tr.local.scale = applyScale ? scale : preservedLocalScale;
+                            }
+                            tr.dirty = true;
 
-                                if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
-                                {
-                                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, entity.GetUUID(), it->second, entity.GetTransform()));
-                                }
+                            if (isPlayOrSimulate)
+                            {
+                                Application::SubmitToMainThread([scene = m_Scene, entity, translation = tr.local.translation, rotation = tr.local.rotation]() mutable {
+                                    if (entity.IsValid())
+                                    {
+                                        if (entity.HasComponent<RigidbodyComponent>())
+                                        {
+                                            auto &rb = entity.GetComponent<RigidbodyComponent>();
+                                            rb.isGizmoDragging = true;
+                                            if (auto dynActor = rb.dynamicActor.lock())
+                                            {
+                                                dynActor->SetPosition(translation, true);
+                                                dynActor->SetRotation(rotation, true);
+                                                dynActor->SetLinearVelocity(glm::vec3(0.0f));
+                                                dynActor->SetAngularVelocity(glm::vec3(0.0f));
+                                            }
+                                            else if (auto statActor = rb.staticActor.lock())
+                                            {
+                                                statActor->SetPosition(translation, true);
+                                                statActor->SetRotation(rotation, true);
+                                            }
+                                        }
+                                        if (entity.HasComponent<Rigidbody2DComponent>())
+                                        {
+                                            auto &rb2D = entity.GetComponent<Rigidbody2DComponent>();
+                                            rb2D.isGizmoDragging = true;
+                                            if (scene->GetPhysics2D() && scene->GetPhysics2D()->IsValidBody(rb2D.bodyId))
+                                            {
+                                                scene->GetPhysics2D()->SetPosition(rb2D.bodyId, translation);
+                                                scene->GetPhysics2D()->SetRotation(rb2D.bodyId, glm::eulerAngles(rotation).z);
+                                                scene->GetPhysics2D()->SetLinearVelocity(rb2D.bodyId, glm::vec2(0.0f));
+                                                scene->GetPhysics2D()->SetAngularVelocity(rb2D.bodyId, 0.0f);
+                                                scene->GetPhysics2D()->SetAwake(rb2D.bodyId, true);
+                                            }
+                                        }
+                                    }
+                                });
                             }
                         }
+
+                        // Commit a single command when the gizmo is released (single entity)
+                        if (!isManipulatingNow && wasManipulating)
+                        {
+                            if (isPlayOrSimulate)
+                            {
+                                Application::SubmitToMainThread([scene = m_Scene, entity]() mutable {
+                                    if (entity.IsValid())
+                                    {
+                                        if (entity.HasComponent<RigidbodyComponent>())
+                                            entity.GetComponent<RigidbodyComponent>().isGizmoDragging = false;
+                                        if (entity.HasComponent<Rigidbody2DComponent>())
+                                            entity.GetComponent<Rigidbody2DComponent>().isGizmoDragging = false;
+                                    }
+                                });
+                            }
+
+                            if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
+                            {
+                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene, entity.GetUUID(), it->second, entity.GetTransform()));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        m_Data.isGizmoManipulating = false;
+                        m_Data.isGizmoBeingUse = false;
                     }
                 }
             }
@@ -5456,7 +5914,7 @@ namespace ignite
         }
 
         ImGui::End();
-
+        ImGui::PopStyleVar(2);
     }
 
     void ScenePanel::RenderSceneGameViewport()
@@ -5464,28 +5922,19 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         if (m_EditorLayer->GetState().gameplayViewportWindow)
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
             m_Data.sceneViewportGameplayVisible = ImGui::Begin("Game", &m_EditorLayer->GetState().gameplayViewportWindow,
-                ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoScrollWithMouse);
+                ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
             if (m_Data.sceneViewportGameplayVisible)
             {
-                // Preview camera
+                // Preview camera (0px edge-to-edge padding)
                 if (m_Scene)
                 {
                     auto activeSceneRenderer = m_Scene->GetSceneRenderer();
-                    ImGui::TextUnformatted("Zoom");
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(120.0f);
-                    ImGui::SliderFloat("##GamePreviewZoom", &m_Data.gamePreviewZoom, 0.25f, 4.0f, "%.2fx");
 
-                    ImGui::SameLine();
-                    if (ImGui::Button("Reset##GamePreviewZoomPan"))
-                    {
-                        m_Data.gamePreviewZoom = 1.0f;
-                        m_Data.gamePreviewPan = glm::vec2(0.0f);
-                    }
-
-                    // Calculating Scene Viewport location
+                    // Calculating Scene Viewport location across entire panel
                     const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
                     const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
@@ -5612,10 +6061,11 @@ namespace ignite
                 }
                 else
                 {
-                    ImGui::Text("No Scene");
+                    UI::DrawCenteredText("No Scene");
                 }
             }
             ImGui::End();
+            ImGui::PopStyleVar(2);
         }
     }
 
@@ -5681,6 +6131,20 @@ namespace ignite
         else
         {
             m_EditorCamera.SetPanSnapValue(0.0f);
+            static constexpr std::array<const char *, 8> kViewPresetLabels = {
+                "Perspective", "2.5D Ortho", "Top", "Bottom", "Front", "Back", "Left", "Right"
+            };
+            int viewPresetIndex = static_cast<int>(m_EditorCamera.GetViewPreset());
+            if (viewPresetIndex < 0 || viewPresetIndex >= static_cast<int>(kViewPresetLabels.size()))
+            {
+                viewPresetIndex = 0;
+            }
+            ImGui::SetNextItemWidth(112.0f);
+            if (ImGui::Combo("##view_preset", &viewPresetIndex, kViewPresetLabels.data(), static_cast<int>(kViewPresetLabels.size())))
+            {
+                m_EditorCamera.SetViewPreset(static_cast<EditorCamera::EditorViewPreset>(viewPresetIndex));
+                m_EditorCamera3D = m_EditorCamera;
+            }
         }
 
         ImGui::SameLine();
@@ -5688,38 +6152,41 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        auto drawGizmoBtn = [&](const std::string &iconName, const ImVec2 &buttonSize, bool active)
-        {
-            const auto texID = UI::GetTextureID(m_Icons[iconName]);
-            return UI::DrawSelectImageButton(iconName.c_str(), texID, buttonSize, active);;
-        };
+        if (UI::IconButton("Picking", ICON_LC_MOUSE_POINTER_2, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Pick Entity", m_Data.gizmoOp == GizmoOperation::NONE))
+            SetGizmoOperation(GizmoOperation::NONE);
 
-        if (drawGizmoBtn("picking", buttonSize, m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
         ImGui::SameLine();
-        if (drawGizmoBtn("translate", buttonSize, m_Data.gizmoOp == GizmoOperation::TRANSLATE)) SetGizmoOperation(GizmoOperation::TRANSLATE);
-        ImGui::SameLine();
-        if (drawGizmoBtn("rotate", buttonSize, m_Data.gizmoOp == GizmoOperation::ROTATE)) SetGizmoOperation(GizmoOperation::ROTATE);
-        ImGui::SameLine();
-        if (drawGizmoBtn("scale", buttonSize, m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
+        if (UI::IconButton("Translate", ICON_LC_MOVE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Translate Entity", m_Data.gizmoOp == GizmoOperation::TRANSLATE))
+            SetGizmoOperation(GizmoOperation::TRANSLATE);
 
-        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
+        ImGui::SameLine();
+        if (UI::IconButton("Rotate", ICON_LC_ROTATE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Rotate Entity", m_Data.gizmoOp == GizmoOperation::ROTATE))
+            SetGizmoOperation(GizmoOperation::ROTATE);
+
+        ImGui::SameLine();
+        if (UI::IconButton("Scale", ICON_LC_SCALE_3D, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Scale Entity", m_Data.gizmoOp == GizmoOperation::SCALE))
+            SetGizmoOperation(GizmoOperation::SCALE);
+
         {
             ImGui::SameLine();
-            bool isBoundSizing = m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D;
-            if (isBoundSizing) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-            else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-            if (ImGui::Button("2D Bounds", ImVec2(0, 24))) SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
-            ImGui::PopStyleColor();
+            if (UI::IconButton("2D Bounds", ICON_LC_SQUARE, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "2D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D))
+                SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+        }
+
+        if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D)
+        {
+            ImGui::SameLine();
+            if (UI::IconButton("3D Bounds", ICON_LC_CUBOID, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "3D Bounds", m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_3D))
+                SetGizmoOperation(GizmoOperation::BOUND_SIZING_3D);
         }
 
         ImGui::SameLine();
         ImGui::Spacing();
         ImGui::SameLine();
 
-        const bool isLocal = m_Gizmo.GetMode() == ImGuizmo::LOCAL;
-        if (drawGizmoBtn("transform_local", buttonSize, isLocal)) m_Gizmo.SetMode(ImGuizmo::LOCAL);
-        ImGui::SameLine();
-        if (drawGizmoBtn("transform_world", buttonSize, !isLocal)) m_Gizmo.SetMode(ImGuizmo::WORLD);
+        const bool isLocal = m_Gizmo.GetMode() == GizmoMode::LOCAL;
+        if (UI::Button(isLocal ? "Local" : "World", isLocal ? UI::ButtonVariant::Ghost : UI::ButtonVariant::Primary, UI::ButtonSize::IconMd, ImVec2(0.0f, 0.0f), isLocal ? ICON_LC_MOVE_3D : ICON_LC_GLOBE))
+            SetGizmoMode(isLocal ? GizmoMode::WORLD : GizmoMode::LOCAL);
 
         ImGui::PopStyleVar(2);
 
@@ -5728,38 +6195,35 @@ namespace ignite
         switch (m_Gizmo.GetOperation())
         {
         default:
-        case ImGuizmo::OPERATION::TRANSLATE:
+        case GizmoOperation::TRANSLATE:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[0], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
-        case ImGuizmo::OPERATION::ROTATE:
+        case GizmoOperation::ROTATE:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[1], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
-        case ImGuizmo::OPERATION::SCALE:
+        case GizmoOperation::SCALE:
+        case GizmoOperation::BOUND_SIZING_2D:
+        case GizmoOperation::BOUND_SIZING_3D:
             ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[2], 0.05f, 0.0f, 100.0f, "Snap %.2f");
             break;
         }
         ImGui::SameLine();
 
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
-
         const bool isScenePlaying = m_Scene && m_Scene->IsPlaying();
         const bool isSceneReadyToPlay = m_Scene && m_Scene->IsReadyToPlay();
         const bool canClickPlay = m_Scene && (isScenePlaying || isSceneReadyToPlay);
-        Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-        const auto scenePlayStopID = UI::GetTextureID(scenePlayStopTex);
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!canClickPlay);
-        if (UI::DrawImageButton("##PlayButton", scenePlayStopID, buttonSize))
+        if (UI::IconButton("##play_button", isScenePlaying ? ICON_LC_SQUARE : ICON_LC_PLAY, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Play Scene", isSceneReadyToPlay))
         {
             if (isScenePlaying)
             {
                 Application::SubmitToMainThread([this]()
-                    {
-                        m_EditorLayer->OnSceneStop();
-                        m_SceneFocused = false;
-                    });
+                {
+                    m_EditorLayer->OnSceneStop();
+                    m_SceneFocused = false;
+                });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -5769,10 +6233,10 @@ namespace ignite
             else
             {
                 Application::SubmitToMainThread([this]()
-                    {
-                        m_EditorLayer->OnScenePlay();
-                        m_SceneFocused = true;
-                    });
+                {
+                    m_EditorLayer->OnScenePlay();
+                    m_SceneFocused = true;
+                });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -5789,20 +6253,18 @@ namespace ignite
 
         const bool isSceneSimulate = m_Scene && m_Scene->IsSimulating();
         const bool canClickSimulate = m_Scene && (isSceneSimulate || isSceneReadyToPlay);
-        Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-        const auto sceneSimulateID = UI::GetTextureID(sceneSimulateTex);
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!canClickSimulate);
-        if (UI::DrawImageButton("##SimulateButton", sceneSimulateID, buttonSize))
+        if (UI::IconButton("##simulate_button", isSceneSimulate ? ICON_LC_SQUARE : ICON_LC_COG, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Simulate Scene", isSceneReadyToPlay))
         {
             if (isSceneSimulate)
             {
                 Application::SubmitToMainThread([this]()
-                    {
-                        m_EditorLayer->OnSceneStop();
-                        m_SceneFocused = false;
-                    });
+                {
+                    m_EditorLayer->OnSceneStop();
+                    m_SceneFocused = false;
+                });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -5830,219 +6292,253 @@ namespace ignite
             ImGui::SetTooltip("Waiting for scene assets to load (%zu/%zu)...", progress.readyAssets, progress.totalAssets);
         }
 
-        ImGui::PopStyleVar(2);
+        ImGui::SameLine();
+        ImGui::Spacing();
+        ImGui::SameLine();
+        if (UI::Button("Scalability", UI::ButtonVariant::Outline, UI::ButtonSize::IconMd, ImVec2(0.0f, 0.0f), ICON_LC_SLIDERS_HORIZONTAL))
+        {
+            ImGui::OpenPopup("##ScalabilityPopup");
+        }
+
+        if (ImGui::BeginPopup("##ScalabilityPopup"))
+        {
+            if (auto sr = m_EditorLayer ? m_EditorLayer->GetSceneRenderer() : nullptr)
+            {
+                auto &rs = sr->sceneRenderSettings;
+                auto &sc = rs.scalability;
+                bool changed = false;
+
+                static constexpr const char *kLevelLabels[] = { "LOW", "MEDIUM", "HIGH", "ULTRA" };
+                auto drawLevelRow = [&](const char *label, ScalabilityLevel &level, bool isOverall)
+                {
+                    ImGui::PushID(label);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(label);
+                    ImGui::SameLine(155.0f);
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (static_cast<int>(level) == i);
+                        if (UI::Button(kLevelLabels[i], active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            const auto newLevel = static_cast<ScalabilityLevel>(i);
+                            if (isOverall)
+                            {
+                                rs.ApplyOverallScalability(newLevel);
+                            }
+                            else
+                            {
+                                level = newLevel;
+                                rs.ApplyIndividualScalability();
+                            }
+                            changed = true;
+                        }
+                    }
+                    ImGui::PopID();
+                };
+
+                drawLevelRow("Overall Scalability", sc.overall, true);
+                ImGui::Separator();
+                drawLevelRow("Shadows", sc.shadows, false);
+                drawLevelRow("Global Illumination", sc.globalIllumination, false);
+                drawLevelRow("Ambient Occlusion", sc.ambientOcclusion, false);
+                drawLevelRow("Reflections", sc.reflections, false);
+                drawLevelRow("Resolution Scale", sc.resolutionScale, false);
+                drawLevelRow("Post Processing", sc.postProcessing, false);
+
+                ImGui::Separator();
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Anti-Aliasing");
+                ImGui::SameLine(155.0f);
+                {
+                    struct AAOption { const char *label; SampleMethod method; };
+                    static constexpr AAOption kAAOptions[] = {
+                        { "NONE", SampleMethod::NONE },
+                        { "MSAA", SampleMethod::MSAA },
+                        { "FXAA", SampleMethod::FXAA },
+                        { "TAA",  SampleMethod::TAA  },
+                    };
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (rs.sampleMethod == kAAOptions[i].method);
+                        if (UI::Button(kAAOptions[i].label, active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            sr->SetSampleMethod(kAAOptions[i].method);
+                            changed = true;
+                        }
+                    }
+                }
+
+                if (rs.sampleMethod == SampleMethod::MSAA)
+                {
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted("MSAA Samples");
+                    ImGui::SameLine(155.0f);
+                    static constexpr int kMSAASamples[] = { 2, 4, 8 };
+                    static constexpr const char *kMSAALabels[] = { "2x", "4x", "8x" };
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (rs.msaaProperties.sampleCount == kMSAASamples[i]);
+                        if (UI::Button(kMSAALabels[i], active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            rs.msaaProperties.sampleCount = kMSAASamples[i];
+                            changed = true;
+                        }
+                    }
+                }
+                else if (rs.sampleMethod == SampleMethod::FXAA)
+                {
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("Subpixel Quality", &rs.fxaaProperties.subpixQuality, 0.0f, 1.0f, "%.2f"))
+                        changed = true;
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("Edge Threshold", &rs.fxaaProperties.edgeThreshold, 0.063f, 0.333f, "%.3f"))
+                        changed = true;
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("Min Threshold", &rs.fxaaProperties.edgeThresholdMin, 0.015f, 0.0833f, "%.4f"))
+                        changed = true;
+                }
+                else if (rs.sampleMethod == SampleMethod::TAA)
+                {
+                    ImGui::SetNextItemWidth(220.0f);
+                    if (ImGui::SliderFloat("TAA Blend Factor", &rs.taaProperties.blendFactor, 0.02f, 1.0f, "%.2f"))
+                        changed = true;
+                }
+
+                if (changed)
+                {
+                    m_EditorLayer->m_State.editorRequestToResize = true;
+                    m_EditorLayer->m_State.gameplayRequestToResize = true;
+                    if (auto proj = m_EditorLayer->GetActiveProject())
+                    {
+                        rs.SerializeToFile(proj->GetDirectory() / "GameSettings.ign");
+                    }
+                }
+            }
+            ImGui::EndPopup();
+        }
 
         ImGui::EndDisabled();
     }
 
-    bool ScenePanel::Is2DResizableEntity(Entity entity) const
+    AABB ScenePanel::ComputeEntityLocalBounds(Entity entity) const
     {
-        return entity.IsValid() && (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>());
+        if (!entity.IsValid())
+        {
+            return AABB(glm::vec3(0.0f), glm::vec3(1.0f));
+        }
+
+        AssetManager *am = AssetManager::GetInstance();
+        if (entity.HasComponent<StaticMeshComponent>() && am)
+        {
+            const auto &smc = entity.GetComponent<StaticMeshComponent>();
+            if (smc.handle != AssetHandle(0))
+            {
+                if (Ref<StaticMesh> mesh = am->GetAsset<StaticMesh>(smc.handle))
+                {
+                    const AABB &aabb = (glm::length(mesh->localAABB.GetSize()) > 1e-4f)
+                        ? mesh->localAABB
+                        : mesh->CalculateLocalAABB();
+                    if (glm::length(aabb.GetSize()) > 1e-4f)
+                    {
+                        return aabb;
+                    }
+                }
+            }
+        }
+
+        if (entity.HasComponent<SkeletalMeshComponent>() && am)
+        {
+            const auto &skc = entity.GetComponent<SkeletalMeshComponent>();
+            if (skc.handle != AssetHandle(0))
+            {
+                if (Ref<SkeletalMesh> mesh = am->GetAsset<SkeletalMesh>(skc.handle))
+                {
+                    const AABB &aabb = (glm::length(mesh->localAABB.GetSize()) > 1e-4f)
+                        ? mesh->localAABB
+                        : mesh->CalculateLocalAABB();
+                    if (glm::length(aabb.GetSize()) > 1e-4f)
+                    {
+                        return aabb;
+                    }
+                }
+            }
+        }
+
+        if (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>())
+        {
+            return AABB::FromMinMax(glm::vec3(-0.5f, -0.5f, 0.0f), glm::vec3(0.5f, 0.5f, 0.0f));
+        }
+
+        return AABB(glm::vec3(0.0f), glm::vec3(1.0f));
     }
 
-    glm::vec3 ScenePanel::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid)
+    void ScenePanel::SubmitGizmoForRender(SceneRenderer *renderer, ICamera *camera)
     {
-        return Math::ScreenToWorldOnPlane(screenPos, planeZ,
-            m_EditorCamera.GetProjection() * m_EditorCamera.GetView(),
-            { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max },
-            isValid
-        );
-    }
-
-    void ScenePanel::Render2DBoundsSizing()
-    {
-        IGN_PROFILE_FUNCTION();
-        m_Data.is2DBoundsHovered = false;
-
-        auto clearResizeState = [this]()
+        if (!renderer)
         {
-            m_Data.is2DBoundsSizing = false;
-            m_Data.active2DCorner = -1;
-            m_Data.active2DEntity = UUID(0);
-        };
-
-        auto releaseResizeCommand = [this, &clearResizeState]()
-        {
-            if (!m_Data.is2DBoundsSizing)
-                return;
-
-            if (!m_Scene)
-            {
-                clearResizeState();
-                return;
-            }
-
-            Entity resizedEntity = SceneManager::GetEntity(m_Scene, m_Data.active2DEntity);
-            if (resizedEntity.IsValid())
-            {
-                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(
-                    m_Scene, resizedEntity.GetUUID(), m_Data.before2DResize, resizedEntity.GetTransform()));
-            }
-
-            clearResizeState();
-        };
-
-        if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_SelectedEntities.size() != 1 || m_Data.gizmoOp != GizmoOperation::BOUND_SIZING_2D)
-        {
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-            {
-                releaseResizeCommand();
-            }
             return;
         }
 
-        Entity entity = GetSelectedEntity();
-        if (!Is2DResizableEntity(entity))
+        if (!m_Scene || m_Scene->IsPlaying() || m_SelectedEntities.empty() || m_Data.gizmoOp == GizmoOperation::NONE || !camera)
         {
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                releaseResizeCommand();
+            renderer->ClearGizmoDrawList();
             return;
         }
 
-        auto &tr = entity.GetTransform();
-        const glm::mat4 worldMatrix = tr.world.GetMatrix();
-        const glm::mat4 viewProjection = m_EditorCamera.GetProjection() * m_EditorCamera.GetView();
-
-        std::array<glm::vec3, 4> worldCorners{};
-        std::array<ImVec2, 4> screenCorners{};
-        for (size_t i = 0; i < kBoundsCorners.size(); ++i)
+        Rect viewRect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
+        if (viewRect.GetSize().x <= 1.0f || viewRect.GetSize().y <= 1.0f)
         {
-            const glm::vec4 world = worldMatrix * glm::vec4(kBoundsCorners[i].x, kBoundsCorners[i].y, 0.0f, 1.0f);
-            worldCorners[i] = glm::vec3(world);
-            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, {globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max}, screenCorners[i]))
-            {
-                if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                {
-                    releaseResizeCommand();
-                }
-                return;
-            }
+            const glm::uvec2 vpSize = camera->GetViewportSize();
+            viewRect = Rect(glm::vec2(0.0f), glm::vec2(static_cast<float>(std::max(1u, vpSize.x)), static_cast<float>(std::max(1u, vpSize.y))));
         }
 
-        ImDrawList *drawList = ImGui::GetWindowDrawList();
-        constexpr ImU32 boundsColor = IM_COL32(247, 210, 60, 255);
-        drawList->AddPolyline(screenCorners.data(), static_cast<int>(screenCorners.size()), boundsColor, ImDrawFlags_Closed, 2.0f);
-
-        const ImVec2 mousePos = ImGui::GetMousePos();
-        const bool mouseInViewport =
-            mousePos.x >= globals::GEditor::EditorViewport.min.x && mousePos.x <= (globals::GEditor::EditorViewport.min.x + globals::GEditor::EditorViewport.max.x) &&
-            mousePos.y >= globals::GEditor::EditorViewport.min.y && mousePos.y <= (globals::GEditor::EditorViewport.min.y + globals::GEditor::EditorViewport.max.y);
-
-        constexpr float handleRadius = 6.0f;
-        const float handleRadiusSq = handleRadius * handleRadius;
-
-        int hoveredCorner = -1;
-        float bestDistanceSq = FLT_MAX;
-        for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
+        GizmoInfo gizmoInfo;
+        gizmoInfo.cameraView = camera->GetView();
+        gizmoInfo.cameraProjection = camera->GetProjection();
+        gizmoInfo.cameraPosition = camera->position;
+        gizmoInfo.cameraForward = camera->GetForwardDirection();
+        gizmoInfo.cameraType = camera->projectionType;
+        gizmoInfo.viewRect = viewRect;
+        if (ImGui::GetCurrentContext() != nullptr)
         {
-            const float dx = mousePos.x - screenCorners[i].x;
-            const float dy = mousePos.y - screenCorners[i].y;
-            const float distanceSq = dx * dx + dy * dy;
-            if (distanceSq <= handleRadiusSq && distanceSq < bestDistanceSq)
-            {
-                bestDistanceSq = distanceSq;
-                hoveredCorner = i;
-            }
+            gizmoInfo.isSnapping = ImGui::GetIO().KeyCtrl;
         }
 
-        m_Data.is2DBoundsHovered = mouseInViewport && hoveredCorner != -1;
-
-        if (m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D)
+        switch (m_Gizmo.GetOperation())
         {
-            for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
-            {
-                const bool isActive = m_Data.is2DBoundsSizing && m_Data.active2DCorner == i;
-                const bool isHovered = hoveredCorner == i;
-                const ImU32 fillColor = isActive ? IM_COL32(255, 185, 0, 255) : (isHovered ? IM_COL32(255, 220, 110, 255) : IM_COL32(240, 240, 240, 230));
-
-                const ImVec2 min = { screenCorners[i].x - handleRadius, screenCorners[i].y - handleRadius };
-                const ImVec2 max = { screenCorners[i].x + handleRadius, screenCorners[i].y + handleRadius };
-                drawList->AddRectFilled(min, max, fillColor, 2.0f);
-                drawList->AddRect(min, max, IM_COL32(30, 30, 30, 255), 2.0f, 0, 1.0f);
-            }
+        default:
+        case GizmoOperation::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
+        case GizmoOperation::ROTATE:    gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
+        case GizmoOperation::SCALE:
+        case GizmoOperation::BOUND_SIZING_2D:
+        case GizmoOperation::BOUND_SIZING_3D:
+            gizmoInfo.snapValue = m_ViewportData.snapValues[2];
+            break;
         }
 
-        if (!m_Data.is2DBoundsSizing && m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D && mouseInViewport && hoveredCorner != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_Gizmo.IsManipulating())
-        {
-            m_Data.is2DBoundsSizing = true;
-            m_Data.active2DCorner = hoveredCorner;
-            m_Data.active2DEntity = entity.GetUUID();
-            m_Data.active2DPlaneZ = worldMatrix[3].z;
-            m_Data.active2DAxisX = glm::normalize(glm::vec3(worldMatrix[0]));
-            m_Data.active2DAxisY = glm::normalize(glm::vec3(worldMatrix[1]));
-            m_Data.before2DResize = tr;
+        m_Gizmo.SetInfo(gizmoInfo);
 
-            const int oppositeCorner = (hoveredCorner + 2) % 4;
-            m_Data.active2DOppositeWorld = worldCorners[oppositeCorner];
+        if (m_SelectedEntities.size() > 1)
+        {
+            glm::vec3 pivot(0.0f);
+            AABB sharedBounds(glm::vec3(0.0f), glm::vec3(1.0f));
+            ComputeSharedGizmoPivotAndBounds(this, m_SelectedEntities, pivot, sharedBounds);
+            m_Gizmo.BuildDrawList(glm::translate(glm::mat4(1.0f), pivot), sharedBounds);
+        }
+        else if (Entity entity = GetSelectedEntity(); entity.IsValid())
+        {
+            m_Gizmo.BuildDrawList(entity.GetTransform().world.GetMatrix(), ComputeEntityLocalBounds(entity));
+        }
+        else
+        {
+            renderer->ClearGizmoDrawList();
+            return;
         }
 
-        if (m_Data.is2DBoundsSizing && m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D)
-        {
-            if (m_Data.active2DEntity != entity.GetUUID())
-            {
-                releaseResizeCommand();
-                return;
-            }
-
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
-            {
-                bool validDragPoint = false;
-                glm::vec3 dragWorld = ScreenToWorldOnPlane(glm::vec2(mousePos.x, mousePos.y), m_Data.active2DPlaneZ, &validDragPoint);
-                if (validDragPoint)
-                {
-                    const glm::vec2 cornerSign = glm::sign(kBoundsCorners[m_Data.active2DCorner]);
-                    const glm::vec3 delta = dragWorld - m_Data.active2DOppositeWorld;
-
-                    float halfX = cornerSign.x * glm::dot(delta, m_Data.active2DAxisX) * 0.5f;
-                    float halfY = cornerSign.y * glm::dot(delta, m_Data.active2DAxisY) * 0.5f;
-
-                    halfX = glm::max(halfX, 0.01f);
-                    halfY = glm::max(halfY, 0.01f);
-
-                    const glm::vec3 centerWorld = m_Data.active2DOppositeWorld
-                        + (m_Data.active2DAxisX * (cornerSign.x * halfX))
-                        + (m_Data.active2DAxisY * (cornerSign.y * halfY));
-
-                    const float targetWorldScaleX = halfX * 2.0f;
-                    const float targetWorldScaleY = halfY * 2.0f;
-
-                    const float currentWorldScaleZ = glm::max(glm::length(glm::vec3(worldMatrix[2])), 0.0001f);
-
-                    glm::mat4 worldRotation = Math::RemoveScale(worldMatrix);
-                    worldRotation[3] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-
-                    const glm::mat4 targetWorld =
-                        glm::translate(glm::mat4(1.0f), centerWorld)
-                        * worldRotation
-                        * glm::scale(glm::mat4(1.0f), glm::vec3(targetWorldScaleX, targetWorldScaleY, currentWorldScaleZ));
-
-                    if (entity.GetParentUUID() != UUID(0))
-                    {
-                        Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
-                        const glm::mat4 parentWorld = parent.GetTransform().world.GetMatrix();
-                        const glm::mat4 localMatrix = glm::inverse(parentWorld) * targetWorld;
-
-                        glm::vec3 localTranslation, localEuler, localScale;
-                        Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                        tr.local.translation = localTranslation;
-                        tr.local.rotation = glm::quat(localEuler);
-                        tr.local.scale = localScale;
-                    }
-                    else
-                    {
-                        tr.local.translation = centerWorld;
-                        tr.local.scale.x = targetWorldScaleX;
-                        tr.local.scale.y = targetWorldScaleY;
-                    }
-
-                    tr.dirty = true;
-                }
-            }
-            else
-            {
-                releaseResizeCommand();
-            }
-        }
+        renderer->SetGizmoDrawList(m_Gizmo.GetDrawList());
     }
 
     template<typename T, typename UIFunction>
@@ -6050,41 +6546,89 @@ namespace ignite
     {
         if (entity.HasComponent<T>())
         {
-            constexpr ImGuiTreeNodeFlags treeNdeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed
-                | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
+            const auto &theme = UI::GetTheme();
+            const float scale = std::max(UI::GetDpiScale(), 1.0f);
+            const NodeVisual vis = GetComponentVisualByName(name);
 
             T &comp = entity.GetComponent<T>();
             UUID compID = comp.GetCompID();
 
             ImGui::PushID(static_cast<int>(compID));
 
-            // ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2 { 6.0f, 3.0f });
-            ImGui::Separator();
+            ImGuiStorage *storage = ImGui::GetStateStorage();
+            const ImGuiID openId = ImGui::GetID("comp_open");
+            bool open = storage->GetBool(openId, true);
 
-            const bool open = ImGui::TreeNodeEx((const char *)(uint32_t *)(uint64_t *)&compID, treeNdeFlags, name.c_str());
-            // ImGui::PopStyleVar();
+            const float headerH = std::round(26.0f * scale);
+            const float optsW = std::round(24.0f * scale);
+            const float availW = ImGui::GetContentRegionAvail().x;
+            const ImVec2 headerMin = ImGui::GetCursorScreenPos();
+            const ImVec2 headerMax(headerMin.x + availW, headerMin.y + headerH);
+            const float toggleW = std::max(40.0f, availW - optsW - 2.0f * scale);
 
-            const float buttonSize = ImGui::GetFrameHeight();
-            const float cursorX = ImGui::GetCursorPosX();
-            const float available = ImGui::GetContentRegionAvail().x;
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(cursorX + available - buttonSize);
-            if (ImGui::Button("...", { buttonSize, buttonSize }))
-                ImGui::OpenPopup("comp_settings");
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+            const bool toggled = ImGui::InvisibleButton("##comp_toggle", ImVec2(toggleW, headerH));
+            const bool headerHovered = ImGui::IsItemHovered();
+            if (headerHovered)
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+            if (toggled)
+            {
+                open = !open;
+                storage->SetBool(openId, open);
+            }
+
+            ImGui::SameLine(0.0f, 2.0f * scale);
+            if (UI::IconButton("##comp_opts", ICON_LC_ELLIPSIS, UI::ButtonVariant::Ghost, UI::ButtonSize::IconSm, "Component Options"))
+            {
+                UI::OpenPopupMenu("comp_settings");
+            }
+            ImGui::PopStyleVar();
+
+            ImDrawList *dl = ImGui::GetWindowDrawList();
+            dl->AddRectFilled(headerMin, headerMax, UI::ToU32(headerHovered ? theme.secondary : theme.inputBg));
+            dl->AddRect(headerMin, headerMax, UI::ToU32(headerHovered ? theme.borderStrong : theme.border), 0.0f, 0, 1.0f);
+            dl->AddRectFilled(headerMin, ImVec2(headerMin.x + 2.5f, headerMax.y), UI::ToU32(vis.color));
+
+            float drawX = headerMin.x + std::round(8.0f * scale);
+            const char *chevron = open ? ICON_LC_CHEVRON_DOWN : ICON_LC_CHEVRON_RIGHT;
+            {
+                UI::ScopedFont tinyFont(UI::FontVariant::Small);
+                const ImVec2 chevSz = ImGui::CalcTextSize(chevron);
+                dl->AddText(ImVec2(drawX, headerMin.y + std::round((headerH - chevSz.y) * 0.5f)), UI::ToU32(theme.mutedForeground), chevron);
+                drawX += std::round(16.0f * scale);
+
+                const ImVec2 icSz = ImGui::CalcTextSize(vis.icon);
+                dl->AddText(ImVec2(drawX, headerMin.y + std::round((headerH - icSz.y) * 0.5f)), UI::ToU32(vis.color), vis.icon);
+                drawX += std::round(20.0f * scale);
+            }
+            {
+                UI::ScopedFont medFont(UI::FontVariant::Medium);
+                const ImVec2 lblSz = ImGui::CalcTextSize(name.c_str());
+                const ImVec4 clipRect(drawX, headerMin.y, headerMax.x - optsW - 4.0f, headerMax.y);
+                dl->AddText(nullptr, 0.0f, ImVec2(drawX, headerMin.y + std::round((headerH - lblSz.y) * 0.5f)), UI::ToU32(theme.foreground), name.c_str(), nullptr, 0.0f, &clipRect);
+            }
 
             bool componentRemoved = false;
 
-            if (ImGui::BeginPopup("comp_settings"))
+            if (UI::BeginPopupMenu("comp_settings"))
             {
-                if (allowedToRemove && ImGui::MenuItem("Remove"))
+                UI::ContextMenuLabel(name.c_str());
+                UI::ContextMenuSeparator();
+                if (UI::ContextMenuItem("Remove Component", nullptr, ICON_LC_TRASH_2, true, allowedToRemove))
                     componentRemoved = true;
-                ImGui::EndPopup();
+                UI::EndContextMenu();
             }
 
             if (open)
             {
+                ImGui::Dummy(ImVec2(0.0f, 2.0f * scale));
                 uiFunction();
-                ImGui::TreePop();
+                ImGui::Dummy(ImVec2(0.0f, 4.0f * scale));
+            }
+            else
+            {
+                ImGui::Dummy(ImVec2(0.0f, 2.0f * scale));
             }
 
             if (componentRemoved)
@@ -6162,32 +6706,16 @@ namespace ignite
 
     void ScenePanel::SetGizmoOperation(GizmoOperation op)
     {
-        if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D && op == GizmoOperation::BOUND_SIZING_2D)
-            return;
+        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D && op == GizmoOperation::BOUND_SIZING_3D)
+        {
+            op = GizmoOperation::BOUND_SIZING_2D;
+        }
 
         m_Data.gizmoOp = op;
-
-        switch (op)
-        {
-        case GizmoOperation::NONE:
-            m_Gizmo.SetOperation(ImGuizmo::NONE);
-            break;
-        case GizmoOperation::TRANSLATE:
-            m_Gizmo.SetOperation(ImGuizmo::TRANSLATE);
-            break;
-        case GizmoOperation::ROTATE:
-            m_Gizmo.SetOperation(ImGuizmo::ROTATE);
-            break;
-        case GizmoOperation::SCALE:
-            m_Gizmo.SetOperation(ImGuizmo::SCALE);
-            break;
-        case GizmoOperation::BOUND_SIZING_2D:
-            m_Gizmo.SetOperation(ImGuizmo::NONE);
-            break;
-        }
+        m_Gizmo.SetOperation(op);
     }
 
-    void ScenePanel::SetGizmoMode(ImGuizmo::MODE mode)
+    void ScenePanel::SetGizmoMode(GizmoMode mode)
     {
         m_Gizmo.SetMode(mode);
     }
@@ -6210,7 +6738,7 @@ namespace ignite
         }
 
         m_EditorCamera.UpdateMouseState();
-        if (m_IsHovered && !m_Gizmo.IsManipulating() && !m_Data.is2DBoundsSizing)
+        if (m_IsHovered && !m_Gizmo.IsManipulating())
         {
             switch (m_EditorCamera.GetNavigationMode())
             {

@@ -50,8 +50,8 @@ namespace ignite
         if (m_ResetStagingBuffer) { nri.DestroyBuffer(m_ResetStagingBuffer); m_ResetStagingBuffer = nullptr; }
         if (m_ResetStagingMemory) { nri.FreeMemory(m_ResetStagingMemory); m_ResetStagingMemory = nullptr; }
 
-        m_SimulateCB = nullptr;
-        m_RenderCB = nullptr;
+        m_SimulateCBs.clear();
+        m_RenderCBs.clear();
     }
 
     void ParticleSystem::DestroyPipelines()
@@ -61,10 +61,15 @@ namespace ignite
         {
             auto &nri = dm->GetNRI();
             if (m_ComputePipeline) { nri.DestroyPipeline(m_ComputePipeline); m_ComputePipeline = nullptr; }
-            if (m_ComputePipelineLayout) { nri.DestroyPipelineLayout(m_ComputePipelineLayout); m_ComputePipelineLayout = nullptr; }
+            if (m_ComputePipelineLayout)
+            {
+                BindingSet::OnPipelineLayoutDestroyed(m_ComputePipelineLayout);
+                nri.DestroyPipelineLayout(m_ComputePipelineLayout);
+                m_ComputePipelineLayout = nullptr;
+            }
         }
-        m_ComputeBindingSet = nullptr;
-        m_RenderBindingSet = nullptr;
+        m_ComputeBindingSets.clear();
+        m_RenderBindingSlots.clear();
         m_RenderPipelineAlphaCache.clear();
         m_RenderPipelineAdditiveCache.clear();
         m_RenderPipelineAlpha = nullptr;
@@ -155,9 +160,15 @@ namespace ignite
             DeviceManager::GetInstance()->GetHelperInterface().UploadData(*graphicsQueue, nullptr, 0, &uploadDesc, 1);
         }
 
-        // 2. Constant Buffers
-        m_SimulateCB = ConstantBuffer::Create(sizeof(ParticleSimCB), true, 16, "[Particle System] Sim CB");
-        m_RenderCB = ConstantBuffer::Create(sizeof(ParticleRenderCB), true, 16, "[Particle System] Render CB");
+        // 2. Per-frame-in-flight Constant Buffers
+        const uint32_t slotCount = std::max(1u, DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight);
+        m_SimulateCBs.resize(slotCount);
+        m_RenderCBs.resize(slotCount);
+        for (uint32_t i = 0; i < slotCount; ++i)
+        {
+            m_SimulateCBs[i] = ConstantBuffer::Create(sizeof(ParticleSimCB), true, 16, "[Particle System] Sim CB " + std::to_string(i));
+            m_RenderCBs[i] = ConstantBuffer::Create(sizeof(ParticleRenderCB), true, 16, "[Particle System] Render CB " + std::to_string(i));
+        }
 
         // 3. Bilinear Clamp Sampler for textures
         nri::SamplerDesc samplerDesc = {};
@@ -187,13 +198,18 @@ namespace ignite
             };
             m_ComputePipelineLayout = m_ComputeBindingLayout.CreatePipelineLayout(nri::StageBits::COMPUTE_SHADER);
 
-            BindingSetDesc computeSetDesc;
-            computeSetDesc.bindings =
+            m_ComputeBindingSets.resize(m_SimulateCBs.size());
+            for (size_t i = 0; i < m_SimulateCBs.size(); ++i)
             {
-                BindingSetItem::ConstantBuffer(0, m_SimulateCB->GetDescriptor()),
-                BindingSetItem::StructuredBuffer_UAV(0, m_ParticleUAV)
-            };
-            m_ComputeBindingSet = BindingSet::Create("[Particle System] Compute", m_ComputePipelineLayout, 0, computeSetDesc);
+                BindingSetDesc computeSetDesc;
+                computeSetDesc.bindings =
+                {
+                    BindingSetItem::ConstantBuffer(0, m_SimulateCBs[i]->GetDescriptor()),
+                    BindingSetItem::StructuredBuffer_UAV(0, m_ParticleUAV)
+                };
+                m_ComputeBindingSets[i] = BindingSet::Create("[Particle System] Compute " + std::to_string(i), m_ComputePipelineLayout, 0, computeSetDesc);
+            }
+            m_RenderBindingSlots.resize(m_RenderCBs.size());
 
             nri::ComputePipelineDesc computePipeDesc = {};
             computePipeDesc.pipelineLayout = m_ComputePipelineLayout;
@@ -262,28 +278,36 @@ namespace ignite
         return pipeline;
     }
 
-    void ParticleSystem::UpdateRenderBindingSet(nri::Descriptor *cameraBufferDescriptor, Ref<Texture> texture, nri::PipelineLayout *pipelineLayout)
+    Ref<BindingSet> ParticleSystem::GetOrCreateRenderBindingSet(uint32_t slot, nri::Descriptor *cameraBufferDescriptor, Ref<Texture> texture, nri::PipelineLayout *pipelineLayout)
     {
+        if (slot >= m_RenderBindingSlots.size() || slot >= m_RenderCBs.size() || !m_RenderCBs[slot])
+            return nullptr;
+
         Ref<Texture> resolvedTex = (texture && texture->IsReady()) ? texture : Renderer::GetWhiteTexture();
-        nri::Texture *texHandle = resolvedTex ? resolvedTex->GetHandle() : nullptr;
+        nri::Descriptor *textureSRV = resolvedTex ? resolvedTex->GetShaderResourceView() : nullptr;
+        if (!textureSRV || !cameraBufferDescriptor || !pipelineLayout)
+            return nullptr;
 
-        if (m_RenderBindingSet && m_LastCameraBufferDescriptor == cameraBufferDescriptor && m_LastBoundTexture == texHandle)
-            return;
+        auto &entry = m_RenderBindingSlots[slot];
+        if (entry.bindingSet && entry.pipelineLayout == pipelineLayout && entry.cameraDesc == cameraBufferDescriptor && entry.textureSRV == textureSRV)
+            return entry.bindingSet;
 
-        m_LastCameraBufferDescriptor = cameraBufferDescriptor;
-        m_LastBoundTexture = texHandle;
+        entry.pipelineLayout = pipelineLayout;
+        entry.cameraDesc = cameraBufferDescriptor;
+        entry.textureSRV = textureSRV;
 
         BindingSetDesc setDesc;
         setDesc.bindings =
         {
             BindingSetItem::ConstantBuffer(0, cameraBufferDescriptor),
-            BindingSetItem::ConstantBuffer(1, m_RenderCB->GetDescriptor()),
+            BindingSetItem::ConstantBuffer(1, m_RenderCBs[slot]->GetDescriptor()),
             BindingSetItem::StructuredBuffer_SRV(0, m_ParticleSRV),
-            BindingSetItem::TextureSRV(1, resolvedTex->GetShaderResourceView()),
+            BindingSetItem::TextureSRV(1, textureSRV),
             BindingSetItem::Sampler(0, m_LinearSampler)
         };
-        BindingSet::CreateOrUpdate(m_RenderBindingSet, "[ParticleSystem] RenderBindingSet", pipelineLayout, 0, setDesc);
-        LOG_ASSERT(m_RenderBindingSet, "[ParticleSystem] Failed to create render binding set");
+        entry.bindingSet = BindingSet::Create("[ParticleSystem] RenderBindingSet", pipelineLayout, 0, setDesc);
+        LOG_ASSERT(entry.bindingSet, "[ParticleSystem] Failed to create render binding set");
+        return entry.bindingSet;
     }
 
     void ParticleSystem::Simulate(nri::CommandBuffer *cmd, float dt, const glm::vec3 &emitterPos, const ParticleEmitterSettings &settings)
@@ -335,7 +359,14 @@ namespace ignite
 
         m_CurrentSpawnIndex = (m_CurrentSpawnIndex + spawnCount) % m_MaxParticles;
 
-        m_SimulateCB->SetData(Buffer(&simCB, sizeof(simCB)));
+        FrameContext *frameContext = Renderer::GetCurrentFrameContext();
+        const uint32_t slot = (frameContext && !m_SimulateCBs.empty())
+            ? (frameContext->frameIndexInFlight % static_cast<uint32_t>(m_SimulateCBs.size()))
+            : 0;
+        if (slot >= m_SimulateCBs.size() || !m_SimulateCBs[slot] || slot >= m_ComputeBindingSets.size() || !m_ComputeBindingSets[slot])
+            return;
+
+        m_SimulateCBs[slot]->SetData(Buffer(&simCB, sizeof(simCB)));
 
         // Barrier: Transition particle buffer to UAV for compute write
         {
@@ -355,7 +386,7 @@ namespace ignite
 
         nri::SetDescriptorSetDesc setDesc = {};
         setDesc.setIndex = 0;
-        setDesc.descriptorSet = m_ComputeBindingSet->GetHandle();
+        setDesc.descriptorSet = m_ComputeBindingSets[slot]->GetHandle();
         setDesc.bindPoint = nri::BindPoint::COMPUTE;
         nri.CmdSetDescriptorSet(*cmd, setDesc);
 
@@ -396,16 +427,27 @@ namespace ignite
             texture = AssetManager::GetInstance()->GetAssetImmediate<Texture>(settings.textureHandle);
         }
 
+        FrameContext *frameContext = Renderer::GetCurrentFrameContext();
+        if (!frameContext)
+            return;
+
+        const uint32_t slot = !m_RenderCBs.empty()
+            ? (frameContext->frameIndexInFlight % static_cast<uint32_t>(m_RenderCBs.size()))
+            : 0;
+        if (slot >= m_RenderCBs.size() || !m_RenderCBs[slot])
+            return;
+
         // Upload render params
         ParticleRenderCB renderCB;
         renderCB.invView = glm::inverse(camera->GetView());
         renderCB.viewportSize = glm::vec2(static_cast<float>(framebuffer->GetWidth()), static_cast<float>(framebuffer->GetHeight()));
         renderCB.useTexture = (texture && texture->IsReady()) ? 1 : 0;
         renderCB.objectID = objectID;
-        m_RenderCB->SetData(Buffer(&renderCB, sizeof(renderCB)));
+        m_RenderCBs[slot]->SetData(Buffer(&renderCB, sizeof(renderCB)));
 
-        FrameContext *frameContext = Renderer::GetCurrentFrameContext();
-        UpdateRenderBindingSet(frameContext->cameraBuffer.GetDescriptor(), texture, pipeline->GetPipelineLayout());
+        Ref<BindingSet> renderBindingSet = GetOrCreateRenderBindingSet(slot, frameContext->cameraBuffer.GetDescriptor(), texture, pipeline->GetPipelineLayout());
+        if (!renderBindingSet || !renderBindingSet->GetHandle())
+            return;
 
         const bool startedRendering = !framebuffer->IsRendering();
         if (startedRendering)
@@ -416,7 +458,7 @@ namespace ignite
 
         nri::SetDescriptorSetDesc setDesc = {};
         setDesc.setIndex = 0;
-        setDesc.descriptorSet = m_RenderBindingSet->GetHandle();
+        setDesc.descriptorSet = renderBindingSet->GetHandle();
         setDesc.bindPoint = nri::BindPoint::GRAPHICS;
         nri.CmdSetDescriptorSet(*cmd, setDesc);
 

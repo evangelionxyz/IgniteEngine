@@ -20,7 +20,7 @@ project "Ignite.Physics"
         "src",
         "src/ignite",
         "%{wks.location}/ignite/core/src",
-
+        "%{IncludeDir.TRACY}",
         "%{IncludeDir.GLM}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.BOX2D}",
@@ -41,9 +41,6 @@ project "Ignite.Physics"
     defines {
         "IGN_PHYSICS_DLL_EXPORTS",
         "JPH_SHARED_LIBRARY",
-        "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
-        "JPH_DEBUG_RENDERER",
-        "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
         "_WIN32_WINNT=0x0A00",
     }
@@ -97,7 +94,10 @@ project "Ignite.Physics"
             defines {
                 "IGN_DEBUG_BUILD",
                 "DEBUG",
-                "_DEBUG"
+                "_DEBUG",
+                "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+                "JPH_DEBUG_RENDERER",
+                "JPH_PROFILE_ENABLED",
             }
 
         filter "configurations:Debug-Profiling"
@@ -107,12 +107,15 @@ project "Ignite.Physics"
                 "IGN_ENABLE_TRACY",
                 "IGN_DEBUG_BUILD",
                 "DEBUG",
-                "_DEBUG"
+                "_DEBUG",
+                "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+                "JPH_DEBUG_RENDERER",
+                "JPH_PROFILE_ENABLED",
             }
 
         filter "configurations:Release"
             runtime "release"
-            optimize "on"
+            optimize "speed"
             symbols "on" -- with debug info
             defines {
                 "IGN_RELEASE_BUILD",
@@ -121,12 +124,13 @@ project "Ignite.Physics"
 
         filter "configurations:Release-Profiling"
             runtime "release"
-            optimize "on"
+            optimize "speed"
             symbols "on" -- with debug info
             defines {
                 "IGN_ENABLE_TRACY",
                 "IGN_RELEASE_BUILD",
-                "NDEBUG"
+                "NDEBUG",
+                "JPH_PROFILE_ENABLED",
             }
 
         filter "configurations:Shipping"
@@ -144,5 +148,6 @@ project "Ignite.Physics"
             defines {
                 "IGN_ENABLE_TRACY",
                 "IGN_SHIPPING_BUILD",
-                "NDEBUG"
+                "NDEBUG",
+                "JPH_PROFILE_ENABLED",
             }

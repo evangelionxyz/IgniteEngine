@@ -43,6 +43,14 @@ namespace ignite::gi
         b[8] = 0.54627422f * (n.x * n.x - n.y * n.y);
     }
 
+    inline void SHBasisL1(const glm::vec3 &n, float b[4])
+    {
+        b[0] = 0.28209479f;
+        b[1] = 0.48860251f * n.y;
+        b[2] = 0.48860251f * n.z;
+        b[3] = 0.48860251f * n.x;
+    }
+
     inline glm::vec3 CubemapUVToDir(uint32_t face, const glm::vec2 &uv)
     {
         const glm::vec2 st = uv * 2.0f - 1.0f;
@@ -112,6 +120,14 @@ namespace ignite::gi
         {
             sum += sh.c[i] * b[i];
         }
+        return glm::max(sum, glm::vec3(0.0f));
+    }
+
+    inline glm::vec3 EvalSHIrradianceL1(const SHL2 &sh, const glm::vec3 &n)
+    {
+        float b[4];
+        SHBasisL1(glm::normalize(n), b);
+        glm::vec3 sum = sh.c[0] * b[0] + sh.c[1] * b[1] + sh.c[2] * b[2] + sh.c[3] * b[3];
         return glm::max(sum, glm::vec3(0.0f));
     }
 
@@ -225,9 +241,10 @@ namespace ignite::gi
         float backfaceFraction = 0.0f;
         uint32_t hitCount = 0;
         uint32_t backfaceCount = 0;
-        uint32_t _pad = 0;
+        float skyVisibility = 0.0f;
+        glm::vec4 skyDirVisibility = glm::vec4(0.0f);
     };
-    static_assert(sizeof(ProbeVisibilityStatsGPU) == 48, "ProbeVisibilityStatsGPU must match HLSL layout");
+    static_assert(sizeof(ProbeVisibilityStatsGPU) == 64, "ProbeVisibilityStatsGPU must match HLSL layout");
 
     inline glm::vec2 OctSignNotZero(const glm::vec2 &v)
     {

@@ -1978,10 +1978,6 @@ namespace ignite
         {
             addHandle(mesh.handle);
             addHandle(mesh.runtimeAnimatorHandle);
-            for (auto &materialHandle : mesh.overrideMaterials | std::views::values)
-            {
-                addHandle(materialHandle);
-            }
             for (auto &attachmentHandle : mesh.socketAttachments | std::views::values)
             {
                 addHandle(attachmentHandle);
@@ -1991,10 +1987,6 @@ namespace ignite
         registry->view<StaticMeshComponent>().each([&](entt::entity, const StaticMeshComponent &mesh)
         {
             addHandle(mesh.handle);
-            for (auto &materialHandle : mesh.overrideMaterials | std::views::values)
-            {
-                addHandle(materialHandle);
-            }
         });
 
         registry->view<AudioSourceComponent>().each([&](entt::entity, const AudioSourceComponent &audio)

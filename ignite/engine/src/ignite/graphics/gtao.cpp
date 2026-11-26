@@ -84,7 +84,7 @@ namespace ignite
         }
     }
 
-    GTAO::GTAO(uint32_t fullWidth, uint32_t fullHeight)
+    GTAO::GTAO(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale)
     {
         auto *dm = DeviceManager::GetInstance();
         nri::Device *device = dm ? dm->GetDevice() : nullptr;
@@ -131,7 +131,7 @@ namespace ignite
         m_MainShader = Shader::Create("resources/shaders/gtao_main.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
         m_DenoiseShader = Shader::Create("resources/shaders/gtao_denoise.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
 
-        CreateTextures(fullWidth, fullHeight);
+        CreateTextures(fullWidth, fullHeight, resolutionScale);
     }
 
     GTAO::~GTAO()
@@ -143,6 +143,7 @@ namespace ignite
         }
 
         InvalidatePipelines();
+        m_LastOutputTexture.reset();
         m_PrefilteredDepth.reset();
         m_AOTexA.reset();
         m_AOTexHalfB.reset();
@@ -155,7 +156,7 @@ namespace ignite
         }
     }
 
-    void GTAO::CreateTextures(uint32_t fullWidth, uint32_t fullHeight)
+    void GTAO::CreateTextures(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale)
     {
         const bool hadTextures = (m_PrefilteredDepth || m_AOTexA || m_AOTexHalfB || m_AOTexB);
         if (hadTextures)
@@ -164,6 +165,7 @@ namespace ignite
             {
                 GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
             }
+            m_LastOutputTexture.reset();
             m_PrefilteredDepth.reset();
             m_AOTexA.reset();
             m_AOTexHalfB.reset();
@@ -173,9 +175,18 @@ namespace ignite
 
         m_FullWidth = std::max(1u, fullWidth);
         m_FullHeight = std::max(1u, fullHeight);
-        m_HalfWidth = std::max(1u, (m_FullWidth + 1u) / 2u);
-        m_HalfHeight = std::max(1u, (m_FullHeight + 1u) / 2u);
-        m_DepthMipCount = std::min(kMaxDepthMips, std::max(1u, Texture::CalculateMaxMipLevels(m_HalfWidth, m_HalfHeight, 1)));
+        m_ResolutionScale = std::clamp(resolutionScale, 0.25f, 1.0f);
+        if (std::abs(m_ResolutionScale - 0.5f) < 1e-4f)
+        {
+            m_HalfWidth = std::max(1u, (m_FullWidth + 1u) / 2u);
+            m_HalfHeight = std::max(1u, (m_FullHeight + 1u) / 2u);
+        }
+        else
+        {
+            m_HalfWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(m_FullWidth) * m_ResolutionScale)));
+            m_HalfHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(m_FullHeight) * m_ResolutionScale)));
+        }
+        m_DepthMipCount = 1u;
 
         TextureCreateInfo depthInfo;
         depthInfo.width = m_HalfWidth;
@@ -210,7 +221,11 @@ namespace ignite
         aoTempInfo.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
         aoTempInfo.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
         m_AOTexA = Texture::Create(aoTempInfo, "[GTAO Scratch A]");
-        m_AOTexHalfB = Texture::Create(aoTempInfo, "[GTAO Scratch HalfB]");
+
+        TextureCreateInfo aoHalfBInfo = aoTempInfo;
+        aoHalfBInfo.bindless = true;
+        aoHalfBInfo.forceBindless = true;
+        m_AOTexHalfB = Texture::Create(aoHalfBInfo, "[GTAO Scratch HalfB]");
 
         TextureCreateInfo aoOutInfo = aoTempInfo;
         aoOutInfo.width = m_FullWidth;
@@ -218,6 +233,7 @@ namespace ignite
         aoOutInfo.bindless = true;
         aoOutInfo.forceBindless = true;
         m_AOTexB = Texture::Create(aoOutInfo, "[GTAO Final]");
+        m_LastOutputTexture = m_AOTexB;
 
         if (BindlessSystem::HasPendingWrites())
         {
@@ -225,15 +241,17 @@ namespace ignite
         }
     }
 
-    void GTAO::Resize(uint32_t fullWidth, uint32_t fullHeight)
+    void GTAO::Resize(uint32_t fullWidth, uint32_t fullHeight, float resolutionScale)
     {
         const uint32_t safeW = std::max(1u, fullWidth);
         const uint32_t safeH = std::max(1u, fullHeight);
-        if (m_FullWidth == safeW && m_FullHeight == safeH && m_PrefilteredDepth && m_AOTexA && m_AOTexHalfB && m_AOTexB)
+        const float safeScale = std::clamp(resolutionScale, 0.25f, 1.0f);
+        if (m_FullWidth == safeW && m_FullHeight == safeH && std::abs(m_ResolutionScale - safeScale) < 1e-4f
+            && m_PrefilteredDepth && m_AOTexA && m_AOTexHalfB && m_AOTexB)
         {
             return;
         }
-        CreateTextures(safeW, safeH);
+        CreateTextures(safeW, safeH, safeScale);
     }
 
     void GTAO::InvalidatePipelines()
@@ -247,9 +265,9 @@ namespace ignite
         if (m_MainPipeline) { nri.DestroyPipeline(m_MainPipeline); m_MainPipeline = nullptr; }
         if (m_DenoisePipeline) { nri.DestroyPipeline(m_DenoisePipeline); m_DenoisePipeline = nullptr; }
 
-        if (m_PrefilterPipelineLayout) { nri.DestroyPipelineLayout(m_PrefilterPipelineLayout); m_PrefilterPipelineLayout = nullptr; }
-        if (m_MainPipelineLayout) { nri.DestroyPipelineLayout(m_MainPipelineLayout); m_MainPipelineLayout = nullptr; }
-        if (m_DenoisePipelineLayout) { nri.DestroyPipelineLayout(m_DenoisePipelineLayout); m_DenoisePipelineLayout = nullptr; }
+        if (m_PrefilterPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_PrefilterPipelineLayout); nri.DestroyPipelineLayout(m_PrefilterPipelineLayout); m_PrefilterPipelineLayout = nullptr; }
+        if (m_MainPipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_MainPipelineLayout); nri.DestroyPipelineLayout(m_MainPipelineLayout); m_MainPipelineLayout = nullptr; }
+        if (m_DenoisePipelineLayout) { BindingSet::OnPipelineLayoutDestroyed(m_DenoisePipelineLayout); nri.DestroyPipelineLayout(m_DenoisePipelineLayout); m_DenoisePipelineLayout = nullptr; }
     }
 
     void GTAO::EnsurePipelines()
@@ -295,7 +313,8 @@ namespace ignite
     }
 
     void GTAO::Build(nri::CommandBuffer *cmd, const Ref<Texture> &depthTexture, const Ref<Texture> &normalTexture,
-        ICamera *camera, const PostProcessing &settings, uint64_t taaFrameIndex)
+        ICamera *camera, const PostProcessing &settings, uint64_t taaFrameIndex,
+        const GTAOQualitySettings &quality)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -305,6 +324,11 @@ namespace ignite
         EnsurePipelines();
         if (!m_PrefilterPipeline || !m_MainPipeline || !m_DenoisePipeline)
             return;
+
+        const uint32_t sliceCount = std::clamp(quality.sliceCount, 1u, 4u);
+        const uint32_t stepsPerSlice = std::clamp(quality.stepsPerSlice, 1u, 6u);
+        const uint32_t denoiseRadius = std::clamp(quality.denoiseRadius, 1u, 4u);
+        const uint32_t upsampleMode = quality.upsampleMode;
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
         const bool hasNormals = (normalTexture && normalTexture->GetHandle() && normalTexture->GetShaderResourceView());
@@ -369,16 +393,19 @@ namespace ignite
             aoHalfBB.planes = nri::PlaneBits::ALL;
             initBarriers.push_back(aoHalfBB);
 
-            nri::TextureBarrierDesc aoBB = {};
-            aoBB.texture = m_AOTexB->GetHandle();
-            aoBB.before = currentState(m_AOTexB);
-            aoBB.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
-            aoBB.mipOffset = 0;
-            aoBB.mipNum = 1;
-            aoBB.layerOffset = 0;
-            aoBB.layerNum = 1;
-            aoBB.planes = nri::PlaneBits::ALL;
-            initBarriers.push_back(aoBB);
+            if (upsampleMode > 0u)
+            {
+                nri::TextureBarrierDesc aoBB = {};
+                aoBB.texture = m_AOTexB->GetHandle();
+                aoBB.before = currentState(m_AOTexB);
+                aoBB.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+                aoBB.mipOffset = 0;
+                aoBB.mipNum = 1;
+                aoBB.layerOffset = 0;
+                aoBB.layerNum = 1;
+                aoBB.planes = nri::PlaneBits::ALL;
+                initBarriers.push_back(aoBB);
+            }
 
             nri::BarrierDesc bd = {};
             bd.textures = initBarriers.data();
@@ -477,6 +504,8 @@ namespace ignite
             mainCB.projScaleY = std::abs(proj11) * 0.5f * static_cast<float>(m_HalfHeight);
             mainCB.farPlane = farPlane;
             mainCB.flags = (hasNormals ? 1u : 0u) | (isOrtho ? 2u : 0u);
+            mainCB.sliceCount = sliceCount;
+            mainCB.stepsPerSlice = stepsPerSlice;
             m_MainCB->SetData(&mainCB, sizeof(mainCB));
 
             BindingSetDesc bsDesc;
@@ -535,6 +564,7 @@ namespace ignite
             hcb.nearPlane = nearPlane;
             hcb.hasNormals = hasNormals ? 1u : 0u;
             hcb.passMode = 0u;
+            hcb.denoiseRadius = denoiseRadius;
             m_DenoiseHCB->SetData(&hcb, sizeof(hcb));
 
             BindingSetDesc bsDesc;
@@ -587,6 +617,7 @@ namespace ignite
             vcb.nearPlane = nearPlane;
             vcb.hasNormals = hasNormals ? 1u : 0u;
             vcb.passMode = 1u;
+            vcb.denoiseRadius = denoiseRadius;
             m_DenoiseVCB->SetData(&vcb, sizeof(vcb));
 
             BindingSetDesc bsDesc;
@@ -609,7 +640,10 @@ namespace ignite
             nri::TextureBarrierDesc halfDone = {};
             halfDone.texture = m_AOTexHalfB->GetHandle();
             halfDone.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
-            halfDone.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER };
+            halfDone.after = (upsampleMode == 0u)
+                ? nri::AccessLayoutStage{ nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE,
+                    nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER }
+                : nri::AccessLayoutStage{ nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER };
             halfDone.mipNum = 1;
             halfDone.layerNum = 1;
             halfDone.planes = nri::PlaneBits::ALL;
@@ -618,6 +652,16 @@ namespace ignite
             bd.textures = &halfDone;
             bd.textureNum = 1;
             nri.CmdBarrier(*cmd, bd);
+        }
+
+        if (upsampleMode == 0u)
+        {
+            m_PrefilteredDepth->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER);
+            m_AOTexA->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER);
+            m_AOTexHalfB->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE,
+                nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
+            m_LastOutputTexture = m_AOTexHalfB;
+            return;
         }
 
         // Full-res Bilateral Upsample: m_AOTexHalfB -> m_AOTexB
@@ -631,7 +675,8 @@ namespace ignite
             ucb.farPlane = farPlane;
             ucb.nearPlane = nearPlane;
             ucb.hasNormals = hasNormals ? 1u : 0u;
-            ucb.passMode = 2u;
+            ucb.passMode = (upsampleMode == 1u) ? 3u : 2u;
+            ucb.denoiseRadius = denoiseRadius;
             m_DenoiseUpsampleCB->SetData(&ucb, sizeof(ucb));
 
             BindingSetDesc bsDesc;
@@ -671,5 +716,6 @@ namespace ignite
         m_AOTexHalfB->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::COMPUTE_SHADER);
         m_AOTexB->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE,
             nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
+        m_LastOutputTexture = m_AOTexB;
     }
 }

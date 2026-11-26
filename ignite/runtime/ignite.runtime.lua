@@ -59,7 +59,6 @@ project "Ignite.Runtime"
         "%{IncludeDir.GLM}",
         "%{IncludeDir.FMOD}",
         "%{IncludeDir.IMGUI}",
-        "%{IncludeDir.IMGUIZMO}",
         "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.SPDLOG}",
@@ -92,9 +91,7 @@ project "Ignite.Runtime"
     defines {
         "IMGUI_DEFINE_MATH_OPERATORS",
         "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
-        "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
-        "JPH_DEBUG_RENDERER",
-        "JPH_PROFILE_ENABLED",
+        "JPH_SHARED_LIBRARY",
         "JPH_OBJECT_STREAM"
     }
 
@@ -262,22 +259,29 @@ project "Ignite.Runtime"
         defines {
             "IGN_DEBUG_BUILD",
             "DEBUG",
-            "_DEBUG"
+            "_DEBUG",
+            "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+            "JPH_DEBUG_RENDERER",
+            "JPH_PROFILE_ENABLED",
         }
 
     filter "configurations:Debug-Profiling"
         runtime "Debug"
+        optimize "off"
         symbols "on" -- with debug info
         defines {
             "IGN_ENABLE_TRACY",
             "IGN_DEBUG_BUILD",
             "DEBUG",
-            "_DEBUG"
+            "_DEBUG",
+            "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
+            "JPH_DEBUG_RENDERER",
+            "JPH_PROFILE_ENABLED",
         }
 
     filter "configurations:Release"
         runtime "Release"
-        optimize "on"
+        optimize "speed"
         symbols "on"
         defines {
             "IGN_RELEASE_BUILD",
@@ -286,17 +290,18 @@ project "Ignite.Runtime"
 
     filter "configurations:Release-Profiling"
         runtime "release"
-        optimize "on"
+        optimize "speed"
         symbols "on" -- with debug info
         defines {
             "IGN_ENABLE_TRACY",
             "IGN_RELEASE_BUILD",
-            "NDEBUG"
+            "NDEBUG",
+            "JPH_PROFILE_ENABLED",
         }
 
     filter "configurations:Shipping"
         runtime "Release"
-        optimize "on"
+        optimize "speed"
         symbols "off"
         defines {
             "IGN_SHIPPING_BUILD",
@@ -310,5 +315,6 @@ project "Ignite.Runtime"
         defines {
             "IGN_ENABLE_TRACY",
             "IGN_SHIPPING_BUILD",
-            "NDEBUG"
+            "NDEBUG",
+            "JPH_PROFILE_ENABLED",
         }

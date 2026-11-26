@@ -4645,19 +4645,33 @@ namespace ignite
         static void StaticMeshComponent_SetOverrideMaterial(uint64_t entityID, int32_t slot, uint64_t materialHandle)
         {
             Entity e = GetEntityByID(entityID);
-            if (e.IsValid() && e.HasComponent<StaticMeshComponent>())
-                e.GetComponent<StaticMeshComponent>().overrideMaterials[slot] = AssetHandle(materialHandle);
+            if (!e.IsValid() || !e.HasComponent<StaticMeshComponent>())
+                return;
+            AssetHandle meshHandle = e.GetComponent<StaticMeshComponent>().handle;
+            if (meshHandle == AssetHandle(0) || !AssetManager::GetInstance())
+                return;
+            if (auto mesh = AssetManager::GetInstance()->GetAsset<StaticMesh>(meshHandle))
+            {
+                const auto &instances = mesh->GetMeshInstances();
+                if (slot >= 0 && static_cast<size_t>(slot) < instances.size() && instances[slot])
+                    instances[slot]->SetMaterial(AssetHandle(materialHandle));
+            }
         }
         static void StaticMeshComponent_GetOverrideMaterial(uint64_t entityID, int32_t slot, uint64_t *result)
         {
             if (!result) return;
             *result = 0;
             Entity e = GetEntityByID(entityID);
-            if (e.IsValid() && e.HasComponent<StaticMeshComponent>())
+            if (!e.IsValid() || !e.HasComponent<StaticMeshComponent>())
+                return;
+            AssetHandle meshHandle = e.GetComponent<StaticMeshComponent>().handle;
+            if (meshHandle == AssetHandle(0) || !AssetManager::GetInstance())
+                return;
+            if (auto mesh = AssetManager::GetInstance()->GetAsset<StaticMesh>(meshHandle))
             {
-                const auto &mats = e.GetComponent<StaticMeshComponent>().overrideMaterials;
-                if (auto it = mats.find(slot); it != mats.end())
-                    *result = static_cast<uint64_t>(it->second);
+                const auto &instances = mesh->GetMeshInstances();
+                if (slot >= 0 && static_cast<size_t>(slot) < instances.size() && instances[slot])
+                    *result = static_cast<uint64_t>(instances[slot]->GetMaterialAssetHandle());
             }
         }
 

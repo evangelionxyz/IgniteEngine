@@ -96,6 +96,10 @@ namespace ignite
         createInfo.initialStages = nri::StageBits::ALL;
 
         std::vector<uint8_t> data(pixels, pixels + static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+        if (m_FontTexture && m_FontTexture->GetShaderResourceView())
+        {
+            InvalidateTextureCache(m_FontTexture->GetShaderResourceView());
+        }
         m_FontTexture = Texture::Create(data, createInfo, nullptr, "ImGui font texture");
         LOG_ASSERT(m_FontTexture && m_FontTexture->GetHandle(), "[ImGui NRI] Failed to create font texture");
 
@@ -204,6 +208,7 @@ namespace ignite
             }
             if (currentFenceValue < slot.fenceValue)
             {
+                IGN_PROFILE_SCOPE("ImGui_NRI::WaitSlotFence");
                 nri.Wait(*m_CommandFence, slot.fenceValue);
             }
         }
@@ -277,17 +282,20 @@ namespace ignite
         }
     }
 
-    bool ImGui_NRI::Render(RenderTarget *renderTarget)
+    bool ImGui_NRI::Render(RenderTarget *renderTarget, bool clearTarget)
     {
         ImDrawData *drawData = ImGui::GetDrawData();
-        return Render(drawData, renderTarget);
+        return Render(drawData, renderTarget, clearTarget);
     }
 
-    bool ImGui_NRI::Render(ImDrawData *drawData, RenderTarget *renderTarget)
+    bool ImGui_NRI::Render(ImDrawData *drawData, RenderTarget *renderTarget, bool clearTarget)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!drawData || drawData->CmdListsCount <= 0 || !renderTarget)
+        if (!renderTarget)
+            return true;
+
+        if ((!drawData || drawData->CmdListsCount <= 0) && !clearTarget)
             return true;
 
         uint32_t slotIndex = 0;
@@ -295,18 +303,30 @@ namespace ignite
         if (!cmd)
             return false;
 
-        const bool result = Render(cmd, drawData, renderTarget, slotIndex);
+        const bool result = Render(cmd, drawData, renderTarget, slotIndex, clearTarget);
 
         SubmitCommandBuffer(cmd);
         return result;
     }
 
-    bool ImGui_NRI::Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget, uint32_t slotIndex)
+    bool ImGui_NRI::Render(nri::CommandBuffer *cmd, ImDrawData *drawData, RenderTarget *renderTarget, uint32_t slotIndex, bool clearTarget)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!cmd || !drawData || drawData->CmdListsCount <= 0 || !renderTarget)
+        if (!cmd || !renderTarget)
             return true;
+
+        const bool hasGeometry = (drawData && drawData->CmdListsCount > 0 && drawData->DisplaySize.x > 0.0f && drawData->DisplaySize.y > 0.0f);
+        if (!hasGeometry)
+        {
+            if (clearTarget)
+            {
+                renderTarget->SetClearColorAttachmentFloat(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0);
+                renderTarget->BeginRendering(cmd, true, false);
+                renderTarget->EndRendering(cmd);
+            }
+            return true;
+        }
 
         int fbWidth = static_cast<int>(drawData->DisplaySize.x * drawData->FramebufferScale.x);
         int fbHeight = static_cast<int>(drawData->DisplaySize.y * drawData->FramebufferScale.y);
@@ -330,14 +350,22 @@ namespace ignite
         ImGuiPushConstants pushConstants = {};
         pushConstants.invDisplaySize[0] = 1.0f / drawData->DisplaySize.x;
         pushConstants.invDisplaySize[1] = 1.0f / drawData->DisplaySize.y;
-        pushConstants.displayPos[0] = drawData->DisplayPos.x;
-        pushConstants.displayPos[1] = drawData->DisplayPos.y;
+        pushConstants.displayPos[0] = drawData->DisplaySize.x ? drawData->DisplayPos.x : 0.0f;
+        pushConstants.displayPos[1] = drawData->DisplaySize.y ? drawData->DisplayPos.y : 0.0f;
+        pushConstants.time = ImGui::GetCurrentContext() ? static_cast<float>(ImGui::GetTime()) : 0.0f;
+        pushConstants.shaderFlags = 0;
+        pushConstants.param0 = 1.0f;
+        pushConstants.param1 = 16.0f;
         ImVec2 clipOff = drawData->DisplayPos;
         ImVec2 clipScale = drawData->FramebufferScale;
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
 
-        renderTarget->BeginRendering(cmd, false /* clearColor */, false /* clearDepth */);
+        if (clearTarget)
+        {
+            renderTarget->SetClearColorAttachmentFloat(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0);
+        }
+        renderTarget->BeginRendering(cmd, clearTarget /* clearColor */, false /* clearDepth */);
 
         nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *pipeline->GetPipelineLayout());
         nri.CmdSetPipeline(*cmd, *pipeline->GetHandle());
@@ -383,9 +411,31 @@ namespace ignite
 
                 if (pCmd->UserCallback)
                 {
-                    pCmd->UserCallback(cmdList, pCmd);
-                    lastTexture = nullptr;
-                    lastBindingSet = nullptr;
+                    if (pCmd->UserCallback == &ImGui_NRI::SetShaderParamsCallback)
+                    {
+                        const uintptr_t packed = reinterpret_cast<uintptr_t>(pCmd->UserCallbackData);
+                        pushConstants.shaderFlags = static_cast<uint32_t>(packed & 0xFFu);
+                        const uint8_t p0 = static_cast<uint8_t>((packed >> 8) & 0xFFu);
+                        const uint8_t p1 = static_cast<uint8_t>((packed >> 16) & 0xFFu);
+                        pushConstants.param0 = static_cast<float>(p0) / 16.0f;
+                        pushConstants.param1 = static_cast<float>(p1);
+                        nri.CmdSetRootConstants(*cmd, rootConstDesc);
+                    }
+                    else if (pCmd->UserCallback == ImDrawCallback_ResetRenderState)
+                    {
+                        pushConstants.shaderFlags = 0;
+                        pushConstants.param0 = 1.0f;
+                        pushConstants.param1 = 16.0f;
+                        nri.CmdSetRootConstants(*cmd, rootConstDesc);
+                        lastTexture = nullptr;
+                        lastBindingSet = nullptr;
+                    }
+                    else
+                    {
+                        pCmd->UserCallback(cmdList, pCmd);
+                        lastTexture = nullptr;
+                        lastBindingSet = nullptr;
+                    }
                 }
                 else
                 {
@@ -567,6 +617,19 @@ namespace ignite
         s_Instance->m_BindingsCache.clear();
     }
 
+    void ImGui_NRI::SetShaderParamsCallback(const ImDrawList *, const ImDrawCmd *)
+    {
+        // Sentinel callback handled inline inside ImGui_NRI::Render.
+    }
+
+    void *ImGui_NRI::PackShaderCallbackData(uint32_t flags, uint8_t normParam0, uint8_t normParam1)
+    {
+        const uintptr_t packed = static_cast<uintptr_t>(flags & 0xFFu)
+            | (static_cast<uintptr_t>(normParam0) << 8)
+            | (static_cast<uintptr_t>(normParam1) << 16);
+        return reinterpret_cast<void *>(packed);
+    }
+
     bool ImGui_NRI::UpdateGeometry(ImDrawData *drawData, uint32_t slotIndex)
     {
         IGN_PROFILE_FUNCTION();
@@ -596,33 +659,39 @@ namespace ignite
                 return false;
         }
 
-        geometry.vertexBufferCPU.resize(geometry.vertexBuffer->GetByteSize() / sizeof(ImGuiVertexData));
-        geometry.indexBufferCPU.resize(geometry.indexBuffer->GetByteSize() / sizeof(ImDrawIdx));
+        const size_t reqVtxCount = static_cast<size_t>(drawData->TotalVtxCount);
+        const size_t reqIdxCount = static_cast<size_t>(drawData->TotalIdxCount);
+        geometry.vertexBufferCPU.resize(reqVtxCount);
+        geometry.indexBufferCPU.resize(reqIdxCount);
 
         ImGuiVertexData *vtxDst = geometry.vertexBufferCPU.data();
         ImDrawIdx *idxDst = geometry.indexBufferCPU.data();
+        constexpr float kInv255 = 1.0f / 255.0f;
 
         for (int n = 0; n < drawData->CmdListsCount; ++n)
         {
             const ImDrawList *cmdList = drawData->CmdLists[n];
+            const ImDrawVert *srcVerts = cmdList->VtxBuffer.Data;
+            const int vtxCount = cmdList->VtxBuffer.Size;
 
-            for (int i = 0; i < cmdList->VtxBuffer.Size; ++i)
+            for (int i = 0; i < vtxCount; ++i)
             {
-                const ImDrawVert &src = cmdList->VtxBuffer[i];
+                const ImDrawVert &src = srcVerts[i];
                 ImGuiVertexData &dst = vtxDst[i];
 
                 dst.position = glm::vec2(src.pos.x, src.pos.y);
                 dst.texCoord = glm::vec2(src.uv.x, src.uv.y);
 
-                dst.color.r = ((src.col >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
-                dst.color.g = ((src.col >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
-                dst.color.b = ((src.col >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
-                dst.color.a = ((src.col >> IM_COL32_A_SHIFT) & 0xFF) / 255.0f;
+                const uint32_t c = src.col;
+                dst.color.r = static_cast<float>((c >> IM_COL32_R_SHIFT) & 0xFF) * kInv255;
+                dst.color.g = static_cast<float>((c >> IM_COL32_G_SHIFT) & 0xFF) * kInv255;
+                dst.color.b = static_cast<float>((c >> IM_COL32_B_SHIFT) & 0xFF) * kInv255;
+                dst.color.a = static_cast<float>((c >> IM_COL32_A_SHIFT) & 0xFF) * kInv255;
             }
 
-            std::memcpy(idxDst, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size * sizeof(ImDrawIdx));
+            std::memcpy(idxDst, cmdList->IdxBuffer.Data, static_cast<size_t>(cmdList->IdxBuffer.Size) * sizeof(ImDrawIdx));
 
-            vtxDst += cmdList->VtxBuffer.Size;
+            vtxDst += vtxCount;
             idxDst += cmdList->IdxBuffer.Size;
         }
 

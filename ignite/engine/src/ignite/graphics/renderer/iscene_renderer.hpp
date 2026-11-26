@@ -10,6 +10,8 @@
 #include "ignite/graphics/bloom.hpp"
 #include "ignite/graphics/ssao.hpp"
 #include "ignite/graphics/outline_jfa.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo_renderer.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/binding_set.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
@@ -45,6 +47,25 @@ namespace ignite
         None = NONE
     };
 
+    enum class ScalabilityLevel : uint8_t
+    {
+        Low = 0,
+        Medium = 1,
+        High = 2,
+        Ultra = 3
+    };
+
+    struct GraphicsScalability
+    {
+        ScalabilityLevel overall = ScalabilityLevel::High;
+        ScalabilityLevel shadows = ScalabilityLevel::High;
+        ScalabilityLevel globalIllumination = ScalabilityLevel::High;
+        ScalabilityLevel ambientOcclusion = ScalabilityLevel::High;
+        ScalabilityLevel reflections = ScalabilityLevel::High;
+        ScalabilityLevel resolutionScale = ScalabilityLevel::High;
+        ScalabilityLevel postProcessing = ScalabilityLevel::High;
+    };
+
     struct DebugGridStyle
     {
         bool enabled = true;
@@ -64,7 +85,7 @@ namespace ignite
         glm::vec4 zAxisColor = glm::vec4(0.29f, 0.52f, 0.96f, 1.0f);
     };
 
-    struct SceneRenderSettings
+    struct IGN_API SceneRenderSettings
     {
         DebugGridStyle worldGrid3D;
         DebugGridStyle worldGrid2D;
@@ -78,12 +99,33 @@ namespace ignite
         int giModeOverride = -1;     // -1 = Volume default, 0 = Off, 1 = Fast, 2 = LeakResistant
         int aoModeOverride = -1;     // -1 = Camera PostProcessing, 0 = Off, 1 = LegacySSAO, 2 = GTAO
         bool enableDepthPrepass = true;
+        bool enableSpecularAA = true;
+        bool enableSSR = true;
+        float ssrIntensity = 1.0f;
+        float ssrMaxRoughness = 0.6f;
+
+        float gtaoResolutionScale = 0.5f;
+        uint32_t gtaoSliceCount = 3;
+        uint32_t gtaoStepsPerSlice = 3;
+        uint32_t gtaoDenoiseRadius = 3;
+        uint32_t gtaoUpsampleMode = 1; // 0 = half-res bilinear, 1 = fast 2x2 bilateral, 2 = full 3x3 bilateral
+
+        float ssrResolutionScale = 0.5f;
+        uint32_t ssrMaxSteps = 32;
+        uint32_t ssrBinarySearchSteps = 4;
+
+        float bloomResolutionScale = 0.75f;
+        int bloomMaxIterations = 5;
 
         SampleMethod sampleMethod = SampleMethod::FXAA;
         TAAProperties taaProperties;   // Current-frame weight; lower is smoother, higher is more responsive
         MSAAProperties msaaProperties; // Requested MSAA sample count for compatible render paths
+        FXAAProperties fxaaProperties; // Tunable FXAA quality/threshold parameters
         bool enableFXAA = true;
         float renderScale = 1.0f;
+
+        GraphicsScalability scalability;
+        ShadowMapQuality shadowQuality = ShadowMapQuality::HIGH;
 
         nri::FillMode fillMode = nri::FillMode::SOLID;
 
@@ -94,10 +136,16 @@ namespace ignite
             SetSampleMethod(SampleMethod::FXAA);
         }
 
+        void ApplyOverallScalability(ScalabilityLevel level);
+        void ApplyIndividualScalability();
+        bool SerializeToFile(const std::filesystem::path &filepath) const;
+        bool DeserializeFromFile(const std::filesystem::path &filepath);
+
         void SetSampleMethod(SampleMethod method)
         {
             sampleMethod = method;
             enableFXAA = (method == SampleMethod::FXAA);
+            fxaaProperties.enable = enableFXAA;
             msaaProperties.enable = (method == SampleMethod::MSAA);
             taaProperties.enable = (method == SampleMethod::TAA);
         }
@@ -140,9 +188,21 @@ namespace ignite
         float fogEnd = 100.0f;
         float padding_fog = 0.0f;
 
-        glm::vec4 taaParams = glm::vec4(0.0f); // x=enableTAA, y=currentFrameWeight, z=historyValid
+        glm::vec4 taaParams = glm::vec4(0.0f); // x=enableTAA, y=currentFrameWeight, z=historyValid, w=enableOutline
+        glm::vec4 taaJitter = glm::vec4(0.0f); // xy=currJitterUV, zw=prevJitterUV
 
         glm::mat4 projectionInv = glm::mat4(1.0f);
+        glm::mat4 taaReprojection = glm::mat4(1.0f); // prevUnjitteredViewProj * inv(currUnjitteredViewProj)
+    };
+
+    struct FXAA_GPUData
+    {
+        glm::vec2 inverseScreenSize = glm::vec2(1.0f / 1920.0f, 1.0f / 1080.0f);
+        float subpixCap = 0.75f;
+        float edgeThreshold = 0.125f;
+        float edgeThresholdMin = 0.0417f;
+        float bypass = 0.0f;
+        float padding[2] = { 0.0f, 0.0f };
     };
 
     class IGN_API ISceneRenderer
@@ -165,6 +225,10 @@ namespace ignite
 
         SampleMethod GetSampleMethod() const { return sceneRenderSettings.sampleMethod; }
         void SetSampleMethod(SampleMethod method);
+
+        void SetGizmoDrawList(const GizmoDrawList &drawList) { m_GizmoDrawList = drawList; }
+        void ClearGizmoDrawList() { m_GizmoDrawList.Clear(); }
+        const GizmoDrawList &GetGizmoDrawList() const { return m_GizmoDrawList; }
 
         virtual Ref<Texture> GetEnvironmentMapColorTexture();
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture();
@@ -243,7 +307,7 @@ namespace ignite
         void ClearRetainedCommandBufferAssets();
 
         static void FillBoneArray(glm::mat4 (&out)[MAX_BONES], const std::vector<glm::mat4> &boneTransforms);
-        Ref<Material> ResolveMeshMaterial(int instanceIndex, const std::unordered_map<int, AssetHandle> &overrideMaterials, AssetHandle defaultMaterialHandle);
+        Ref<Material> ResolveMeshMaterial(AssetHandle materialHandle);
 
         void EnsureSceneEnvironmentMap();
         void DrainDirtyResolvedAssets();
@@ -255,6 +319,8 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<OutlineJFA> m_OutlineJFA;
+        Ref<GizmoRenderer> m_GizmoRenderer;
+        GizmoDrawList m_GizmoDrawList;
 
         ConstantBuffer m_CompositePostProcessBuffer;
         ConstantBuffer m_FXAABuffer;

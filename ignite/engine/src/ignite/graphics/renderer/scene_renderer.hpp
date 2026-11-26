@@ -9,6 +9,7 @@
 #include "ignite/graphics/hash_keys.hpp"
 #include "ignite/graphics/gpu_timer.hpp"
 #include "ignite/graphics/gtao.hpp"
+#include "ignite/graphics/ssr.hpp"
 #include "ignite/graphics/gi/ibl_prefilter.hpp"
 #include "ignite/graphics/gi/irradiance_volume.hpp"
 #include "ignite/graphics/gi/reflection_probe_set.hpp"
@@ -46,6 +47,7 @@ namespace ignite
         bool requiresObjectId = false;
         bool requiresDebugOverlay = false;
         bool requiresGrid = false;
+        bool requiresGizmo = false;
         bool requiresBloom = false;
         bool requiresSSAO = false;
         bool requiresTAA = false;
@@ -58,7 +60,7 @@ namespace ignite
 
         bool IsEmptyScene() const
         {
-            return !HasRenderables() && !hasWidgets && !hasScreenText && !requiresDebugOverlay && !requiresObjectId;
+            return !HasRenderables() && !hasWidgets && !hasScreenText && !requiresDebugOverlay && !requiresObjectId && !requiresGizmo;
         }
     };
 
@@ -68,11 +70,21 @@ namespace ignite
         Ref<RenderTarget> sceneResolvedRT; // Single-sample resolve target (only used when MSAA is active)
         Ref<RenderTarget> selectionRT;     // Single-sample selected-object ID mask for outlines
         Ref<RenderTarget> widgetRT;
+        Ref<RenderTarget> gizmoRT;
         Ref<RenderTarget> postProcessRT;  // Intermediate LDR target for tonemapping before FXAA/UI
+        Ref<RenderTarget> objectIdResolveRT; // Single-sample R32_UINT object-ID resolve (MSAA picking)
         Ref<RenderTarget> compositeRT;
         Ref<RenderTarget> debugRT;
         Ref<RenderTarget> taaHistoryRT[3];
         Ref<RenderTarget> depthPrepassRT;  // RG16F octahedral view-normal + shared scene depth (prepass)
+        Ref<Texture> prevSceneColor;       // Single-sample previous frame HDR scene color for SSR
+        glm::mat4 prevViewProj = glm::mat4(1.0f);
+        glm::mat4 currUnjitteredViewProj = glm::mat4(1.0f);
+        glm::mat4 taaPrevUnjitteredViewProj = glm::mat4(1.0f);
+        glm::vec2 taaCurrJitterUV = glm::vec2(0.0f);
+        glm::vec2 taaPrevJitterUV = glm::vec2(0.0f);
+        bool prevSceneColorValid = false;
+        bool ssrHistoryValid = false;
 
         bool taaHistoryValid = false;
         int msaaSampleCount = 1;           // Tracks the current MSAA sample count (1 = no MSAA)
@@ -139,34 +151,41 @@ namespace ignite
 
         RenderPlan BuildRenderPlan(ICamera *camera, bool drawDebug, const PostProcessing &postProcessing, bool isGameCamera);
         void EnsureWidgetRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
+        void EnsureGizmoRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureDebugRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
         void EnsureTAAHistoryRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height);
         void EnsureMSAARenderTargets(Ref<CameraRenderTarget> target, int desiredSampleCount, uint32_t renderWidth, uint32_t renderHeight);
 
         void ShadowPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
+        void LocalLightShadowPass(nri::CommandBuffer *cmd, FrameContext *frameContext);
+        void EnsureLocalShadowResources();
+        void ShutdownLocalShadowResources();
         void UpdateSkyIBL(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext);
         void RenderDebugProbes(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
-        void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug);
+        void ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug, bool has2D, bool &sceneColorCleared, bool &sceneDepthCleared);
         void UIPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
         void DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
-        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr);
-        void FXAAPass(nri::CommandBuffer *cmd, RenderTarget *framebuffer, Ref<Texture> inputTexture);
+        void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, Ref<Texture> gizmoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr, bool enableOutline = true);
+        void FXAAPass(nri::CommandBuffer *cmd, RenderTarget *framebuffer, Ref<Texture> inputTexture, bool bypass = false);
+        void ObjectIdResolvePass(nri::CommandBuffer *cmd, Ref<CameraRenderTarget> target);
 
-        void DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, bool is2D);
+        void DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, int planeMode);
         void DrawDebug2D(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
         void DrawDebug3D(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
 
         /// Flush all accumulated opaque static-mesh batches to the command list.
-        void FlushOpaqueBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer);
+        bool FlushOpaqueBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, bool clearColor = false, bool clearDepth = false);
 
         /// Flush all accumulated shadow (CSM) static-mesh batches to the command list.
-        void FlushShadowBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, uint32_t cascadeIndex);
+        bool FlushShadowBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, uint32_t cascadeIndex, bool clearDepth = false);
 
-        void FlushBatches(BatchBuilder &builder, nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer);
+        bool FlushBatches(BatchBuilder &builder, nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, bool clearColor = false, bool clearDepth = false);
 
-        // Depth + normal prepass / GTAO (M6)
+        // Depth + normal prepass / GTAO / SSR
         void EnsureDepthPrepassRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
-        std::vector<Ref<GTAO>> GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight);
+        void EnsurePrevSceneColor(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight);
+        std::vector<Ref<GTAO>> GetOrCreateGTAOs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale = 0.5f);
+        std::vector<Ref<SSR>> GetOrCreateSSRs(ICamera *camera, uint32_t renderWidth, uint32_t renderHeight, float resolutionScale = 0.5f);
         void DepthPrepass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *depthPrepassFB);
         Ref<GraphicsPipeline> GetOrCreateDepthPrepassPSO(std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
             RenderTarget *framebuffer, nri::CullMode cullMode, const char *vertexShaderPath, EBindingLayout meshLayout);
@@ -193,7 +212,7 @@ namespace ignite
 
         template<typename MeshT>
         void DrawMesh(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
-            const glm::mat4 &normalMatrix, uint32_t objectID, const std::unordered_map<int, AssetHandle> &overrideMaterials, const std::vector<glm::mat4> &boneTransforms,
+            const glm::mat4 &normalMatrix, uint32_t objectID, const std::vector<glm::mat4> &boneTransforms,
             const std::vector<Mesh_GPUData> &cachedInstanceTransforms, ICamera *camera, Ref<GraphicsPipeline> opaquePSO, std::vector<TransparentDrawCall> &transparentDrawCalls,
             std::unordered_set<Material *> &uploadedMaterialsThisPass, entt::entity entity = entt::null, const std::string &socketName = "");
 
@@ -229,6 +248,7 @@ namespace ignite
         Ref<GraphicsPipeline> GetEnvironmentPSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         Ref<GraphicsPipeline> GetCompositePSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         Ref<GraphicsPipeline> GetFXAAPSO(RenderTarget *framebuffer);
+        Ref<GraphicsPipeline> GetObjectIdResolvePSO(RenderTarget *framebuffer);
         Ref<GraphicsPipeline> GetDebugProbePSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         void EnsureSkySHBuffers();
         void EnsureDebugProbeBuffers(size_t requiredCount);
@@ -236,7 +256,7 @@ namespace ignite
 
         Ref<BindingSet> GetOrCreateDebugGridBindingSet(nri::PipelineLayout *pipelineLayout, const ConstantBuffer &cameraBuffer, const ConstantBuffer &gridBuffer);
         Ref<BindingSet> GetOrCreateCompositeBindingSet(nri::PipelineLayout *pipelineLayout, Ref<CameraRenderTarget> target, Ref<Texture> edgeTexture,
-            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene = false);
+            Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> taaHistoryTexture, Ref<Texture> gizmoTexture, const ConstantBuffer &postProcessBuffer, nri::Descriptor *sampler, bool useResolvedScene = false);
 
         Ref<CameraRenderTarget> GetOrCreateRenderTarget(ICamera *camera);
         std::vector<Ref<Bloom>> GetOrCreateBlooms(ICamera *camera);
@@ -252,6 +272,7 @@ namespace ignite
         std::unordered_map<ICamera *, std::vector<Ref<Bloom>>> m_Blooms;
         std::unordered_map<ICamera *, std::vector<Ref<SSAO>>> m_SSAOs;
         std::unordered_map<ICamera *, std::vector<Ref<GTAO>>> m_GTAOs;
+        std::unordered_map<ICamera *, std::vector<Ref<SSR>>> m_SSRs;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_StaticDepthPrepassPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_AnimatedDepthPrepassPSOCache;
@@ -273,6 +294,7 @@ namespace ignite
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_EnvironmentPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CompositePSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_FXAAPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_ObjectIdResolvePSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_DebugGridPSOCache;
 
         std::unordered_map<CompositeBindingKey, Ref<BindingSet>, CompositeBindingKeyHash> m_CompositeBindingSetCache;
@@ -357,6 +379,47 @@ namespace ignite
 
         Ref<ReflectionProbeSet> m_ActiveReflectionProbeSet;
         std::string m_LoadedReflectionSignature;
+
+        // Runtime Static (cached by hash) + Dynamic (movable casters) Point & Spot Light shadow cube arrays
+        static constexpr uint32_t kMaxLocalShadowPointLights = 8;
+        static constexpr uint32_t kMaxLocalShadowSpotLights = 4;
+        static constexpr uint32_t kMaxLocalShadowLights = kMaxLocalShadowPointLights + kMaxLocalShadowSpotLights;
+        static constexpr uint32_t kLocalShadowResolution = 256;
+
+        Ref<Texture> m_StaticLocalShadowCubeArray;
+        Ref<Texture> m_StaticLocalShadowDepthTex;
+        std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> m_StaticLocalShadowFaceRTs;
+        std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> m_StaticLocalShadowFaceCameraBuffers;
+        uint64_t m_StaticLocalShadowHash = 0;
+        bool m_StaticLocalShadowValid = false;
+        bool m_StaticLocalShadowInitialized = false;
+
+        Ref<Texture> m_DynamicLocalShadowCubeArray;
+        Ref<Texture> m_DynamicLocalShadowDepthTex;
+        std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> m_DynamicLocalShadowFaceRTs;
+        std::array<std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6>, 3> m_DynamicLocalShadowFaceCameraBuffers;
+        std::array<uint8_t, kMaxLocalShadowLights * 6> m_DynamicLocalShadowDirtySlices{};
+        bool m_HasDynamicLocalShadows = false;
+        bool m_DynamicLocalShadowInitialized = false;
+
+        Ref<GraphicsPipeline> m_LocalShadowStaticPSO;
+        Ref<GraphicsPipeline> m_LocalShadowAnimPSO;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_StaticLocalShadowStaticBindingSets;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_StaticLocalShadowAnimBindingSets;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_DynamicLocalShadowStaticBindingSets;
+        std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> m_DynamicLocalShadowAnimBindingSets;
+
+        Ref<GraphicsPipeline> GetOrCreateLocalShadowPSO(bool animated);
+        Ref<BindingSet> GetOrCreateLocalShadowBindingSet(
+            std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &cache,
+            FrameContext *frameContext, uint32_t slice, ConstantBuffer *camBuf, bool animated);
+        void RenderLocalShadowPassCube(nri::CommandBuffer *cmd, FrameContext *frameContext,
+            const std::vector<LocalShadowLightItem> &lights, bool staticOnly, bool includeMovableOnly,
+            std::array<Ref<RenderTarget>, kMaxLocalShadowLights * 6> &faceRTs,
+            std::array<Ref<ConstantBuffer>, kMaxLocalShadowLights * 6> &faceCamBuffers,
+            std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &staticBindingCache,
+            std::unordered_map<FrameContext *, std::array<Ref<BindingSet>, kMaxLocalShadowLights * 6>> &animBindingCache,
+            const Ref<GraphicsPipeline> &staticPSO, const Ref<GraphicsPipeline> &animPSO);
     };
 }
 

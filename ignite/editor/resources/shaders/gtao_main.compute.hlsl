@@ -22,6 +22,9 @@ cbuffer GTAOMainParams : register(b0)
     float projScaleY;
     float farPlane;
     uint flags; // bit 0 = hasNormals, bit 1 = isOrtho
+    uint sliceCount;
+    uint stepsPerSlice;
+    uint2 _pad;
 };
 
 Texture2D<float> t_PrefilteredDepth : register(t0);
@@ -97,7 +100,9 @@ float3 LoadViewNormal(int2 centerPx, float3 centerPosVS, float centerZ)
     }
 
     int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
-    int2 basePx = centerPx * 2;
+    float2 scale = fullRes * invHalfRes;
+    int2 basePx = int2(floor(float2(centerPx) * scale));
+    int2 stepPx = max(int2(round(scale * 0.5f)), int2(1, 1));
     float3 accumN = float3(0.0f, 0.0f, 0.0f);
 
     [unroll]
@@ -106,7 +111,7 @@ float3 LoadViewNormal(int2 centerPx, float3 centerPosVS, float centerZ)
         [unroll]
         for (int dx = 0; dx < 2; ++dx)
         {
-            int2 fpx = clamp(basePx + int2(dx, dy), int2(0, 0), maxFull);
+            int2 fpx = clamp(basePx + int2(dx, dy) * stepPx, int2(0, 0), maxFull);
             float3 n = OctDecode(t_Normal.Load(int3(fpx, 0)).rg);
             float w = max(dot(n, geomN), 0.05f);
             accumN += n * w;
@@ -171,16 +176,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float noiseSlice = noise.x;
     float noiseSample = noise.y;
 
-    const int kSliceCount = 4;
-    const int kStepsPerSlice = 4;
+    int sliceCnt = clamp(int(sliceCount), 1, 4);
+    int stepCnt = clamp(int(stepsPerSlice), 1, 6);
     const float kHorizonBias = 0.03f;
 
     float visibility = 0.0f;
 
-    [unroll]
-    for (int s = 0; s < kSliceCount; ++s)
+    [loop]
+    for (int s = 0; s < sliceCnt; ++s)
     {
-        float phi = (GTAO_PI / float(kSliceCount)) * (float(s) + noiseSlice);
+        float phi = (GTAO_PI / float(sliceCnt)) * (float(s) + noiseSlice);
         float2 omega = float2(cos(phi), sin(phi));
         // +v in UV maps to -Y in right-handed view space
         float3 directionVec = float3(omega.x, -omega.y, 0.0f);
@@ -206,10 +211,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         float stepNoise = frac(noiseSample + float(s) * 0.618033989f);
 
-        [unroll]
-        for (int step = 0; step < kStepsPerSlice; ++step)
+        [loop]
+        for (int step = 0; step < stepCnt; ++step)
         {
-            float t = (float(step) + stepNoise) / float(kStepsPerSlice);
+            float t = (float(step) + stepNoise) / float(stepCnt);
             t = pow(max(t, 1e-4f), sampleDistributionPower);
             float sampleDistPx = max(t * screenspaceRadius, 1.0f);
             float2 sampleOffsetUV = omega * (sampleDistPx * invHalfRes);
@@ -277,5 +282,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
         visibility += projectedNormalLen * (iarc0 + iarc1);
     }
 
-    u_OutAO[DTid.xy] = saturate(visibility / float(kSliceCount));
+    u_OutAO[DTid.xy] = saturate(visibility / float(sliceCnt));
 }

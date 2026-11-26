@@ -63,6 +63,7 @@ PixelVertexInput main(VertexMeshAnim input)
     pixelInput.uv = input.uv;
     pixelInput.color = input.color;
     pixelInput.objectID = g_ObjectBuffer[objectIndex].objectID;
+    pixelInput.receiveShadow = g_ObjectBuffer[objectIndex].receiveShadow;
 
     const int cascadeIdx = clamp(csm.cascadeIndex, 0, 3);
     pixelInput.position = mul(csm.lightViewProjection[cascadeIdx], worldPosition);

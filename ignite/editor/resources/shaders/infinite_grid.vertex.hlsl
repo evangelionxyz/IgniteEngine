@@ -53,7 +53,11 @@ VSOutput main(uint vertexID : SV_VertexID)
     float2 pos = positions[index] * grid.settings0.z;
     float3 worldPos;
 
-    if (grid.settings1.x > 0.5f)
+    if (grid.settings1.x > 1.5f)
+    {
+        worldPos = float3(0.0f, pos.y + camera.position.y, pos.x + camera.position.z);
+    }
+    else if (grid.settings1.x > 0.5f)
     {
         worldPos = float3(pos.x + camera.position.x, pos.y + camera.position.y, 0.0f);
     }

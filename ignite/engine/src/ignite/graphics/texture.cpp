@@ -537,12 +537,16 @@ namespace ignite
             std::vector<MipPlacement> placements(mipCount);
             uint64_t totalSize = 0;
 
+            const auto &devDesc = nri.GetDeviceDesc(*deviceManager->GetDevice());
+            const uint32_t rowAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureRow, 256u);
+            const uint32_t sliceAlign = std::max<uint32_t>(devDesc.memoryAlignment.uploadBufferTextureSlice, 512u);
+
             for (uint32_t mip = 0; mip < mipCount; ++mip)
             {
                 const auto &mipData = m_PreparedMipChain[mip];
-                totalSize = (totalSize + 511ULL) & ~511ULL;
+                totalSize = ((totalSize + sliceAlign - 1ULL) / sliceAlign) * sliceAlign;
                 placements[mip].offset = totalSize;
-                placements[mip].alignedRowPitch = (mipData.rowPitch + 255u) & ~255u;
+                placements[mip].alignedRowPitch = ((mipData.rowPitch + rowAlign - 1u) / rowAlign) * rowAlign;
                 placements[mip].alignedSlicePitch = placements[mip].alignedRowPitch * mipData.height;
                 totalSize += placements[mip].alignedSlicePitch;
             }
@@ -576,7 +580,9 @@ namespace ignite
 
                 nri::TextureBarrierDesc preBarrier = {};
                 preBarrier.texture = m_Handle;
-                preBarrier.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+                preBarrier.before = (m_CurrentLayout == nri::Layout::UNDEFINED)
+                    ? nri::AccessLayoutStage{ nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE }
+                    : nri::AccessLayoutStage{ m_CurrentAccess, m_CurrentLayout, m_CurrentStages };
                 preBarrier.after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION, nri::StageBits::COPY };
                 preBarrier.mipOffset = 0;
                 preBarrier.mipNum = nri::REMAINING;
@@ -640,6 +646,7 @@ namespace ignite
             uploadDesc.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
             uploadDesc.planes = nri::PlaneBits::ALL;
 
+            IGN_PROFILE_SCOPE("Texture::SetData::SyncUploadData");
             std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
             deviceManager->GetHelperInterface().UploadData(*deviceManager->GetGraphicsQueue(), &uploadDesc, 1, nullptr, 0);
 
@@ -1273,6 +1280,175 @@ namespace ignite
     static std::mutex s_UploadQueueMutex;
     static std::queue<TextureUploadTask> s_UploadQueue;
 
+    namespace
+    {
+        struct AsyncUploadSlot
+        {
+            nri::CommandAllocator *allocator = nullptr;
+            nri::CommandBuffer *commandBuffer = nullptr;
+            uint64_t fenceValue = 0;
+            std::vector<nri::Buffer *> stagingBuffers;
+            std::vector<Ref<Texture>> retainedTextures;
+        };
+
+        struct AsyncUploadState
+        {
+            static constexpr uint32_t kUploadSlots = 4;
+            nri::Device *device = nullptr;
+            nri::Fence *fence = nullptr;
+            uint64_t nextFenceValue = 1;
+            uint32_t currentSlot = 0;
+            std::array<AsyncUploadSlot, kUploadSlots> slots{};
+            std::atomic<bool> hasInFlightUploads{ false };
+        };
+
+        AsyncUploadState s_AsyncUploadState;
+
+        void ReclaimCompletedUploadSlots(const nri::CoreInterface &nri)
+        {
+            if (!s_AsyncUploadState.fence)
+            {
+                s_AsyncUploadState.hasInFlightUploads.store(false, std::memory_order_release);
+                return;
+            }
+
+            const uint64_t completed = nri.GetFenceValue(*s_AsyncUploadState.fence);
+            bool anyInFlight = false;
+            for (auto &slot : s_AsyncUploadState.slots)
+            {
+                if (slot.fenceValue == 0)
+                    continue;
+
+                if (completed >= slot.fenceValue)
+                {
+                    for (nri::Buffer *buf : slot.stagingBuffers)
+                    {
+                        if (buf)
+                            nri.DestroyBuffer(buf);
+                    }
+                    slot.stagingBuffers.clear();
+                    slot.retainedTextures.clear();
+                    slot.fenceValue = 0;
+                }
+                else
+                {
+                    anyInFlight = true;
+                }
+            }
+            s_AsyncUploadState.hasInFlightUploads.store(anyInFlight, std::memory_order_release);
+        }
+
+        void TeardownAsyncUploadState()
+        {
+            auto *dm = DeviceManager::GetInstance();
+            nri::Device *currentDevice = dm ? dm->GetDevice() : nullptr;
+            const bool deviceValid = (currentDevice != nullptr && currentDevice == s_AsyncUploadState.device);
+
+            if (deviceValid)
+            {
+                const auto &nri = dm->GetCoreInterface();
+                if (s_AsyncUploadState.fence)
+                {
+                    uint64_t maxFence = 0;
+                    for (const auto &slot : s_AsyncUploadState.slots)
+                    {
+                        maxFence = std::max(maxFence, slot.fenceValue);
+                    }
+                    if (maxFence > 0 && nri.GetFenceValue(*s_AsyncUploadState.fence) < maxFence)
+                    {
+                        nri.Wait(*s_AsyncUploadState.fence, maxFence);
+                    }
+                }
+
+                for (auto &slot : s_AsyncUploadState.slots)
+                {
+                    for (nri::Buffer *buf : slot.stagingBuffers)
+                    {
+                        if (buf)
+                            nri.DestroyBuffer(buf);
+                    }
+                    slot.stagingBuffers.clear();
+                    slot.retainedTextures.clear();
+                    slot.fenceValue = 0;
+
+                    if (slot.commandBuffer)
+                    {
+                        nri.DestroyCommandBuffer(slot.commandBuffer);
+                        slot.commandBuffer = nullptr;
+                    }
+                    if (slot.allocator)
+                    {
+                        nri.DestroyCommandAllocator(slot.allocator);
+                        slot.allocator = nullptr;
+                    }
+                }
+
+                if (s_AsyncUploadState.fence)
+                {
+                    nri.DestroyFence(s_AsyncUploadState.fence);
+                    s_AsyncUploadState.fence = nullptr;
+                }
+            }
+            else
+            {
+                for (auto &slot : s_AsyncUploadState.slots)
+                {
+                    slot.stagingBuffers.clear();
+                    slot.retainedTextures.clear();
+                    slot.fenceValue = 0;
+                    slot.commandBuffer = nullptr;
+                    slot.allocator = nullptr;
+                }
+                s_AsyncUploadState.fence = nullptr;
+            }
+
+            s_AsyncUploadState.device = nullptr;
+            s_AsyncUploadState.nextFenceValue = 1;
+            s_AsyncUploadState.currentSlot = 0;
+            s_AsyncUploadState.hasInFlightUploads.store(false, std::memory_order_release);
+        }
+
+        bool EnsureAsyncUploadState(DeviceManager *dm)
+        {
+            if (!dm || !dm->GetDevice() || !dm->GetGraphicsQueue())
+                return false;
+
+            nri::Device *device = dm->GetDevice();
+            if (s_AsyncUploadState.device && s_AsyncUploadState.device != device)
+            {
+                TeardownAsyncUploadState();
+            }
+
+            const auto &nri = dm->GetCoreInterface();
+            if (!s_AsyncUploadState.device)
+            {
+                s_AsyncUploadState.device = device;
+                nri::FenceDesc fenceDesc = {};
+                if (nri.CreateFence(*device, fenceDesc, s_AsyncUploadState.fence) != nri::Result::SUCCESS || !s_AsyncUploadState.fence)
+                {
+                    TeardownAsyncUploadState();
+                    return false;
+                }
+
+                for (auto &slot : s_AsyncUploadState.slots)
+                {
+                    if (nri.CreateCommandAllocator(*dm->GetGraphicsQueue(), slot.allocator) != nri::Result::SUCCESS || !slot.allocator)
+                    {
+                        TeardownAsyncUploadState();
+                        return false;
+                    }
+                    if (nri.CreateCommandBuffer(*slot.allocator, slot.commandBuffer) != nri::Result::SUCCESS || !slot.commandBuffer)
+                    {
+                        TeardownAsyncUploadState();
+                        return false;
+                    }
+                }
+            }
+
+            return s_AsyncUploadState.fence != nullptr;
+        }
+    }
+
     void Texture::SubmitAsyncUpload(Ref<Texture> texture, std::function<void()> onComplete)
     {
         if (!texture)
@@ -1306,21 +1482,30 @@ namespace ignite
     bool Texture::HasPendingUploads()
     {
         std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
-        return !s_UploadQueue.empty();
+        return !s_UploadQueue.empty() || s_AsyncUploadState.hasInFlightUploads.load(std::memory_order_acquire);
     }
 
     void Texture::ClearPendingUploads()
     {
-        std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
-        while (!s_UploadQueue.empty())
         {
-            s_UploadQueue.pop();
+            std::lock_guard<std::mutex> lock(s_UploadQueueMutex);
+            while (!s_UploadQueue.empty())
+            {
+                s_UploadQueue.pop();
+            }
         }
+        TeardownAsyncUploadState();
     }
 
     void Texture::ProcessAsyncUploads(uint32_t maxUploadsPerFrame, uint64_t maxBytesPerFrame)
     {
         IGN_PROFILE_FUNCTION();
+
+        auto *dm = DeviceManager::GetInstance();
+        if (dm && dm->GetDevice() && s_AsyncUploadState.device == dm->GetDevice() && s_AsyncUploadState.fence)
+        {
+            ReclaimCompletedUploadSlots(dm->GetCoreInterface());
+        }
 
         std::vector<TextureUploadTask> batch;
         {
@@ -1354,20 +1539,109 @@ namespace ignite
         if (batch.empty())
             return;
 
-        if (!DeviceManager::GetInstance() || !DeviceManager::GetInstance()->GetDevice())
+        if (!dm || !dm->GetDevice())
             return;
 
-        for (auto &task : batch)
+        if (EnsureAsyncUploadState(dm))
         {
-            if (!task.texture)
-                continue;
+            const auto &nri = dm->GetCoreInterface();
+            auto &slot = s_AsyncUploadState.slots[s_AsyncUploadState.currentSlot];
+            s_AsyncUploadState.currentSlot = (s_AsyncUploadState.currentSlot + 1) % AsyncUploadState::kUploadSlots;
 
-            task.texture->SetReadyFlag(false);
-            task.texture->SetData(nullptr, 4);
-            task.texture->SetReadyFlag(true);
-            if (task.onComplete)
+            if (slot.fenceValue > 0 && nri.GetFenceValue(*s_AsyncUploadState.fence) < slot.fenceValue)
             {
-                task.onComplete();
+                IGN_PROFILE_SCOPE("Texture::ProcessAsyncUploads::WaitSlot");
+                nri.Wait(*s_AsyncUploadState.fence, slot.fenceValue);
+            }
+
+            for (nri::Buffer *buf : slot.stagingBuffers)
+            {
+                if (buf)
+                    nri.DestroyBuffer(buf);
+            }
+            slot.stagingBuffers.clear();
+            slot.retainedTextures.clear();
+            slot.fenceValue = 0;
+
+            nri.ResetCommandAllocator(*slot.allocator);
+            nri.BeginCommandBuffer(*slot.commandBuffer, nullptr);
+
+            for (auto &task : batch)
+            {
+                if (!task.texture)
+                    continue;
+
+                task.texture->SetReadyFlag(false);
+                task.texture->SetData(slot.commandBuffer, 4);
+                if (nri::Buffer *staging = task.texture->DetachStagingBuffer())
+                {
+                    slot.stagingBuffers.push_back(staging);
+                }
+                slot.retainedTextures.push_back(task.texture);
+            }
+
+            nri.EndCommandBuffer(*slot.commandBuffer);
+
+            const uint64_t signalValue = s_AsyncUploadState.nextFenceValue++;
+            nri::FenceSubmitDesc signalFence = {};
+            signalFence.fence = s_AsyncUploadState.fence;
+            signalFence.value = signalValue;
+            signalFence.stages = nri::StageBits::ALL;
+
+            nri::QueueSubmitDesc submitDesc = {};
+            submitDesc.commandBuffers = &slot.commandBuffer;
+            submitDesc.commandBufferNum = 1;
+            submitDesc.signalFences = &signalFence;
+            submitDesc.signalFenceNum = 1;
+
+            nri::Result submitRes = nri::Result::FAILURE;
+            {
+                std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                submitRes = nri.QueueSubmit(*dm->GetGraphicsQueue(), submitDesc);
+            }
+
+            if (submitRes == nri::Result::SUCCESS)
+            {
+                slot.fenceValue = signalValue;
+                s_AsyncUploadState.hasInFlightUploads.store(true, std::memory_order_release);
+            }
+            else
+            {
+                LOG_ERROR("[Texture] Async upload QueueSubmit failed with NRI result {}", static_cast<uint32_t>(submitRes));
+                for (nri::Buffer *buf : slot.stagingBuffers)
+                {
+                    if (buf)
+                        nri.DestroyBuffer(buf);
+                }
+                slot.stagingBuffers.clear();
+                slot.retainedTextures.clear();
+            }
+
+            for (auto &task : batch)
+            {
+                if (!task.texture)
+                    continue;
+                task.texture->SetReadyFlag(true);
+                if (task.onComplete)
+                {
+                    task.onComplete();
+                }
+            }
+        }
+        else
+        {
+            for (auto &task : batch)
+            {
+                if (!task.texture)
+                    continue;
+
+                task.texture->SetReadyFlag(false);
+                task.texture->SetData(nullptr, 4);
+                task.texture->SetReadyFlag(true);
+                if (task.onComplete)
+                {
+                    task.onComplete();
+                }
             }
         }
 

@@ -124,4 +124,25 @@ namespace ignite
         if (entries.empty())
             g_BindingCacheData.bindingSets.erase(it);
     }
+
+    void BindingCache::RemovePipelineLayout(nri::PipelineLayout *pipelineLayout)
+    {
+        if (!pipelineLayout)
+            return;
+
+        std::unique_lock lock(g_BindingCacheData.mutex);
+        for (auto it = g_BindingCacheData.bindingSets.begin(); it != g_BindingCacheData.bindingSets.end(); )
+        {
+            auto &entries = it->second;
+            entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const BindingCacheEntry &entry)
+            {
+                return entry.pipelineLayout == pipelineLayout;
+            }), entries.end());
+
+            if (entries.empty())
+                it = g_BindingCacheData.bindingSets.erase(it);
+            else
+                ++it;
+        }
+    }
 }

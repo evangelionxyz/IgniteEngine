@@ -5,7 +5,8 @@
 #include "ext/editor_ui.hpp" 
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/asset/asset_manager.hpp"
-#include "ignite/imgui/gizmo.hpp"
+#include "ignite/graphics/gizmo/gizmo.hpp"
+#include "ignite/graphics/renderer/asset_scene_renderer.hpp"
 #include "ignite/math/math.hpp"
 #include <imgui_internal.h>
 #include <format>
@@ -85,14 +86,17 @@ namespace ignite::UI
 			GizmoInfo gizmoInfo;
 			gizmoInfo.cameraView = sceneData.camera.GetView();
 			gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
+			gizmoInfo.cameraPosition = sceneData.camera.position;
+			gizmoInfo.cameraForward = sceneData.camera.GetForwardDirection();
 			gizmoInfo.cameraType = sceneData.camera.projectionType;
+			gizmoInfo.viewportHovered = previewViewportFocused;
 			gizmoInfo.snapValue = 0.05f;
 			gizmoInfo.isSnapping = false;
 			gizmoInfo.viewRect = viewportRect;
 
 			gizmo.SetInfo(gizmoInfo);
-			gizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-			gizmo.SetMode(ImGuizmo::MODE::LOCAL);
+			gizmo.SetOperation(GizmoOperation::TRANSLATE);
+			gizmo.SetMode(GizmoMode::LOCAL);
 
 			glm::mat4 gizmoTransform = glm::mat4(1.0f);
 			if (useSocketGizmo)
@@ -156,6 +160,15 @@ namespace ignite::UI
 				isDirty = true;
 				skeleton->SetDirtyFlag(true);
 			}
+
+			if (sceneData.sceneRenderer)
+			{
+				sceneData.sceneRenderer->SetGizmoDrawList(gizmo.GetDrawList());
+			}
+		}
+		else if (sceneData.sceneRenderer)
+		{
+			sceneData.sceneRenderer->ClearGizmoDrawList();
 		}
 
 		if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)

@@ -47,8 +47,23 @@ float4 main(VSOutput input) : SV_Target
     const float minPixelsBetweenCells = max(grid.settings0.y, 0.1f);
     const float majorLineScale = max(grid.settings0.w, 1.0f);
 
-    float2 uv = (input.planeMode > 0.5f) ? input.worldPos.xy : input.worldPos.xz;
-    float2 cameraUv = (input.planeMode > 0.5f) ? input.cameraPos.xy : input.cameraPos.xz;
+    float2 uv;
+    float2 cameraUv;
+    if (input.planeMode > 1.5f)
+    {
+        uv = input.worldPos.yz;
+        cameraUv = input.cameraPos.yz;
+    }
+    else if (input.planeMode > 0.5f)
+    {
+        uv = input.worldPos.xy;
+        cameraUv = input.cameraPos.xy;
+    }
+    else
+    {
+        uv = input.worldPos.xz;
+        cameraUv = input.cameraPos.xz;
+    }
 
     float2 dvx = float2(ddx(uv.x), ddy(uv.x));
     float2 dvy = float2(ddx(uv.y), ddy(uv.y));
@@ -90,7 +105,15 @@ float4 main(VSOutput input) : SV_Target
     float axisAlphaU = 1.0f - saturate(abs(uv.x) / max(dudvScaled.x * 1.5f, 1e-6f));
     float axisAlphaV = 1.0f - saturate(abs(uv.y) / max(dudvScaled.y * 1.5f, 1e-6f));
 
-    if (input.planeMode > 0.5f)
+    if (input.planeMode > 1.5f)
+    {
+        if (grid.settings1.z > 0.5f)
+            color = lerp(color, grid.yAxisColor, axisAlphaV * grid.yAxisColor.a);
+
+        if (grid.settings1.w > 0.5f)
+            color = lerp(color, grid.zAxisColor, axisAlphaU * grid.zAxisColor.a);
+    }
+    else if (input.planeMode > 0.5f)
     {
         if (grid.settings1.y > 0.5f)
             color = lerp(color, grid.xAxisColor, axisAlphaV * grid.xAxisColor.a);

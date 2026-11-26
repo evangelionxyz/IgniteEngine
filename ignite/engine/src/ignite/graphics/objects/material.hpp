@@ -11,6 +11,7 @@
 #include "ignite/graphics/gpu_data.hpp"
 
 #include <glm/glm.hpp>
+#include <atomic>
 #include <map>
 
 namespace ignite
@@ -50,6 +51,7 @@ namespace ignite
 
         bool IsNeedToInvalidate() const;
         void InvalidateBindingSet() { m_BindingSetDirty = true; m_HasUploadedGpuData = false; m_BindingSet = nullptr; m_BindingSets.clear(); }
+        static void InvalidateAllBindingSets();
         bool IsBindingSetDirty() const { return m_BindingSetDirty; }
         void SetBindingSetClean() { m_BindingSetDirty = false; }
 
@@ -79,6 +81,9 @@ namespace ignite
         bool m_HasUploadedGpuData = false;
         bool m_BindingSetDirty = true;
         bool m_HasSamplerDesc = false;
+        uint64_t m_CachedGlobalGeneration = 0;
+
+        static std::atomic<uint64_t> s_GlobalBindingGeneration;
     };
 }
 

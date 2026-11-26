@@ -91,10 +91,49 @@ namespace ignite
         }
     }
 
+    namespace
+    {
+        ReflectionProbe_GPUData BuildProbeGPUData(
+            const TransformComponent &tr,
+            const ReflectionProbeComponent &rp,
+            uint32_t sliceIdx,
+            const std::array<glm::vec4, 4> &captureSH)
+        {
+            const glm::mat4 rigidLocalToWorld =
+                glm::translate(glm::mat4(1.0f), tr.world.translation) *
+                glm::mat4_cast(tr.world.rotation);
+            const glm::mat4 rigidWorldToLocal = glm::inverse(rigidLocalToWorld);
+
+            const glm::vec3 worldScale = glm::abs(tr.world.scale);
+            const glm::vec3 infExt = glm::max(glm::abs(rp.influenceExtents) * worldScale, glm::vec3(0.05f));
+            const glm::vec3 projExt = glm::max(glm::abs(rp.projectionExtents) * worldScale, glm::vec3(0.05f));
+            const glm::vec3 capturePos = tr.world.translation
+                + glm::mat3_cast(tr.world.rotation) * (rp.captureOffset * worldScale);
+
+            ReflectionProbe_GPUData gpu{};
+            gpu.worldToLocal = rigidWorldToLocal;
+            gpu.localToWorld = rigidLocalToWorld;
+            gpu.boxMinAndSlice = glm::vec4(-projExt, static_cast<float>(sliceIdx));
+            gpu.boxMaxAndBlend = glm::vec4(projExt, std::max(rp.blendDistance, 0.0f));
+            gpu.influenceMinAndPrio = glm::vec4(-infExt, static_cast<float>(rp.priority));
+            gpu.influenceMaxAndInt = glm::vec4(infExt, std::max(rp.intensity, 0.0f));
+            gpu.capturePosAndNorm = glm::vec4(capturePos,
+                rp.normalize ? glm::clamp(rp.normalizationStrength, 0.0f, 1.0f) : 0.0f);
+
+            for (int i = 0; i < 4; ++i)
+            {
+                gpu.captureSH[i] = captureSH[i];
+            }
+            gpu.captureSH[0].w = rp.boxProjection ? 1.0f : 0.0f;
+            return gpu;
+        }
+    }
+
     void ReflectionProbeSet::Clear()
     {
         m_CubeArray.reset();
         m_Probes.clear();
+        m_BoundEntries.clear();
         m_Resolution = 128;
         m_MipCount = 1;
     }
@@ -232,6 +271,7 @@ namespace ignite
         m_Resolution = targetRes;
         m_MipCount = targetMips;
         m_Probes.reserve(compatible.size());
+        m_BoundEntries.reserve(compatible.size());
 
         for (uint32_t sliceIdx = 0; sliceIdx < static_cast<uint32_t>(compatible.size()); ++sliceIdx)
         {
@@ -243,38 +283,41 @@ namespace ignite
                 return false;
             }
 
-            const glm::mat4 rigidLocalToWorld =
-                glm::translate(glm::mat4(1.0f), entry.transform.world.translation) *
-                glm::mat4_cast(entry.transform.world.rotation);
-            const glm::mat4 rigidWorldToLocal = glm::inverse(rigidLocalToWorld);
-
-            const glm::vec3 worldScale = glm::abs(entry.transform.world.scale);
-            const glm::vec3 infExt = glm::max(glm::abs(entry.component.influenceExtents) * worldScale, glm::vec3(0.05f));
-            const glm::vec3 projExt = glm::max(glm::abs(entry.component.projectionExtents) * worldScale, glm::vec3(0.05f));
-            const glm::vec3 capturePos = entry.transform.world.translation
-                + glm::mat3_cast(entry.transform.world.rotation) * (entry.component.captureOffset * worldScale);
-
-            ReflectionProbe_GPUData gpu{};
-            gpu.worldToLocal = rigidWorldToLocal;
-            gpu.localToWorld = rigidLocalToWorld;
-            gpu.boxMinAndSlice = glm::vec4(-projExt, static_cast<float>(sliceIdx));
-            gpu.boxMaxAndBlend = glm::vec4(projExt, std::max(entry.component.blendDistance, 0.0f));
-            gpu.influenceMinAndPrio = glm::vec4(-infExt, static_cast<float>(entry.component.priority));
-            gpu.influenceMaxAndInt = glm::vec4(infExt, std::max(entry.component.intensity, 0.0f));
-            gpu.capturePosAndNorm = glm::vec4(capturePos,
-                entry.component.normalize ? glm::clamp(entry.component.normalizationStrength, 0.0f, 1.0f) : 0.0f);
-
-            for (int i = 0; i < 4; ++i)
-            {
-                gpu.captureSH[i] = entry.data.captureSH[i];
-            }
-            gpu.captureSH[0].w = entry.component.boxProjection ? 1.0f : 0.0f;
-
-            m_Probes.push_back(gpu);
+            m_Probes.push_back(BuildProbeGPUData(entry.transform, entry.component, sliceIdx, entry.data.captureSH));
+            m_BoundEntries.push_back({ entry.entity, sliceIdx, entry.data.captureSH });
         }
 
         BindlessSystem::FlushPendingWrites();
         return IsValid();
+    }
+
+    bool ReflectionProbeSet::UpdateProbeTransformsFromScene(Scene *scene)
+    {
+        if (!scene || !scene->registry || m_BoundEntries.size() != m_Probes.size() || m_Probes.empty())
+        {
+            return false;
+        }
+
+        bool anyChanged = false;
+        for (size_t i = 0; i < m_BoundEntries.size(); ++i)
+        {
+            const BoundProbeEntry &bound = m_BoundEntries[i];
+            if (!scene->registry->valid(bound.entity)
+                || !scene->registry->all_of<TransformComponent, ReflectionProbeComponent>(bound.entity))
+            {
+                continue;
+            }
+
+            const auto &tr = scene->registry->get<TransformComponent>(bound.entity);
+            const auto &rp = scene->registry->get<ReflectionProbeComponent>(bound.entity);
+            const ReflectionProbe_GPUData updated = BuildProbeGPUData(tr, rp, bound.sliceIdx, bound.captureSH);
+            if (std::memcmp(&m_Probes[i], &updated, sizeof(ReflectionProbe_GPUData)) != 0)
+            {
+                m_Probes[i] = updated;
+                anyChanged = true;
+            }
+        }
+        return anyChanged;
     }
 
     void ReflectionProbeSet::FillGIGPUData(GI_GPUData &outGI) const

@@ -25,18 +25,6 @@ project "IMGUI"
         "%{THIRDPARTY_DIR}/ImGui/imstb_rectpack.h",
         "%{THIRDPARTY_DIR}/ImGui/imstb_textedit.h",
         "%{THIRDPARTY_DIR}/ImGui/imstb_truetype.h",
-
-        -- include imguizmo src to compile
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGradient.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGradient.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/GraphEditor.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/GraphEditor.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImCurveEdit.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImCurveEdit.h",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImSequencer.cpp",
-        "%{THIRDPARTY_DIR}/IMGUIZMO/ImSequencer.h",
     }
 
     includedirs {
@@ -55,3 +43,20 @@ project "IMGUI"
             "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_dx12.cpp",
             "%{THIRDPARTY_DIR}/ImGui/backends/imgui_impl_dx12.hpp",
         }
+
+    filter { "configurations:Debug or Debug-Profiling" }
+        runtime "Debug"
+        optimize "off"
+        symbols "on"
+
+    filter { "configurations:Release or Release-Profiling" }
+        runtime "Release"
+        optimize "speed"
+        symbols "on"
+        defines { "NDEBUG" }
+
+    filter { "configurations:Shipping or Shipping-Profiling" }
+        runtime "Release"
+        optimize "speed"
+        symbols "off"
+        defines { "NDEBUG" }

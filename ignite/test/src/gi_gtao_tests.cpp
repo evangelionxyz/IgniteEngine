@@ -110,8 +110,26 @@ namespace ignite::tests
             tr.dirty = true;
 
             auto &smc = e.AddComponent<StaticMeshComponent>();
-            smc.handle = Renderer::GetDefaultMeshHandle(EMeshType::CUBE);
-            smc.overrideMaterials[0] = matHandle;
+            const AssetHandle baseCubeHandle = Renderer::GetDefaultMeshHandle(EMeshType::CUBE);
+            auto baseCube = AssetManager::GetInstance()->GetAsset<StaticMesh>(baseCubeHandle);
+            Ref<StaticMesh> uniqueCube = StaticMesh::Create();
+            if (baseCube)
+            {
+                for (const auto &inst : baseCube->GetMeshInstances())
+                {
+                    auto copyInst = StaticMeshInstance::Create(inst->GetName(), inst->GetPrimitive());
+                    copyInst->local = inst->local;
+                    copyInst->global = inst->global;
+                    copyInst->localAABB = inst->localAABB;
+                    copyInst->SetMaterial(matHandle);
+                    uniqueCube->AddMeshInstance(copyInst);
+                }
+                uniqueCube->CalculateLocalAABB();
+            }
+            static uint64_t s_TestMeshId = 900400000ULL;
+            const AssetHandle meshHandle(++s_TestMeshId);
+            AssetManager::GetInstance()->AssignAsset(meshHandle, uniqueCube);
+            smc.handle = meshHandle;
             return e;
         }
     }
@@ -417,10 +435,14 @@ namespace ignite::tests
         EXPECT_NE(h1, h0);
         EXPECT_TRUE(IsSceneGIOutOfDate(scene.get()));
 
-        // 2. Material override change invalidates bake hash
+        // 2. Material change invalidates bake hash
         vol.bakeHash = h1;
         EXPECT_FALSE(IsSceneGIOutOfDate(scene.get()));
-        cube.GetComponent<StaticMeshComponent>().overrideMaterials[0] = mat2;
+        if (auto cubeMesh = AssetManager::GetInstance()->GetAsset<StaticMesh>(cube.GetComponent<StaticMeshComponent>().handle))
+        {
+            if (!cubeMesh->GetMeshInstances().empty())
+                cubeMesh->GetMeshInstances()[0]->SetMaterial(mat2);
+        }
         const uint64_t h2 = ComputeSceneBakeHash(scene.get());
         EXPECT_NE(h2, h1);
         EXPECT_TRUE(IsSceneGIOutOfDate(scene.get()));

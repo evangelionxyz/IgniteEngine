@@ -31,6 +31,7 @@ namespace ignite
         virtual void OnGuiRender() override;
 
         virtual void OnRender(RenderTarget *framebuffer) override;
+        virtual bool DidRenderToBackBuffer() const override { return m_RenderedToBackBuffer; }
 
     private:
         bool OnFramebufferResize(const FramebufferResizeEvent &event);
@@ -62,6 +63,7 @@ namespace ignite
         char m_PlayerName[64] = "RuntimeClient";
         bool m_AutoConnect = false;
         bool m_DiagnosticsOpen = false;
+        bool m_RenderedToBackBuffer = false;
         std::filesystem::path m_InitialProjectPath;
     };
 }

@@ -17,6 +17,13 @@
 
 namespace ignite
 {
+    std::atomic<uint64_t> Material::s_GlobalBindingGeneration{ 0 };
+
+    void Material::InvalidateAllBindingSets()
+    {
+        s_GlobalBindingGeneration.fetch_add(1, std::memory_order_relaxed);
+    }
+
     Material::Material()
     {
     }
@@ -43,6 +50,15 @@ namespace ignite
 
     bool Material::UpdateBindingSet(Ref<Texture> envMap, Ref<Texture> shadowMap)
     {
+        const uint64_t globalGen = s_GlobalBindingGeneration.load(std::memory_order_relaxed);
+        if (m_CachedGlobalGeneration != globalGen)
+        {
+            m_BindingSetDirty = true;
+            m_BindingSets.clear();
+            m_BindingSet = nullptr;
+            m_CachedGlobalGeneration = globalGen;
+        }
+
         Texture* envPtr = envMap ? envMap.get() : nullptr;
         Texture* shadowPtr = shadowMap ? shadowMap.get() : nullptr;
         auto key = std::make_pair(envPtr, shadowPtr);
@@ -207,12 +223,16 @@ namespace ignite
             sr.AddKeyValue("SubsurfaceRadius", gpuData.subsurfaceRadius);
             sr.AddKeyValue("TransmissionWeight", gpuData.transmissionWeight);
             sr.AddKeyValue("TransmissionDepth", gpuData.transmissionDepth);
+            sr.AddKeyValue("SpecularRotation", gpuData.specularRotation);
+            sr.AddKeyValue("TransmissionScatter", gpuData.transmissionScatter);
             sr.AddKeyValue("TransmissionColor", gpuData.transmissionColor);
             sr.AddKeyValue("FuzzWeight", gpuData.fuzzWeight);
             sr.AddKeyValue("FuzzRoughness", gpuData.fuzzRoughness);
             sr.AddKeyValue("FuzzColor", gpuData.fuzzColor);
             sr.AddKeyValue("UseMultiScatter", gpuData.useMultiScatter);
             sr.AddKeyValue("EmissionLuminance", gpuData.emissionLuminance);
+            sr.AddKeyValue("AlphaCutoff", gpuData.alphaCutoff);
+            sr.AddKeyValue("NormalScale", gpuData.normalScale);
             sr.AddKeyValue("MetallicChannel", gpuData.metallicChannel);
             sr.AddKeyValue("RoughnessChannel", gpuData.roughnessChannel);
             sr.AddKeyValue("TilingFactorX", gpuData.tilingFactor.x);
@@ -279,12 +299,16 @@ namespace ignite
             if (gpuDataNode["SubsurfaceRadius"]) material->gpuData.subsurfaceRadius = gpuDataNode["SubsurfaceRadius"].as<glm::vec4>();
             if (gpuDataNode["TransmissionWeight"]) material->gpuData.transmissionWeight = gpuDataNode["TransmissionWeight"].as<float>();
             if (gpuDataNode["TransmissionDepth"]) material->gpuData.transmissionDepth = gpuDataNode["TransmissionDepth"].as<float>();
+            if (gpuDataNode["SpecularRotation"]) material->gpuData.specularRotation = gpuDataNode["SpecularRotation"].as<float>();
+            if (gpuDataNode["TransmissionScatter"]) material->gpuData.transmissionScatter = gpuDataNode["TransmissionScatter"].as<float>();
             if (gpuDataNode["TransmissionColor"]) material->gpuData.transmissionColor = gpuDataNode["TransmissionColor"].as<glm::vec4>();
             if (gpuDataNode["FuzzWeight"]) material->gpuData.fuzzWeight = gpuDataNode["FuzzWeight"].as<float>();
             if (gpuDataNode["FuzzRoughness"]) material->gpuData.fuzzRoughness = gpuDataNode["FuzzRoughness"].as<float>();
             if (gpuDataNode["FuzzColor"]) material->gpuData.fuzzColor = gpuDataNode["FuzzColor"].as<glm::vec4>();
             if (gpuDataNode["UseMultiScatter"]) material->gpuData.useMultiScatter = gpuDataNode["UseMultiScatter"].as<float>();
             if (gpuDataNode["EmissionLuminance"]) material->gpuData.emissionLuminance = gpuDataNode["EmissionLuminance"].as<float>();
+            if (gpuDataNode["AlphaCutoff"]) material->gpuData.alphaCutoff = gpuDataNode["AlphaCutoff"].as<float>();
+            if (gpuDataNode["NormalScale"]) material->gpuData.normalScale = gpuDataNode["NormalScale"].as<float>();
             if (gpuDataNode["MetallicChannel"]) material->gpuData.metallicChannel = gpuDataNode["MetallicChannel"].as<int>();
             if (gpuDataNode["RoughnessChannel"]) material->gpuData.roughnessChannel = gpuDataNode["RoughnessChannel"].as<int>();
             if (gpuDataNode["TilingFactorX"]) material->gpuData.tilingFactor.x = gpuDataNode["TilingFactorX"].as<float>();

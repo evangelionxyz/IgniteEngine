@@ -21,7 +21,8 @@ namespace ignite
 		glm::mat4 normal;
         uint32_t objectID = 0xFFFFFFFFu;
         uint32_t boneOffset = 0;
-		glm::vec2 _padding = glm::vec2(0.0f);
+		uint32_t receiveShadow = 1;
+		uint32_t _padding = 0;
 	};
 
 	struct Scene_GPUData
@@ -73,7 +74,7 @@ namespace ignite
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		glm::vec4 emissiveFactor = glm::vec4(0.0f);
 		float metallicFactor = 0.0f;
-		float roughnessFactor = 0.0f;
+		float roughnessFactor = 0.5f;
 		float occlusionStrength = 0.0f;
 		int metallicChannel = 2;
 		int roughnessChannel = 1;
@@ -110,7 +111,8 @@ namespace ignite
 		// OpenPBR §translucent-base — thin-slab Beer's law transmission
 		float transmissionWeight = 0.0f;   // [0,1] blend from opaque to translucent
 		float transmissionDepth  = 0.0f;   // absorption depth
-		glm::vec2 _padTR;                  // 16-byte alignment
+		float specularRotation   = 0.0f;   // [0,1] anisotropic tangent rotation turn
+		float transmissionScatter = 0.0f;  // [0,1] subsurface/volume scatter
 		glm::vec4 transmissionColor = glm::vec4(1.0f); // volumetric absorption tint
 
 		// OpenPBR §fuzz — microflake-based fuzz/sheen layer
@@ -121,8 +123,9 @@ namespace ignite
 
 		// Advanced
 		float useMultiScatter   = 1.0f;    // [0,1] enable Kulla-Conty energy compensation
-		float emissionLuminance = 1.0f;     // nits scale for emission
-		glm::vec2 _padAdv;                 // 16-byte alignment
+		float emissionLuminance = 1.0f;    // nits scale for emission
+		float alphaCutoff       = 0.5f;    // mask alpha test threshold
+		float normalScale       = 1.0f;    // tangent-space normal map XY strength
 	};
 
 	// GPU-side point light data (16-byte aligned for HLSL constant buffers)
@@ -131,6 +134,7 @@ namespace ignite
 		glm::vec4 positionAndRange;  // xyz = position, w = range
 		glm::vec4 color;             // rgb = color, a = intensity
 		glm::vec4 attenuation;       // x = constant, y = linear, z = quadratic, w = unused
+		glm::vec4 shadowParams = glm::vec4(-1.0f, 0.015f, 0.02f, 1.0f); // x=sliceIdx(<0 off), y=bias, z=pcfRadius, w=strength
 	};
 
 	// GPU-side spot light data (16-byte aligned for HLSL constant buffers)
@@ -140,6 +144,7 @@ namespace ignite
 		glm::vec4 directionAndAngle; // xyz = direction, w = cos(outerConeAngle)
 		glm::vec4 color;             // rgb = color, a = intensity
 		glm::vec4 attenuation;       // x = constant, y = linear, z = quadratic, w = cos(innerConeAngle)
+		glm::vec4 shadowParams = glm::vec4(-1.0f, 0.015f, 0.02f, 1.0f); // x=sliceIdx(<0 off), y=bias, z=pcfRadius, w=strength
 	};
 
 	struct PointLightBufferData
@@ -180,6 +185,16 @@ namespace ignite
 		float aoPower = 1.0f;
 
 		glm::vec4 viewportInvSizeAndFlags = glm::vec4(1.0f / 1280.0f, 1.0f / 720.0f, 0.0f, 1.0f); // z=depthPrepassActive, w=receiveGI
+
+		int32_t dynamicPointShadowCubeArrayIndex = -1;
+		int32_t skyVisibilitySplit = 1;
+		int32_t skyVisibilityTexIndex = -1;
+		int32_t _giPad0 = 0;
+
+		int32_t ssrTextureIndex = -1;
+		float ssrIntensity = 1.0f;
+		float ssrMaxRoughness = 0.6f;
+		uint32_t renderFeatureFlags = 3u; // bit 0 = Specular AA, bit 1 = SSR
 	};
 
 	struct ReflectionProbe_GPUData

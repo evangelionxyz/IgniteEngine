@@ -486,7 +486,10 @@ namespace ignite
             return false;
 
         // Wait for previous frame in flight
-        (void)m_VulkanDevice.waitForFences(1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+        {
+            IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::WaitInFlightFence");
+            (void)m_VulkanDevice.waitForFences(1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+        }
         vk::Result resetRes = m_VulkanDevice.resetFences(1, &m_InFlightFences[m_CurrentFrame]); (void)resetRes;
 
         const auto &acquireSemaphore = m_AcquireSemaphores[m_CurrentFrame];
@@ -494,6 +497,7 @@ namespace ignite
         vk::Result res = vk::Result::eErrorUnknown;
         if (m_SwapChain)
         {
+            IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::AcquireNextImage");
             for (int attempt = 0; attempt < 3; ++attempt)
             {
                 res = m_VulkanDevice.acquireNextImageKHR(
@@ -528,6 +532,7 @@ namespace ignite
             submitInfo.pWaitDstStageMask = &waitStage;
 
             {
+                IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::SubmitAcquireWait");
                 std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
                 vk::Result submitRes = m_GraphicsQueue.submit(1, &submitInfo, vk::Fence()); (void)submitRes;
             }
@@ -558,6 +563,7 @@ namespace ignite
         submitInfo.pSignalSemaphores = &presentSemaphore;
 
         {
+            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::SignalSubmit");
             std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
             vk::Result submitRes = m_GraphicsQueue.submit(1, &submitInfo, m_InFlightFences[m_CurrentFrame]); (void)submitRes;
         }
@@ -694,6 +700,7 @@ namespace ignite
             // internal flag behind "gpuav_validate_ray_query" and "gpuav_mesh_shading" exist.
             { "gpuav_validate_ray_query", gpuAssisted && cfg.gpuAssistedRayQuery },
             { "gpuav_mesh_shading", gpuAssisted && cfg.gpuAssistedMeshShading },
+            { "gpuav_force_on_robustness", gpuAssisted },
         };
 
         // The layer dereferences "pValues" lazily during "vkCreateInstance", so the backing storage must

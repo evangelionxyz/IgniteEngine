@@ -4,6 +4,7 @@
 
 #include "bloom.hpp"
 #include "binding_cache.hpp"
+#include "gpu_upload_sync.hpp"
 #include "vertex_data.hpp"
 
 #include "ignite/core/profiler/profiler.hpp"
@@ -73,10 +74,20 @@ namespace ignite
     {
         IGN_PROFILE_SCOPE_COLOR("Bloom::CreateRenderTargets", 0xFA0010FF);
 
+        if (!m_Levels.empty() || m_FinalRT)
+        {
+            if (auto *dm = DeviceManager::GetInstance(); dm && dm->GetDevice())
+            {
+                GPUUploadSync::DeviceWaitIdle(dm->GetDevice());
+            }
+            BindingCache::Clear();
+        }
+
         m_Width = std::max(width, 1u);
         m_Height = std::max(height, 1u);
 
         m_Levels.clear();
+        m_FinalRT.reset();
 
         uint32_t w = std::max(m_Width / 2, 1u);
         uint32_t h = std::max(m_Height / 2, 1u);

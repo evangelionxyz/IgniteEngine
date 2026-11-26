@@ -27,9 +27,12 @@ To build a single target quickly (e.g., runtime only):
 Verify exit code `0` with `0 Error(s)`.
 
 ## 3. Syncing Updated Shaders (Required)
-Binaries load shaders from `<cwd>/resources/shaders` (`bin/Debug/resources/shaders` when running from `bin/Debug`). Always sync from source after editing `.hlsl` or `.hlsli` files before running tests or executables:
+Binaries load shaders from `<cwd>/resources/shaders` (`bin/Debug/resources/shaders` or `bin/Release/resources/shaders`), and cache compiled SPIR-V under `<cwd>/resources/shaders/bin/*.spirv`. Always sync from source after editing `.hlsl` or `.hlsli` files and remove stale `.spirv` files for modified shaders before running tests or executables:
 ```powershell
 Copy-Item -Path D:\Dev\Ignite\ignite\editor\resources\shaders\* -Destination D:\Dev\Ignite\bin\Debug\resources\shaders\ -Recurse -Force
+Copy-Item -Path D:\Dev\Ignite\ignite\editor\resources\shaders\* -Destination D:\Dev\Ignite\bin\Release\resources\shaders\ -Recurse -Force
+# Optional when forcing recompilation of edited shaders:
+# Remove-Item -Force -ErrorAction SilentlyContinue D:\Dev\Ignite\bin\Debug\resources\shaders\bin\<shader>.spirv,D:\Dev\Ignite\bin\Release\resources\shaders\bin\<shader>.spirv
 ```
 
 ## 4. Verifying Lua API Stubs

@@ -64,11 +64,12 @@ namespace ignite
         m_IndexBuffer.reset();
     }
 
-    void Environment::Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &pipeline,
-        const ConstantBuffer &cameraBuffer, const ConstantBuffer &sceneBuffer)
+    bool Environment::Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &pipeline,
+        const ConstantBuffer &cameraBuffer, const ConstantBuffer &sceneBuffer,
+        bool clearColor, bool clearDepth)
     {
         if (!cmd || !pipeline || !pipeline->GetHandle())
-            return;
+            return false;
 
         auto &nri = DeviceManager::GetInstance()->GetNRI();
 
@@ -93,7 +94,7 @@ namespace ignite
 
         const bool startedRendering = rt && !rt->IsRendering();
         if (startedRendering)
-            rt->BeginRendering(cmd, false, false);
+            rt->BeginRendering(cmd, clearColor, clearDepth);
 
         nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *pipeline->GetPipelineLayout());
         nri.CmdSetPipeline(*cmd, *pipeline->GetHandle());
@@ -118,14 +119,16 @@ namespace ignite
 
         if (startedRendering)
             rt->EndRendering(cmd);
+        return startedRendering;
     }
 
-    void Environment::Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &pipeline,
-        const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer)
+    bool Environment::Draw(nri::CommandBuffer *cmd, RenderTarget *rt, const Ref<GraphicsPipeline> &pipeline,
+        const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer,
+        bool clearColor, bool clearDepth)
     {
         if (!cameraBuffer || !sceneBuffer)
-            return;
-        Draw(cmd, rt, pipeline, *cameraBuffer, *sceneBuffer);
+            return false;
+        return Draw(cmd, rt, pipeline, *cameraBuffer, *sceneBuffer, clearColor, clearDepth);
     }
 
     void Environment::LoadTexture(const std::string& filepath)

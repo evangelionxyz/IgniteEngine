@@ -21,6 +21,14 @@ static void SHBasisL2(float3 n, out float b[9])
     b[8] = 0.54627422f * (n.x * n.x - n.y * n.y);
 }
 
+static void SHBasisL1(float3 n, out float b[4])
+{
+    b[0] = 0.28209479f;
+    b[1] = 0.48860251f * n.y;
+    b[2] = 0.48860251f * n.z;
+    b[3] = 0.48860251f * n.x;
+}
+
 // Coefficients are pre-convolved and pre-divided by PI -> returns outgoing diffuse radiance per unit albedo.
 static float3 EvalSHIrradiance(float3 c[9], float3 n)
 {
@@ -32,6 +40,14 @@ static float3 EvalSHIrradiance(float3 c[9], float3 n)
     {
         e += c[i] * b[i];
     }
+    return max(e, float3(0.0f, 0.0f, 0.0f));
+}
+
+static float3 EvalSHIrradianceL1(float3 c[4], float3 n)
+{
+    float b[4];
+    SHBasisL1(normalize(n), b);
+    float3 e = c[0] * b[0] + c[1] * b[1] + c[2] * b[2] + c[3] * b[3];
     return max(e, float3(0.0f, 0.0f, 0.0f));
 }
 
@@ -60,6 +76,16 @@ static void UnpackSHL2(
     c[7] = t5.yzw;
     c[8] = t6.xyz;
     validity = t6.w;
+}
+
+static void UnpackSHL1(
+    float4 t0, float4 t1, float4 t2,
+    out float3 c[4])
+{
+    c[0] = t0.xyz;
+    c[1] = float3(t0.w, t1.xy);
+    c[2] = float3(t1.zw, t2.x);
+    c[3] = t2.yzw;
 }
 
 static float2 OctSignNotZero(float2 v)

@@ -7,6 +7,9 @@
 
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/binding_cache.hpp"
 
 #include "shadow_map.hpp"
 #include "ignite/scene/icamera.hpp"
@@ -76,7 +79,14 @@ namespace ignite
             LOG_ASSERT(m_DepthSampler, "Failed to create depth comparison sampler");
         }
 
+        if (!m_DepthTextures.empty())
+        {
+            GPUUploadSync::DeviceWaitIdle(device);
+        }
+
         CreateCascadeFramebuffers();
+        Material::InvalidateAllBindingSets();
+        BindingCache::Clear();
     }
 
     void CascadedShadowMap::BeginCascade(nri::CommandBuffer *cmd, int cascadeIndex, uint32_t frameIndex)
@@ -147,9 +157,11 @@ namespace ignite
         return nullptr;
     }
 
-    void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance)
+    void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition, float shadowDistance, int activeCascades)
     {
         IGN_PROFILE_FUNCTION();
+
+        activeCascades = std::clamp(activeCascades, 1, NUM_CASCADES);
 
         glm::vec3 lightDir = lightPosition;
         if (glm::dot(lightDir, lightDir) < 1e-6f)
@@ -185,14 +197,20 @@ namespace ignite
         const float ratio = csmFar / csmNear;
 
         std::array<float, NUM_CASCADES> cascadeSplits{};
-        for (int i = 0; i < NUM_CASCADES; ++i)
+        for (int i = 0; i < activeCascades; ++i)
         {
-            const float p            = (i + 1) / static_cast<float>(NUM_CASCADES);
+            const float p            = (i + 1) / static_cast<float>(activeCascades);
             const float logSplit     = csmNear * std::pow(ratio, p);
             const float uniformSplit = csmNear + range * p;
             const float dist         = splitLambda * (logSplit - uniformSplit) + uniformSplit;
             cascadeSplits[i]           = dist;
             m_GPUData.cascadeSplits[i] = dist;
+        }
+        for (int i = activeCascades; i < NUM_CASCADES; ++i)
+        {
+            cascadeSplits[i]           = 1e9f;
+            m_GPUData.cascadeSplits[i] = 1e9f;
+            m_CascadeTexelSizes[i]     = 0.0f;
         }
 
         glm::mat4 invView = glm::inverse(camera->GetView());
@@ -202,26 +220,28 @@ namespace ignite
         const float aspect = static_cast<float>(vpW) / static_cast<float>(vpH);
         const bool isOrtho = (camera->projectionType == ProjectionType::Orthographic);
         const float fovRadians = glm::radians(camera->fov);
-        const float tanHalfFovY = std::tan(fovRadians * 0.5f);
-        const float tanHalfFovX = tanHalfFovY * aspect;
+        const glm::mat4 &camProj = camera->GetProjection();
+        const bool hasValidProj = (std::abs(camProj[0][0]) > 1e-5f && std::abs(camProj[1][1]) > 1e-5f);
+        const float tanHalfFovY = (!isOrtho && hasValidProj) ? (1.0f / std::abs(camProj[1][1])) : std::tan(fovRadians * 0.5f);
+        const float tanHalfFovX = (!isOrtho && hasValidProj) ? (1.0f / std::abs(camProj[0][0])) : (tanHalfFovY * aspect);
+        const float projOrthoHalfH = (isOrtho && hasValidProj) ? (1.0f / std::abs(camProj[1][1])) : (camera->orthoSize * 0.5f);
+        const float projOrthoHalfW = (isOrtho && hasValidProj) ? (1.0f / std::abs(camProj[0][0])) : (projOrthoHalfH * aspect);
 
         // Fixed world-space up vector so camera pitch/yaw never rotates light space or causes swimming/clipping
         glm::vec3 upDir = (std::abs(lightDir.y) > 0.95f) ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
 
         float lastSplitDist = csmNear;
 
-        for (int cascadeIdx = 0; cascadeIdx < NUM_CASCADES; ++cascadeIdx)
+        for (int cascadeIdx = 0; cascadeIdx < activeCascades; ++cascadeIdx)
         {
             const float splitDist = cascadeSplits[cascadeIdx];
             const float nearDist = lastSplitDist;
             const float farDist = splitDist;
 
-            const float orthoHalfH = camera->orthoSize * 0.5f;
-            const float orthoHalfW = orthoHalfH * aspect;
-            const float nearX = isOrtho ? orthoHalfW : (tanHalfFovX * nearDist);
-            const float nearY = isOrtho ? orthoHalfH : (tanHalfFovY * nearDist);
-            const float farX  = isOrtho ? orthoHalfW : (tanHalfFovX * farDist);
-            const float farY  = isOrtho ? orthoHalfH : (tanHalfFovY * farDist);
+            const float nearX = isOrtho ? projOrthoHalfW : (tanHalfFovX * nearDist);
+            const float nearY = isOrtho ? projOrthoHalfH : (tanHalfFovY * nearDist);
+            const float farX  = isOrtho ? projOrthoHalfW : (tanHalfFovX * farDist);
+            const float farY  = isOrtho ? projOrthoHalfH : (tanHalfFovY * farDist);
 
             std::array<glm::vec3, 8> frustumCornersVS{
                 glm::vec3(-nearX, -nearY, -nearDist),
@@ -253,18 +273,6 @@ namespace ignite
                 radius = glm::max(radius, glm::length(corner - frustumCenter));
             radius = std::ceil(radius * 16.0f) / 16.0f;
 
-            auto computeCascadeBounds = [&](const glm::mat4 &lightViewMatrix, glm::vec3 &outMin, glm::vec3 &outMax)
-                {
-                    outMin = glm::vec3(std::numeric_limits<float>::max());
-                    outMax = glm::vec3(std::numeric_limits<float>::lowest());
-                    for (const auto &corner : frustumCornersWS)
-                    {
-                        glm::vec4 cornerLS = lightViewMatrix * glm::vec4(corner, 1.0f);
-                        outMin = glm::min(outMin, glm::vec3(cornerLS));
-                        outMax = glm::max(outMax, glm::vec3(cornerLS));
-                    }
-                };
-
             // Use a fixed origin-centered light rotation matrix so texel grid alignment
             // depends only on light direction and never drifts or flips with camera orientation.
             const glm::mat4 lightRot = glm::lookAt(glm::vec3(0.0f), lightDir, upDir);
@@ -273,6 +281,7 @@ namespace ignite
             const float texelBase = (extent * 2.0f) / static_cast<float>(m_Resolution);
             const float safeExtent = extent + texelBase;
             const float texelSize = (safeExtent * 2.0f) / static_cast<float>(m_Resolution);
+            m_CascadeTexelSizes[cascadeIdx] = texelSize;
 
             glm::vec3 centerLS = glm::vec3(lightRot * glm::vec4(frustumCenter, 1.0f));
             if (texelSize > 0.0f)
@@ -281,15 +290,11 @@ namespace ignite
                 centerLS.y = std::round(centerLS.y / texelSize) * texelSize;
             }
 
-            // Measure cascade Z bounds in lightRot space across the 8 frustum corners
-            glm::vec3 cascadeMin, cascadeMax;
-            computeCascadeBounds(lightRot, cascadeMin, cascadeMax);
-
-            // Pad Z upstream (+Z toward sun) and downstream (-Z away from sun) so tall or
-            // distant shadow casters outside the view sub-frustum are never clipped.
+            // Rotation-invariant Z bounds from the sub-frustum bounding sphere + upstream/downstream padding
+            // so farPlaneLS - nearPlaneLS never fluctuates as the camera rotates.
             const float zPadding = glm::max(150.0f, m_ShadowDistance * 0.5f);
-            const float minZ_LS = cascadeMin.z - zPadding;
-            const float maxZ_LS = cascadeMax.z + zPadding;
+            const float minZ_LS = centerLS.z - safeExtent - zPadding;
+            const float maxZ_LS = centerLS.z + safeExtent + zPadding;
 
             // Shift lightView along Z so every point in [minZ_LS, maxZ_LS] sits strictly in front
             // of nearPlaneLS = 1.0f, eliminating near-plane clamping/clipping behind lightPos.
@@ -303,6 +308,10 @@ namespace ignite
             m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
 
             lastSplitDist = splitDist;
+        }
+        for (int cascadeIdx = activeCascades; cascadeIdx < NUM_CASCADES; ++cascadeIdx)
+        {
+            m_GPUData.lightViewProj[cascadeIdx] = m_GPUData.lightViewProj[activeCascades - 1];
         }
     }
 

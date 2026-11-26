@@ -51,10 +51,12 @@ namespace ignite
             bool multiSelect = false;
             bool settingsWindow = false;
             bool imguiDemoWindow = false;
+            bool uiShowcaseWindow = false;
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
             bool gameplayViewportWindow = false;
+            bool sceneRendererWindow = false;
             bool consoleWindow = true;
             bool networkWindow = true;
             bool giBakeModal = false;
@@ -89,7 +91,7 @@ namespace ignite
         virtual void OnEvent(Event &e) override;
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
-	    bool OnMouseMovedEvent(MouseMovedEvent &event);
+        bool OnWindowCloseEvent(WindowCloseEvent &event);
 
         virtual void OnRender(RenderTarget *framebuffer) override;
         virtual void OnGuiRender() override;
@@ -106,7 +108,7 @@ namespace ignite
 
         void SaveProject();
         void OpenProject();
-        void CloseCurrentProject();
+        void CloseProject();
         void OpenProject(const std::filesystem::path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);
@@ -145,6 +147,9 @@ namespace ignite
         static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
         static void OnPackageFolderSelected(void *userData, const char *const *filelist, int filter);
+
+        void SerializeEditorState();
+        void DeserializeEditorState();
 
         void OnOpenProject();
 
@@ -198,6 +203,9 @@ namespace ignite
         std::string m_StatusText;
         float m_LoadingProgress = 0.0f;
         bool m_LoadingSceneAssets = false;
+        bool m_CachedAllSceneAssetsReady = false;
+        Scene *m_LastAssetProgressScene = nullptr;
+        uint32_t m_AssetProgressCheckCounter = 0;
         float m_FixedAccumulator = 0.0f;
 
         static EditorLayer *s_Instance;
