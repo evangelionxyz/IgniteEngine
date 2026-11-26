@@ -72,6 +72,7 @@ namespace ignite
         Ref<RenderTarget> widgetRT;
         Ref<RenderTarget> gizmoRT;
         Ref<RenderTarget> postProcessRT;  // Intermediate LDR target for tonemapping before FXAA/UI
+        Ref<RenderTarget> objectIdResolveRT; // Single-sample R32_UINT object-ID resolve (MSAA picking)
         Ref<RenderTarget> compositeRT;
         Ref<RenderTarget> debugRT;
         Ref<RenderTarget> taaHistoryRT[3];
@@ -166,6 +167,7 @@ namespace ignite
         void DebugPass(nri::CommandBuffer *cmd, ICamera *camera, RenderTarget *framebuffer, FrameContext *frameContext);
         void CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr, Ref<Texture> gizmoTexture = nullptr, bool msaaResolved = false, RenderTarget *targetFramebuffer = nullptr, bool enableOutline = true);
         void FXAAPass(nri::CommandBuffer *cmd, RenderTarget *framebuffer, Ref<Texture> inputTexture, bool bypass = false);
+        void ObjectIdResolvePass(nri::CommandBuffer *cmd, Ref<CameraRenderTarget> target);
 
         void DrawDebugGrid(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext, const DebugGridStyle &style, int planeMode);
         void DrawDebug2D(nri::CommandBuffer *cmd, RenderTarget *framebuffer, FrameContext *frameContext);
@@ -246,6 +248,7 @@ namespace ignite
         Ref<GraphicsPipeline> GetEnvironmentPSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         Ref<GraphicsPipeline> GetCompositePSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         Ref<GraphicsPipeline> GetFXAAPSO(RenderTarget *framebuffer);
+        Ref<GraphicsPipeline> GetObjectIdResolvePSO(RenderTarget *framebuffer);
         Ref<GraphicsPipeline> GetDebugProbePSO(RenderTarget *framebuffer, nri::FillMode fillMode);
         void EnsureSkySHBuffers();
         void EnsureDebugProbeBuffers(size_t requiredCount);
@@ -291,6 +294,7 @@ namespace ignite
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_EnvironmentPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CompositePSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_FXAAPSOCache;
+        std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_ObjectIdResolvePSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_DebugGridPSOCache;
 
         std::unordered_map<CompositeBindingKey, Ref<BindingSet>, CompositeBindingKeyHash> m_CompositeBindingSetCache;

@@ -216,6 +216,7 @@ namespace ignite
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
         m_FXAAPSOCache.clear();
+        m_ObjectIdResolvePSOCache.clear();
         m_DebugGridPSOCache.clear();
         m_CompositeBindingSetCache.clear();
         m_DebugGridBindingSetCache.clear();
@@ -1096,6 +1097,14 @@ namespace ignite
 
                     resolvedColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
                     msaaColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
+                }
+
+                // R32_UINT cannot be hardware-resolved (MULTISAMPLE_RESOLVE unsupported), so resolve the
+                // object-ID attachment with a tiny fullscreen pass into a single-sample pick target.
+                // Without this, viewport mouse picking under MSAA always read 0.
+                if (plan.requiresObjectId)
+                {
+                    ObjectIdResolvePass(cmd, target);
                 }
             }
 
@@ -6377,6 +6386,134 @@ namespace ignite
         m_CompositePSOCache.emplace(key, gp);
 
         return gp;
+    }
+
+    Ref<GraphicsPipeline> SceneRenderer::GetObjectIdResolvePSO(RenderTarget *framebuffer)
+    {
+        auto key = MakeFramebufferKey(framebuffer, nri::FillMode::SOLID, nri::CullMode::NONE);
+        auto it = m_ObjectIdResolvePSOCache.find(key);
+        if (it != m_ObjectIdResolvePSOCache.end())
+            return it->second;
+
+        BindingLayoutDesc layoutDesc = {};
+        layoutDesc.SetVisibility(nri::StageBits::ALL);
+        layoutDesc.AddItem(BindingLayoutItem::TextureSRV(0)); // MSAA object-ID texture
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = false;
+        params.enableDepthStencil = false;
+        params.fillMode = nri::FillMode::SOLID;
+        params.cullMode = nri::CullMode::NONE;
+
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/fxaa.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/object_id_resolve.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create("ObjectIdResolvePass");
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(layoutDesc)
+            .Build(framebuffer, params);
+
+        m_ObjectIdResolvePSOCache.emplace(key, gp);
+        return gp;
+    }
+
+    void SceneRenderer::ObjectIdResolvePass(nri::CommandBuffer *cmd, Ref<CameraRenderTarget> target)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!cmd || !target || !target->sceneRT || target->msaaSampleCount <= 1 || target->sceneRT->GetColorAttachmentCount() < 2)
+            return;
+
+        Ref<Texture> msaaObjectId = target->sceneRT->GetColorAttachment(1);
+        if (!msaaObjectId || !msaaObjectId->GetHandle() || !msaaObjectId->GetShaderResourceView())
+            return;
+
+        const uint32_t width = static_cast<uint32_t>(std::max(target->sceneRT->GetWidth(), 1u));
+        const uint32_t height = static_cast<uint32_t>(std::max(target->sceneRT->GetHeight(), 1u));
+        if (!target->objectIdResolveRT)
+        {
+            RenderTargetCreateInfo createInfo = {};
+            createInfo.width = width;
+            createInfo.height = height;
+            createInfo.sampleCount = 1;
+            createInfo.attachments =
+            {
+                FramebufferAttachments{ "[Scene Object ID Resolve]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
+            };
+            target->objectIdResolveRT = RenderTarget::Create(createInfo, "[Scene Renderer] Object ID Resolve RT");
+        }
+        else if (target->objectIdResolveRT->GetWidth() != width || target->objectIdResolveRT->GetHeight() != height)
+        {
+            target->objectIdResolveRT->Resize(width, height);
+        }
+
+        RenderTarget *framebuffer = target->objectIdResolveRT.get();
+        if (!framebuffer)
+            return;
+
+        Ref<GraphicsPipeline> pso = GetObjectIdResolvePSO(framebuffer);
+        if (!pso || !pso->GetHandle())
+            return;
+
+        const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        if (msaaObjectId->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+        {
+            nri::TextureBarrierDesc b = {};
+            b.texture = msaaObjectId->GetHandle();
+            if (msaaObjectId->GetCurrentLayout() == nri::Layout::UNDEFINED)
+                b.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
+            else
+                b.before = { msaaObjectId->GetCurrentAccess(), msaaObjectId->GetCurrentLayout(), msaaObjectId->GetCurrentStages() };
+            b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            b.mipNum = nri::REMAINING;
+            b.layerNum = nri::REMAINING;
+            b.planes = nri::PlaneBits::ALL;
+
+            nri::BarrierDesc bd = {};
+            bd.textures = &b;
+            bd.textureNum = 1;
+            nri.CmdBarrier(*cmd, bd);
+            msaaObjectId->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+        }
+
+        nri::PipelineLayout *layout = pso->GetPipelineLayout();
+        FXAABindingKey bindKey{ layout, msaaObjectId->GetShaderResourceView() };
+        Ref<BindingSet> bindingSet;
+        if (auto it = m_FXAABindingSetCache.find(bindKey); it != m_FXAABindingSetCache.end())
+        {
+            bindingSet = it->second;
+        }
+        else
+        {
+            BindingSetDesc desc = BindingSetDesc().AddItem(BindingSetItem::TextureSRV(0, msaaObjectId->GetShaderResourceView()));
+            bindingSet = BindingSet::Create("ObjectIdResolve Binding Set", BindingSet::AllocateAndUpdate(layout, 0, desc));
+            m_FXAABindingSetCache.emplace(bindKey, bindingSet);
+        }
+        if (!bindingSet || !bindingSet->GetHandle())
+            return;
+
+        framebuffer->SetClearColorAttachmentUint(0xFFFFFFFFu, 0);
+        framebuffer->BeginRendering(cmd, true, false);
+
+        nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *layout);
+        nri.CmdSetPipeline(*cmd, *pso->GetHandle());
+        nri::SetDescriptorSetDesc setDesc = { 0, bindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+        nri.CmdSetDescriptorSet(*cmd, setDesc);
+
+        nri::VertexBufferDesc vbDesc = {};
+        vbDesc.buffer = m_CompositeVertexBuffer->GetHandle();
+        vbDesc.offset = 0;
+        vbDesc.stride = sizeof(VertexScreen);
+        nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+
+        nri::DrawDesc drawDesc = {};
+        drawDesc.instanceNum = 1;
+        drawDesc.vertexNum = 6;
+        nri.CmdDraw(*cmd, drawDesc);
+
+        framebuffer->EndRendering(cmd);
     }
 
     Ref<GraphicsPipeline> SceneRenderer::GetFXAAPSO(RenderTarget *framebuffer)

@@ -5451,8 +5451,8 @@ namespace ignite
                         }
                         else // invalid entity
                         {
-                            Ref<Texture> objectIdTexture = (target->msaaSampleCount > 1 && target->sceneResolvedRT)
-                                ? target->sceneResolvedRT->GetColorAttachment(1)
+                            Ref<Texture> objectIdTexture = (target->msaaSampleCount > 1)
+                                ? (target->objectIdResolveRT ? target->objectIdResolveRT->GetColorAttachment(0) : nullptr)
                                 : target->sceneRT->GetColorAttachment(1);
                             if (objectIdTexture && objectIdTexture->GetHandle() && objectIdTexture->GetCreateInfo().sampleCount <= 1)
                             {
