@@ -27,6 +27,7 @@ namespace ignite
         void *nativeObjectPtr = nullptr;
         bool isNativeObject = false;
         uint32_t nativeObjectType = 0;
+        bool allowHostReadback = false;
     };
 
     struct RenderTargetCreateInfo
@@ -75,7 +76,7 @@ namespace ignite
         nri::Descriptor *GetDepthAttachmentView() const { return m_DepthAttachmentView; }
 
         // Dynamic rendering helpers
-        void BeginRendering(nri::CommandBuffer *commandBuffer, bool clearColor = false, bool clearDepth = false);
+        void BeginRendering(nri::CommandBuffer *commandBuffer, bool clearColor = false, bool clearDepth = false, bool discardColor = false);
         void EndRendering(nri::CommandBuffer *commandBuffer);
         bool IsRendering() const { return m_IsRendering; }
 

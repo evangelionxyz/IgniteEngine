@@ -503,7 +503,7 @@ namespace ignite
                     {
                         const std::string m = props["ao_mode"].get<std::string>();
                         if (m == "off") cc.camera.postProcessing.aoMode = AOMode::Off;
-                        else if (m == "ssao" || m == "legacy_ssao") cc.camera.postProcessing.aoMode = AOMode::LegacySSAO;
+                        else if (m == "ssao") cc.camera.postProcessing.aoMode = AOMode::SSAO;
                         else if (m == "gtao" || m == "xegtao") cc.camera.postProcessing.aoMode = AOMode::GTAO;
                     }
                     else if (props["ao_mode"].is_number_integer())
@@ -1871,9 +1871,9 @@ namespace ignite
                     if (val.is_string())
                     {
                         const std::string s = val.get<std::string>();
-                        if (s == "off") return 0;
-                        if (s == "ssao" || s == "legacy_ssao" || s == "legacySSAO") return 1;
-                        if (s == "gtao" || s == "xegtao") return 2;
+                        if (s == "off" || s == "none" || s == "NONE" || s == "None") return 0;
+                        if (s == "ssao" || s == "SSAO") return 1;
+                        if (s == "gtao" || s == "GTAO" || s == "xegtao") return 2;
                         return -1;
                     }
                     if (val.is_number_integer())
@@ -1882,10 +1882,34 @@ namespace ignite
                 };
                 if (cmd.contains("gi_mode")) ctx.sceneRenderer->sceneRenderSettings.giModeOverride = parseGIMode(cmd["gi_mode"]);
                 else if (cmd.contains("giMode")) ctx.sceneRenderer->sceneRenderSettings.giModeOverride = parseGIMode(cmd["giMode"]);
-                if (cmd.contains("ao_mode")) ctx.sceneRenderer->sceneRenderSettings.aoModeOverride = parseAOMode(cmd["ao_mode"]);
-                else if (cmd.contains("aoMode")) ctx.sceneRenderer->sceneRenderSettings.aoModeOverride = parseAOMode(cmd["aoMode"]);
+                if (cmd.contains("ao_mode") || cmd.contains("aoMode"))
+                {
+                    const int aoVal = parseAOMode(cmd.contains("ao_mode") ? cmd["ao_mode"] : cmd["aoMode"]);
+                    ctx.sceneRenderer->sceneRenderSettings.aoModeOverride = aoVal;
+                    if (aoVal >= 0)
+                        ctx.sceneRenderer->sceneRenderSettings.scalability.ambientOcclusion = static_cast<AOMode>(aoVal);
+                }
                 if (cmd.contains("depth_prepass")) ctx.sceneRenderer->sceneRenderSettings.enableDepthPrepass = cmd["depth_prepass"].get<bool>();
                 else if (cmd.contains("depthPrepass")) ctx.sceneRenderer->sceneRenderSettings.enableDepthPrepass = cmd["depthPrepass"].get<bool>();
+                if (cmd.contains("ssr")) ctx.sceneRenderer->sceneRenderSettings.enableSSR = cmd["ssr"].get<bool>();
+                if (cmd.contains("bloom")) ctx.sceneRenderer->sceneRenderSettings.enableBloom = cmd["bloom"].get<bool>();
+                if (cmd.contains("shadow_quality"))
+                {
+                    const auto &sq = cmd["shadow_quality"];
+                    if (sq.is_string())
+                    {
+                        const std::string s = sq.get<std::string>();
+                        if (s == "low" || s == "LOW") ctx.sceneRenderer->sceneRenderSettings.SyncFromDirectionalLight(0);
+                        else if (s == "medium" || s == "MEDIUM") ctx.sceneRenderer->sceneRenderSettings.SyncFromDirectionalLight(1);
+                        else if (s == "high" || s == "HIGH") ctx.sceneRenderer->sceneRenderSettings.SyncFromDirectionalLight(2);
+                        else if (s == "ultra" || s == "ULTRA") ctx.sceneRenderer->sceneRenderSettings.SyncFromDirectionalLight(3);
+                        else if (s == "ultimate" || s == "ULTIMATE") ctx.sceneRenderer->sceneRenderSettings.SyncFromDirectionalLight(4);
+                    }
+                    else if (sq.is_number_integer())
+                    {
+                        ctx.sceneRenderer->sceneRenderSettings.SyncFromDirectionalLight(static_cast<uint32_t>(std::max(0, sq.get<int>())));
+                    }
+                }
                 if (cmd.contains("show_gi_probes")) ctx.sceneRenderer->sceneRenderSettings.showGIProbes = cmd["show_gi_probes"].get<bool>();
                 else if (cmd.contains("showGIProbes")) ctx.sceneRenderer->sceneRenderSettings.showGIProbes = cmd["showGIProbes"].get<bool>();
                 if (cmd.contains("show_colliders")) ctx.sceneRenderer->sceneRenderSettings.showPhysicsCollider = cmd["show_colliders"].get<bool>();
@@ -1993,6 +2017,10 @@ namespace ignite
                         ctx.scene->registry->get<DirectionalLightComponent>(e).softShadows = soft;
                     }
                 }
+            }
+            if (ctx.sceneRenderer)
+            {
+                ctx.sceneRenderer->sceneRenderSettings.SyncToScene(ctx.scene, ctx.camera);
             }
             res["ok"] = true;
             return res;

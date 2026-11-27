@@ -434,7 +434,7 @@ namespace ignite
 
     void Renderer2D::InitQuadData()
     {
-        m_QuadBatch.minCount = 4096;
+        m_QuadBatch.minCount = 256;
         m_QuadBatch.maxCount = m_QuadBatch.minCount;
         m_QuadBatch.verticesPerObject = 4;
         m_QuadBatch.indicesPerObject = 6;
@@ -482,7 +482,7 @@ namespace ignite
 
     void Renderer2D::InitLineData()
     {
-        m_LineBatch.minCount = 8192;
+        m_LineBatch.minCount = 512;
         m_LineBatch.maxCount = m_LineBatch.minCount;
         m_LineBatch.verticesPerObject = 24;
         m_LineBatch.indicesPerObject = 0;
@@ -498,7 +498,7 @@ namespace ignite
 
     void Renderer2D::InitCircleData()
     {
-        m_CircleBatch.minCount = 1024;
+        m_CircleBatch.minCount = 256;
         m_CircleBatch.maxCount = m_CircleBatch.minCount;
         m_CircleBatch.verticesPerObject = 4;
         m_CircleBatch.indicesPerObject = 6;
@@ -536,7 +536,7 @@ namespace ignite
 
     void Renderer2D::InitTextData()
     {
-        m_TextBatch.minCount = 8192;
+        m_TextBatch.minCount = 512;
         m_TextBatch.maxCount = m_TextBatch.minCount;
         m_TextBatch.verticesPerObject = 4;
         m_TextBatch.indicesPerObject = 6;

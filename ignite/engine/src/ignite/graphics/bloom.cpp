@@ -197,7 +197,9 @@ namespace ignite
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
 
-        renderTarget->BeginRendering(cmd, true, false);
+        constexpr bool clearDepthAndColor = false;
+        constexpr bool discardDepth = true;
+        renderTarget->BeginRendering(cmd, clearDepthAndColor, clearDepthAndColor, discardDepth);
 
         nri::Viewport viewport = {};
         viewport.x = 0.0f;

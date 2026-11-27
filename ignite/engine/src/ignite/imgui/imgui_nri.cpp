@@ -398,6 +398,8 @@ namespace ignite
 
         nri::Descriptor *lastTexture = nullptr;
         Ref<BindingSet> lastBindingSet = nullptr;
+        nri::Rect lastScissor = { 0, 0, 0, 0 };
+        bool hasLastScissor = false;
 
         int vtxOffset = 0;
         int idxOffset = 0;
@@ -429,12 +431,14 @@ namespace ignite
                         nri.CmdSetRootConstants(*cmd, rootConstDesc);
                         lastTexture = nullptr;
                         lastBindingSet = nullptr;
+                        hasLastScissor = false;
                     }
                     else
                     {
                         pCmd->UserCallback(cmdList, pCmd);
                         lastTexture = nullptr;
                         lastBindingSet = nullptr;
+                        hasLastScissor = false;
                     }
                 }
                 else
@@ -449,15 +453,14 @@ namespace ignite
                     {
                         lastTexture = textureSRV;
                         lastBindingSet = GetBindingSet(textureSRV);
-                    }
-
-                    if (lastBindingSet && lastBindingSet->GetHandle())
-                    {
-                        nri::SetDescriptorSetDesc setDesc = {};
-                        setDesc.setIndex = 0;
-                        setDesc.descriptorSet = lastBindingSet->GetHandle();
-                        setDesc.bindPoint = nri::BindPoint::GRAPHICS;
-                        nri.CmdSetDescriptorSet(*cmd, setDesc);
+                        if (lastBindingSet && lastBindingSet->GetHandle())
+                        {
+                            nri::SetDescriptorSetDesc setDesc = {};
+                            setDesc.setIndex = 0;
+                            setDesc.descriptorSet = lastBindingSet->GetHandle();
+                            setDesc.bindPoint = nri::BindPoint::GRAPHICS;
+                            nri.CmdSetDescriptorSet(*cmd, setDesc);
+                        }
                     }
 
                     ImVec2 clipMin((pCmd->ClipRect.x - clipOff.x) * clipScale.x, (pCmd->ClipRect.y - clipOff.y) * clipScale.y);
@@ -476,7 +479,13 @@ namespace ignite
                     scissor.y = static_cast<nri::Dim_t>(clipMin.y);
                     scissor.width = static_cast<nri::Dim_t>(clipMax.x - clipMin.x);
                     scissor.height = static_cast<nri::Dim_t>(clipMax.y - clipMin.y);
-                    nri.CmdSetScissors(*cmd, &scissor, 1);
+                    if (!hasLastScissor || scissor.x != lastScissor.x || scissor.y != lastScissor.y
+                        || scissor.width != lastScissor.width || scissor.height != lastScissor.height)
+                    {
+                        nri.CmdSetScissors(*cmd, &scissor, 1);
+                        lastScissor = scissor;
+                        hasLastScissor = true;
+                    }
 
                     nri::DrawIndexedDesc drawDesc = {};
                     drawDesc.indexNum = pCmd->ElemCount;
@@ -912,7 +921,7 @@ namespace ignite
             .setImageColorSpace(viewportData->surfaceFormat.colorSpace)
             .setImageExtent(extent)
             .setImageArrayLayers(1)
-            .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled)
+            .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst)
             .setImageSharingMode(sharedSwapChain ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive)
             .setQueueFamilyIndexCount(sharedSwapChain ? static_cast<uint32_t>(queueFamilies.size()) : 0)
             .setPQueueFamilyIndices(sharedSwapChain ? queueFamilies.data() : nullptr)

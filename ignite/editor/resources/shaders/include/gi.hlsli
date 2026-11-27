@@ -69,6 +69,8 @@ static float3 SampleIrradianceVolumeFast(float3 worldPos, float3 N, GIData gi, S
 
     bool hasOffsets = (gi.shTextureIndices1.w >= 0);
     bool hasSkyVis = (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0);
+    Texture3D<float4> offsetTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.w)];
+    Texture3D<float4> skyVisTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyVisibilityTexIndex)];
 
     float3 accumSH[9];
     [unroll]
@@ -90,53 +92,32 @@ static float3 SampleIrradianceVolumeFast(float3 worldPos, float3 N, GIData gi, S
             offset.y != 0 ? alpha.y : (1.0f - alpha.y),
             offset.z != 0 ? alpha.z : (1.0f - alpha.z));
         float w = trilinear.x * trilinear.y * trilinear.z;
+        if (w <= 0.01f)
+        {
+            continue;
+        }
 
         int4 loadPos = int4(probeCoord, 0);
-        float4 t0 = shTex0.Load(loadPos);
-        float4 t1 = shTex1.Load(loadPos);
-        float4 t2 = shTex2.Load(loadPos);
-
-        float3 probeSH[9];
+        float3 probePos = gridMin + float3(probeCoord) * spacing;
         float validity = 1.0f;
-        if (isL1)
+        float4 t6 = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        if (hasOffsets)
         {
-            float3 probeSH1[4];
-            UnpackSHL1(t0, t1, t2, probeSH1);
-            probeSH[0] = probeSH1[0];
-            probeSH[1] = probeSH1[1];
-            probeSH[2] = probeSH1[2];
-            probeSH[3] = probeSH1[3];
-            [unroll]
-            for (int z = 4; z < 9; ++z) probeSH[z] = float3(0.0f, 0.0f, 0.0f);
-            if (!hasOffsets)
+            float4 offData = offsetTex.Load(loadPos);
+            if (offData.w < 0.5f)
             {
-                validity = shTex6.Load(loadPos).w;
+                continue;
             }
+            probePos += offData.xyz;
         }
         else
         {
-            float4 t3 = shTex3.Load(loadPos);
-            float4 t4 = shTex4.Load(loadPos);
-            float4 t5 = shTex5.Load(loadPos);
-            float4 t6 = shTex6.Load(loadPos);
-            UnpackSHL2(t0, t1, t2, t3, t4, t5, t6, probeSH, validity);
-        }
-
-        float3 probePos = gridMin + float3(probeCoord) * spacing;
-        if (hasOffsets)
-        {
-            Texture3D<float4> offsetTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.w)];
-            float4 offData = offsetTex.Load(loadPos);
-            probePos += offData.xyz;
-            if (offData.w < 0.5f)
+            t6 = shTex6.Load(loadPos);
+            validity = t6.w;
+            if (validity < 0.5f)
             {
-                validity = 0.0f;
+                continue;
             }
-        }
-
-        if (validity < 0.5f || w <= 1e-6f)
-        {
-            continue;
         }
 
         float3 diffVec = biasedPos - probePos;
@@ -145,27 +126,47 @@ static float3 SampleIrradianceVolumeFast(float3 worldPos, float3 N, GIData gi, S
         float wrap = (dot(toProbe, unitN) + 1.0f) * 0.5f;
         w *= (0.2f + 0.8f * wrap);
 
-        if (w > 1e-6f)
+        if (w <= 0.01f)
         {
-            accumSH[0] += probeSH[0] * w;
-            accumSH[1] += probeSH[1] * w;
-            accumSH[2] += probeSH[2] * w;
-            accumSH[3] += probeSH[3] * w;
-            if (!isL1)
-            {
-                [unroll]
-                for (int c = 4; c < 9; ++c)
-                {
-                    accumSH[c] += probeSH[c] * w;
-                }
-            }
-            if (hasSkyVis)
-            {
-                Texture3D<float4> skyVisTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyVisibilityTexIndex)];
-                accumSkyVis += EvalSkyVisTexel(skyVisTex.Load(loadPos), unitN) * w;
-            }
-            accumW += w;
+            continue;
         }
+
+        float4 t0 = shTex0.Load(loadPos);
+        float4 t1 = shTex1.Load(loadPos);
+        float4 t2 = shTex2.Load(loadPos);
+
+        if (isL1)
+        {
+            float3 probeSH1[4];
+            UnpackSHL1(t0, t1, t2, probeSH1);
+            accumSH[0] += probeSH1[0] * w;
+            accumSH[1] += probeSH1[1] * w;
+            accumSH[2] += probeSH1[2] * w;
+            accumSH[3] += probeSH1[3] * w;
+        }
+        else
+        {
+            float4 t3 = shTex3.Load(loadPos);
+            float4 t4 = shTex4.Load(loadPos);
+            float4 t5 = shTex5.Load(loadPos);
+            if (hasOffsets)
+            {
+                t6 = shTex6.Load(loadPos);
+            }
+            float3 probeSH[9];
+            UnpackSHL2(t0, t1, t2, t3, t4, t5, t6, probeSH, validity);
+            [unroll]
+            for (int c = 0; c < 9; ++c)
+            {
+                accumSH[c] += probeSH[c] * w;
+            }
+        }
+
+        if (hasSkyVis)
+        {
+            accumSkyVis += EvalSkyVisTexel(skyVisTex.Load(loadPos), unitN) * w;
+        }
+        accumW += w;
     }
 
     if (accumW > 1e-4f)
@@ -250,6 +251,9 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
     bool hasOffsets = (gi.shTextureIndices1.w >= 0);
     bool hasVisAtlas = (gi.visibilityParams.x >= 0 && gi.visibilityParams.z > 0 && gi.visibilityParams.w > 0);
     bool hasSkyVis = (gi.skyVisibilitySplit != 0 && gi.skyVisibilityTexIndex >= 0);
+    Texture3D<float4> offsetTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.w)];
+    Texture2D<float4> visAtlas = ResourceDescriptorHeap[SafeBindlessIndex(gi.visibilityParams.x)];
+    Texture3D<float4> skyVisTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyVisibilityTexIndex)];
     int octRes = max(gi.visibilityParams.y, 1);
     int visCols = gi.visibilityParams.z;
     int visRows = gi.visibilityParams.w;
@@ -276,54 +280,33 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
             offset.y != 0 ? alpha.y : (1.0f - alpha.y),
             offset.z != 0 ? alpha.z : (1.0f - alpha.z));
         float w = trilinear.x * trilinear.y * trilinear.z;
+        if (w <= 0.01f)
+        {
+            continue;
+        }
 
         int4 loadPos = int4(probeCoord, 0);
-        float4 t0 = shTex0.Load(loadPos);
-        float4 t1 = shTex1.Load(loadPos);
-        float4 t2 = shTex2.Load(loadPos);
-
-        float3 probeSH[9];
+        float3 probePos = gridMin + float3(probeCoord) * spacing;
         float validity = 1.0f;
-        if (isL1)
+        float4 t6 = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        if (hasOffsets)
         {
-            float3 probeSH1[4];
-            UnpackSHL1(t0, t1, t2, probeSH1);
-            probeSH[0] = probeSH1[0];
-            probeSH[1] = probeSH1[1];
-            probeSH[2] = probeSH1[2];
-            probeSH[3] = probeSH1[3];
-            [unroll]
-            for (int z = 4; z < 9; ++z) probeSH[z] = float3(0.0f, 0.0f, 0.0f);
-            if (!hasOffsets)
+            float4 offData = offsetTex.Load(loadPos);
+            if (offData.w < 0.5f)
             {
-                validity = shTex6.Load(loadPos).w;
+                continue;
             }
+            probePos += offData.xyz;
         }
         else
         {
-            float4 t3 = shTex3.Load(loadPos);
-            float4 t4 = shTex4.Load(loadPos);
-            float4 t5 = shTex5.Load(loadPos);
-            float4 t6 = shTex6.Load(loadPos);
-            UnpackSHL2(t0, t1, t2, t3, t4, t5, t6, probeSH, validity);
-        }
-
-        float3 probePos = gridMin + float3(probeCoord) * spacing;
-        if (hasOffsets)
-        {
-            Texture3D<float4> offsetTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.shTextureIndices1.w)];
-            float4 offData = offsetTex.Load(loadPos);
-            probePos += offData.xyz;
-            if (offData.w < 0.5f)
+            t6 = shTex6.Load(loadPos);
+            validity = t6.w;
+            if (validity <= 1e-6f)
             {
-                validity = 0.0f;
+                continue;
             }
-        }
-
-        w *= validity;
-        if (w <= 1e-6f)
-        {
-            continue;
+            w *= validity;
         }
 
         float3 diffVec = Pb - probePos;
@@ -335,7 +318,6 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
 
         if (hasVisAtlas && d > 1e-5f)
         {
-            Texture2D<float4> visAtlas = ResourceDescriptorHeap[SafeBindlessIndex(gi.visibilityParams.x)];
             int probeFlatIdx = (probeCoord.z * dims.y + probeCoord.y) * dims.x + probeCoord.x;
             int tileCol = probeFlatIdx % visCols;
             int tileRow = probeFlatIdx / visCols;
@@ -354,27 +336,47 @@ static float3 SampleIrradianceVolumeLeakResistant(float3 worldPos, float3 N, flo
         }
 
         w = (w < 0.2f) ? (w * w * w) / (0.2f * 0.2f) : w;
-        if (w > 1e-6f)
+        if (w <= 0.01f)
         {
-            accumSH[0] += probeSH[0] * w;
-            accumSH[1] += probeSH[1] * w;
-            accumSH[2] += probeSH[2] * w;
-            accumSH[3] += probeSH[3] * w;
-            if (!isL1)
-            {
-                [unroll]
-                for (int c = 4; c < 9; ++c)
-                {
-                    accumSH[c] += probeSH[c] * w;
-                }
-            }
-            if (hasSkyVis)
-            {
-                Texture3D<float4> skyVisTex = ResourceDescriptorHeap[SafeBindlessIndex(gi.skyVisibilityTexIndex)];
-                accumSkyVis += EvalSkyVisTexel(skyVisTex.Load(loadPos), unitN) * w;
-            }
-            accumW += w;
+            continue;
         }
+
+        float4 t0 = shTex0.Load(loadPos);
+        float4 t1 = shTex1.Load(loadPos);
+        float4 t2 = shTex2.Load(loadPos);
+
+        if (isL1)
+        {
+            float3 probeSH1[4];
+            UnpackSHL1(t0, t1, t2, probeSH1);
+            accumSH[0] += probeSH1[0] * w;
+            accumSH[1] += probeSH1[1] * w;
+            accumSH[2] += probeSH1[2] * w;
+            accumSH[3] += probeSH1[3] * w;
+        }
+        else
+        {
+            float4 t3 = shTex3.Load(loadPos);
+            float4 t4 = shTex4.Load(loadPos);
+            float4 t5 = shTex5.Load(loadPos);
+            if (hasOffsets)
+            {
+                t6 = shTex6.Load(loadPos);
+            }
+            float3 probeSH[9];
+            UnpackSHL2(t0, t1, t2, t3, t4, t5, t6, probeSH, validity);
+            [unroll]
+            for (int c = 0; c < 9; ++c)
+            {
+                accumSH[c] += probeSH[c] * w;
+            }
+        }
+
+        if (hasSkyVis)
+        {
+            accumSkyVis += EvalSkyVisTexel(skyVisTex.Load(loadPos), unitN) * w;
+        }
+        accumW += w;
     }
 
     if (accumW > 1e-4f)

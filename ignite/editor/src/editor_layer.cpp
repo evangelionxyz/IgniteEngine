@@ -178,6 +178,7 @@ namespace ignite
 
         // Close project
         CloseProject();
+        ContentBrowserPanel::ReleaseSharedResources();
 
         m_ContentBrowserPanels.clear();
         m_ContentBrowserPanelsPendingRemoval.clear();
@@ -1751,29 +1752,57 @@ namespace ignite
         if (!sceneToSave || !m_ActiveProject)
             return;
 
-        SceneSerializer serializer(sceneToSave, m_ActiveProject.get());
-        serializer.Serialize(filepath);
-
-        if (sceneToSave->handle == AssetHandle(0))
-        {
-            sceneToSave->handle = AssetHandle();
-        }
+        std::error_code ec;
+        const auto normDest = std::filesystem::weakly_canonical(filepath, ec);
+        const auto normCurr = m_CurrentSceneFilePath.empty() ? std::filesystem::path() : std::filesystem::weakly_canonical(m_CurrentSceneFilePath, ec);
+        const bool savingToDifferentFile = !m_CurrentSceneFilePath.empty() && !normDest.empty() && (normDest != normCurr);
 
         if (AssetManager *am = AssetManager::GetInstance())
         {
-            AssetHandle existingHandle = am->GetAssetHandle(filepath);
-            if (existingHandle != AssetHandle(0))
+            const AssetHandle existingHandle = am->GetAssetHandle(filepath);
+            if (savingToDifferentFile)
             {
-                sceneToSave->handle = existingHandle;
-            }
-            else
-            {
+                if (existingHandle != AssetHandle(0) && existingHandle != m_CurrentSceneHandle)
+                {
+                    sceneToSave->handle = existingHandle;
+                }
+                else
+                {
+                    sceneToSave->handle = AssetHandle();
+                }
+
                 const auto relPath = m_ActiveProject->GetProjectRelativeFilepath(filepath);
                 AssetMetaData meta(relPath, AssetType::Scene);
                 am->AssignMetaData(sceneToSave->handle, meta);
                 am->AssignAsset(sceneToSave->handle, sceneToSave);
             }
+            else
+            {
+                if (sceneToSave->handle == AssetHandle(0))
+                {
+                    sceneToSave->handle = AssetHandle();
+                }
+
+                if (existingHandle != AssetHandle(0))
+                {
+                    sceneToSave->handle = existingHandle;
+                }
+                else
+                {
+                    const auto relPath = m_ActiveProject->GetProjectRelativeFilepath(filepath);
+                    AssetMetaData meta(relPath, AssetType::Scene);
+                    am->AssignMetaData(sceneToSave->handle, meta);
+                    am->AssignAsset(sceneToSave->handle, sceneToSave);
+                }
+            }
         }
+        else if (sceneToSave->handle == AssetHandle(0))
+        {
+            sceneToSave->handle = AssetHandle();
+        }
+
+        SceneSerializer serializer(sceneToSave, m_ActiveProject.get());
+        serializer.Serialize(filepath);
 
         if (m_EditorScene)
         {
@@ -2094,8 +2123,6 @@ namespace ignite
             {
                 filepath += ".ixscene";
             }
-
-            editor->m_CurrentSceneFilePath = filepath;
 
             Application::SubmitToMainThread([editor, file = filepath, userData]()
             {
@@ -2455,6 +2482,10 @@ namespace ignite
         }
 
         DeserializeEditorState();
+        if (m_SceneRenderer && m_ActiveProject && std::filesystem::exists(m_ActiveProject->GetDirectory() / "GameSettings.ign"))
+        {
+            m_SceneRenderer->sceneRenderSettings.SyncToScene(m_ActiveScene.get(), m_ScenePanel ? &m_ScenePanel->GetViewportCamera() : nullptr);
+        }
         m_State.isLoading = false;
     }
 
@@ -3294,7 +3325,7 @@ namespace ignite
         ImGui::Begin("Scene Renderer", &m_State.sceneRendererWindow);
 
         // Scene Render
-        if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Render Settings", ImGuiTreeNodeFlags_Framed))
         {
             auto &renderSettings = m_SceneRenderer->sceneRenderSettings;
             bool settingsChanged = false;
@@ -3410,17 +3441,29 @@ namespace ignite
                         settingsChanged = true;
                     }
 
-                    static const char *aoModeLabels[] = { "Camera Default", "Off", "Legacy SSAO", "GTAO" };
-                    int aoIdx = std::clamp(renderSettings.aoModeOverride + 1, 0, 3);
-                    if (UI::DrawComboBox("AO Mode", aoModeLabels, IM_ARRAYSIZE(aoModeLabels), &aoIdx))
+                    static const char *aoModeLabels[] = { "NONE", "SSAO", "GTAO" };
+                    int aoIdx = static_cast<int>(renderSettings.scalability.ambientOcclusion);
+                    if (UI::DrawComboBox("Ambient Occlusion", aoModeLabels, IM_ARRAYSIZE(aoModeLabels), &aoIdx))
                     {
-                        renderSettings.aoModeOverride = aoIdx - 1;
+                        renderSettings.scalability.ambientOcclusion = static_cast<AOMode>(std::clamp(aoIdx, 0, 2));
+                        renderSettings.aoModeOverride = static_cast<int>(renderSettings.scalability.ambientOcclusion);
+                        renderSettings.ApplyIndividualScalability();
+                        settingsChanged = true;
+                    }
+
+                    static const char *shadowQualLabels[] = { "Low (512)", "Medium (1024)", "High (2048)", "Ultra (4096)", "Ultimate (8192)" };
+                    int shadowQualIdx = std::clamp(static_cast<int>(renderSettings.shadowQuality), 0, 4);
+                    if (UI::DrawComboBox("Shadow Quality", shadowQualLabels, IM_ARRAYSIZE(shadowQualLabels), &shadowQualIdx))
+                    {
+                        renderSettings.SyncFromDirectionalLight(static_cast<uint32_t>(shadowQualIdx));
                         settingsChanged = true;
                     }
 
                     if (UI::DrawCheckbox("Depth+Normal Prepass", &renderSettings.enableDepthPrepass))
                         settingsChanged = true;
                     if (UI::DrawCheckbox("Specular AA", &renderSettings.enableSpecularAA))
+                        settingsChanged = true;
+                    if (UI::DrawCheckbox("Bloom", &renderSettings.enableBloom))
                         settingsChanged = true;
                     if (UI::DrawCheckbox("Screen-Space Reflections (SSR)", &renderSettings.enableSSR))
                         settingsChanged = true;
@@ -3440,40 +3483,22 @@ namespace ignite
                 ImGui::TreePop();
             }
 
-            if (settingsChanged && m_ActiveProject)
+            if (settingsChanged)
             {
-                renderSettings.SerializeToFile(m_ActiveProject->GetDirectory() / "GameSettings.ign");
-            }
-
-            ImGui::TreePop();
-        }
-
-        // Shaders
-        if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
-        {
-            for (auto &[key, shader] : Shader::GetShaderCache())
-            {
-                constexpr float buttonW = 24.0f;
-                const float w = ImGui::GetContentRegionAvail().x - buttonW;
-
-                ImGui::PushID(key.filename.c_str());
-                ImGui::SetNextItemWidth(w);
-                ImGui::Text(shader->GetName().c_str());
-                ImGui::SameLine();
-
-                if (UI::Button("##recompile_shader", UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, ImVec2(buttonW, 0.0f), ICON_LC_ROTATE_CW))
+                renderSettings.SyncToScene(m_ActiveScene.get(), m_ScenePanel ? &m_ScenePanel->GetViewportCamera() : nullptr);
+                m_State.editorRequestToResize = true;
+                m_State.gameplayRequestToResize = true;
+                if (m_ActiveProject)
                 {
-                    shader->Recompile();
+                    renderSettings.SerializeToFile(m_ActiveProject->GetDirectory() / "GameSettings.ign");
                 }
-
-                ImGui::PopID();
-
             }
+
             ImGui::TreePop();
         }
 
         // Render Stats
-        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed))
+        if (ImGui::TreeNodeEx("Statistics", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
             const auto &stats = Renderer::Stats;
 
@@ -3487,6 +3512,25 @@ namespace ignite
             };
             char memBuf[32];
 
+            ImGui::SeparatorText("GPU Pass Timings (ms)");
+            const auto &timings = m_SceneRenderer->GetLastGPUTimingsMs();
+            if (timings.empty())
+            {
+                ImGui::Text("No GPU timestamps available");
+            }
+            else
+            {
+                double totalMs = 0.0;
+                for (const auto &[zoneName, ms] : timings)
+                {
+                    totalMs += ms;
+                    ImGui::Text("%s: %.3f ms", zoneName.c_str(), ms);
+                }
+                ImGui::Separator();
+                ImGui::Text("Total Timed: %.3f ms", totalMs);
+            }
+
+            ImGui::Spacing();
             ImGui::SeparatorText("3D Renderer");
             ImGui::Text("Draw Calls (opaque+transparent): %zu", stats.drawCallCount);
             ImGui::Text("Shadow Draw Calls (CSM) %zu", stats.shadowDrawCallCount);
@@ -3553,26 +3597,28 @@ namespace ignite
                     ImGui::Text("%s: %zu", name.c_str(), count);
                 }
             }
+            ImGui::TreePop();
+        }
 
-            ImGui::Spacing();
-            ImGui::SeparatorText("GPU Pass Timings (ms)");
-            const auto &timings = m_SceneRenderer->GetLastGPUTimingsMs();
-            if (timings.empty())
+        // Shaders
+        if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
+        {
+            for (auto &[key, shader] : Shader::GetShaderCache())
             {
-                ImGui::Text("No GPU timestamps available");
-            }
-            else
-            {
-                double totalMs = 0.0;
-                for (const auto &[zoneName, ms] : timings)
+                constexpr float buttonW = 24.0f;
+                ImGui::PushID(key.filename.c_str());
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionMax().x - buttonW);
+                ImGui::Text(shader->GetName().c_str());
+                ImGui::SameLine();
+
+                if (UI::Button("##recompile_shader", UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, ImVec2(buttonW, 0.0f), ICON_LC_ROTATE_CW))
                 {
-                    totalMs += ms;
-                    ImGui::Text("%s: %.3f ms", zoneName.c_str(), ms);
+                    shader->Recompile();
                 }
-                ImGui::Separator();
-                ImGui::Text("Total Timed: %.3f ms", totalMs);
-            }
 
+                ImGui::PopID();
+
+            }
             ImGui::TreePop();
         }
 

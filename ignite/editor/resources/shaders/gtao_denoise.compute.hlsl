@@ -33,6 +33,13 @@ float3 LoadViewNormalAtHalf(int2 hpx, int2 maxFull)
     return OctDecode(t_Normal.Load(int3(fpx, 0)).rg);
 }
 
+float Pow12Fast(float x)
+{
+    float x2 = x * x;
+    float x4 = x2 * x2;
+    return x4 * x4 * x4;
+}
+
 float DeviceDepthToViewZ(float d)
 {
     float maxZ = min(farPlane, 65000.0f);
@@ -40,8 +47,9 @@ float DeviceDepthToViewZ(float d)
     {
         return maxZ;
     }
-    float4 view = mul(projectionInv, float4(0.0f, 0.0f, d, 1.0f));
-    float viewZ = abs(view.z / max(abs(view.w), 1e-6f));
+    float vz = projectionInv[2][2] * d + projectionInv[2][3];
+    float vw = projectionInv[3][2] * d + projectionInv[3][3];
+    float viewZ = abs(vz / max(abs(vw), 1e-6f));
     return clamp(viewZ, max(nearPlane, 1e-3f), maxZ);
 }
 
@@ -96,7 +104,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                     if (hasNormals != 0u)
                     {
                         float3 sampleN = LoadViewNormalAtHalf(shPx, maxFull);
-                        w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+                        w *= Pow12Fast(saturate(dot(centerN, sampleN)));
                     }
 
                     if (w > 1e-5f)
@@ -129,7 +137,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                     if (hasNormals != 0u)
                     {
                         float3 sampleN = LoadViewNormalAtHalf(shPx, maxFull);
-                        w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+                        w *= Pow12Fast(saturate(dot(centerN, sampleN)));
                     }
 
                     if (w > 1e-5f)
@@ -206,7 +214,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         if (hasNormals != 0u)
         {
             float3 sampleN = LoadViewNormalAtHalf(samplePx, maxFull);
-            w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+            w *= Pow12Fast(saturate(dot(centerN, sampleN)));
         }
 
         if (w > 1e-5f)

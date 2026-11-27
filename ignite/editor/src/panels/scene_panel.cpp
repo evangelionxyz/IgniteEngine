@@ -1926,17 +1926,17 @@ namespace ignite
                         "Ultimate - 8192px"
                     };
 
-                    UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &c.shadowResolution);
-
-                    // if (auto sceneRenderer = m_Scene->GetSceneRenderer())
-                    // {
-                    //     auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
-                    //     if (shadowMap)
-                    //     {
-                    //         ImTextureID texId = UI::GetTextureID(shadowMap);
-                    //         ImGui::Image(texId, { 256, 256 });
-                    //     }
-                    // }
+                    if (UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &c.shadowResolution))
+                    {
+                        if (auto sr = m_EditorLayer ? m_EditorLayer->GetSceneRenderer() : nullptr)
+                        {
+                            sr->sceneRenderSettings.SyncFromDirectionalLight(c.shadowResolution);
+                            if (auto proj = m_EditorLayer->GetActiveProject())
+                            {
+                                sr->sceneRenderSettings.SerializeToFile(proj->GetDirectory() / "GameSettings.ign");
+                            }
+                        }
+                    }
                 }
                 ImGui::EndDisabled();
             });
@@ -2834,19 +2834,61 @@ namespace ignite
                 {
                     auto &pp = c.camera.postProcessing;
 
+                    bool camGraphicsSynced = false;
                     if (ImGui::TreeNodeEx("Anti aliasing"))
                     {
                         if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            c.dirty |= UI::DrawSwitch("Enable", &pp.taaProperties.enable);
-                            c.dirty |= UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+                            if (UI::DrawSwitch("Enable", &pp.taaProperties.enable))
+                            {
+                                if (pp.taaProperties.enable)
+                                {
+                                    pp.msaaProperties.enable = false;
+                                    pp.enableFXAA = false;
+                                }
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
+                            if (UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f))
+                            {
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
                             ImGui::TreePop();
                         }
 
                         if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            c.dirty |= UI::DrawSwitch("Enable", &pp.msaaProperties.enable);
-                            c.dirty |= UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16);
+                            if (UI::DrawSwitch("Enable", &pp.msaaProperties.enable))
+                            {
+                                if (pp.msaaProperties.enable)
+                                {
+                                    pp.taaProperties.enable = false;
+                                    pp.enableFXAA = false;
+                                }
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
+                            if (UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16))
+                            {
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
+                            ImGui::TreePop();
+                        }
+
+                        if (ImGui::TreeNodeEx("FXAA", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            if (UI::DrawSwitch("Enable", &pp.enableFXAA))
+                            {
+                                if (pp.enableFXAA)
+                                {
+                                    pp.taaProperties.enable = false;
+                                    pp.msaaProperties.enable = false;
+                                }
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
                             ImGui::TreePop();
                         }
 
@@ -2855,11 +2897,16 @@ namespace ignite
 
                     if (ImGui::TreeNodeEx("Render scale"))
                     {
-                        c.dirty |= UI::DrawFloatControl("Factor", &pp.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
+                        if (UI::DrawFloatControl("Factor", &pp.renderScale, 0.025f, 0.25f, 1.0f, 1.0f))
+                        {
+                            c.dirty = true;
+                            camGraphicsSynced = true;
+                        }
                         if (UI::DrawButtonWithColumn("", "Apply"))
                         {
                             m_EditorLayer->m_State.gameplayRequestToResize = true;
                             m_EditorLayer->m_State.editorRequestToResize = true;
+                            camGraphicsSynced = true;
                         }
                         ImGui::TreePop();
                     }
@@ -2896,7 +2943,11 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         // Bloom
-                        c.dirty |= UI::DrawSwitch("Enable Bloom", &pp.enableBloom).isItemEdited;
+                        if (UI::DrawSwitch("Enable Bloom", &pp.enableBloom).isItemEdited)
+                        {
+                            c.dirty = true;
+                            camGraphicsSynced = true;
+                        }
                         ImGui::BeginDisabled(!pp.enableBloom);
                         {
                             c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
@@ -2927,16 +2978,25 @@ namespace ignite
                         }
                         ImGui::EndDisabled();
 
-                        // Ambient Occlusion (GTAO / Legacy SSAO)
-                        c.dirty |= UI::DrawSwitch("Enable Ambient Occlusion", &pp.enableSSAO).isItemEdited;
+                        // Ambient Occlusion (NONE / SSAO / GTAO)
+                        if (UI::DrawSwitch("Enable Ambient Occlusion", &pp.enableSSAO).isItemEdited)
+                        {
+                            if (pp.enableSSAO && pp.aoMode == AOMode::Off)
+                                pp.aoMode = AOMode::GTAO;
+                            c.dirty = true;
+                            camGraphicsSynced = true;
+                        }
                         ImGui::BeginDisabled(!pp.enableSSAO);
                         {
-                            static const char *kAOModes[] = { "Off", "Legacy SSAO", "GTAO" };
-                            int aoModeIdx = static_cast<int>(pp.aoMode);
+                            static const char *kAOModes[] = { "None", "SSAO", "GTAO" };
+                            auto aoModeIdx = static_cast<int>(pp.aoMode);
                             if (UI::DrawComboBox("AO Mode", kAOModes, IM_ARRAYSIZE(kAOModes), &aoModeIdx))
                             {
                                 pp.aoMode = static_cast<AOMode>(std::clamp(aoModeIdx, 0, 2));
+                                if (pp.aoMode == AOMode::Off)
+                                    pp.enableSSAO = false;
                                 c.dirty = true;
+                                camGraphicsSynced = true;
                             }
                             c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.05f, 2.5f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 3.0f).isItemEdited;
@@ -2945,6 +3005,21 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         ImGui::TreePop();
+                    }
+
+                    if (camGraphicsSynced)
+                    {
+                        if (auto sr = m_EditorLayer ? m_EditorLayer->GetSceneRenderer() : nullptr)
+                        {
+                            sr->sceneRenderSettings.SyncFromPostProcessing(c.camera.postProcessing);
+                            sr->sceneRenderSettings.SyncToScene(m_Scene, &GetViewportCamera());
+                            m_EditorLayer->m_State.editorRequestToResize = true;
+                            m_EditorLayer->m_State.gameplayRequestToResize = true;
+                            if (auto proj = m_EditorLayer->GetActiveProject())
+                            {
+                                sr->sceneRenderSettings.SerializeToFile(proj->GetDirectory() / "GameSettings.ign");
+                            }
+                        }
                     }
 
                     ImGui::TreePop();
@@ -6341,7 +6416,30 @@ namespace ignite
                 ImGui::Separator();
                 drawLevelRow("Shadows", sc.shadows, false);
                 drawLevelRow("Global Illumination", sc.globalIllumination, false);
-                drawLevelRow("Ambient Occlusion", sc.ambientOcclusion, false);
+                {
+                    ImGui::PushID("Ambient Occlusion");
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted("Ambient Occlusion");
+                    ImGui::SameLine(155.0f);
+                    struct AOOption { const char *label; AOMode mode; };
+                    static constexpr AOOption kAOOptions[] = {
+                        { "NONE", AOMode::Off  },
+                        { "SSAO", AOMode::SSAO },
+                        { "GTAO", AOMode::GTAO },
+                    };
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (sc.ambientOcclusion == kAOOptions[i].mode);
+                        if (UI::Button(kAOOptions[i].label, active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            sc.ambientOcclusion = kAOOptions[i].mode;
+                            rs.ApplyIndividualScalability();
+                            changed = true;
+                        }
+                    }
+                    ImGui::PopID();
+                }
                 drawLevelRow("Reflections", sc.reflections, false);
                 drawLevelRow("Resolution Scale", sc.resolutionScale, false);
                 drawLevelRow("Post Processing", sc.postProcessing, false);
@@ -6409,6 +6507,7 @@ namespace ignite
 
                 if (changed)
                 {
+                    rs.SyncToScene(m_Scene, &GetViewportCamera());
                     m_EditorLayer->m_State.editorRequestToResize = true;
                     m_EditorLayer->m_State.gameplayRequestToResize = true;
                     if (auto proj = m_EditorLayer->GetActiveProject())

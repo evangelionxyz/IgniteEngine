@@ -154,15 +154,15 @@ namespace ignite
             return fallbackIndex;
         };
 
-        uint32_t whiteIdx = Renderer::GetWhiteTexture() ? Renderer::GetWhiteTexture()->GetBindlessIndex() : 0;
+        constexpr uint32_t kUnsetTextureIndex = static_cast<uint32_t>(-1);
 
-        gpuData.baseColorTextureIndex = getBindlessIndex(baseColorTextureHandle, whiteIdx);
-        gpuData.emissiveTextureIndex = getBindlessIndex(emissiveTextureHandle, whiteIdx);
-        gpuData.metallicTextureIndex = getBindlessIndex(metallicTextureHandle, whiteIdx);
-        gpuData.roughnessTextureIndex = getBindlessIndex(roughnessTextureHandle, whiteIdx);
+        gpuData.baseColorTextureIndex = static_cast<int>(getBindlessIndex(baseColorTextureHandle, kUnsetTextureIndex));
+        gpuData.emissiveTextureIndex = static_cast<int>(getBindlessIndex(emissiveTextureHandle, kUnsetTextureIndex));
+        gpuData.metallicTextureIndex = static_cast<int>(getBindlessIndex(metallicTextureHandle, kUnsetTextureIndex));
+        gpuData.roughnessTextureIndex = static_cast<int>(getBindlessIndex(roughnessTextureHandle, kUnsetTextureIndex));
         // -1 tells the shader there is no normal map (a white fallback would decode to an invalid normal)
-        gpuData.normalTextureIndex = static_cast<int>(getBindlessIndex(normalTextureHandle, static_cast<uint32_t>(-1)));
-        gpuData.occlusionTextureIndex = getBindlessIndex(occlusionTextureHandle, whiteIdx);
+        gpuData.normalTextureIndex = static_cast<int>(getBindlessIndex(normalTextureHandle, kUnsetTextureIndex));
+        gpuData.occlusionTextureIndex = static_cast<int>(getBindlessIndex(occlusionTextureHandle, kUnsetTextureIndex));
 
         if (!m_HasUploadedGpuData || std::memcmp(&gpuData, &m_LastUploadedGpuData, sizeof(Material_GPUData)) != 0)
         {

@@ -45,17 +45,18 @@ namespace ignite
             const auto &nri = dm->GetCoreInterface();
 
             // 1. Create global descriptor pool (bindless set is allocated first at heap offset 0)
+            // Keep samplerMaxNum <= 2048 for D3D12 shader-visible sampler heap compatibility.
             nri::DescriptorPoolDesc poolDesc = {};
-            poolDesc.descriptorSetMaxNum = 32768;
+            poolDesc.descriptorSetMaxNum = 4096;
             poolDesc.mutableMaxNum = 16384;
-            poolDesc.samplerMaxNum = 32768;
-            poolDesc.constantBufferMaxNum = 32768;
-            poolDesc.textureMaxNum = 32768;
-            poolDesc.storageTextureMaxNum = 8192;
-            poolDesc.bufferMaxNum = 4096;
-            poolDesc.storageBufferMaxNum = 4096;
-            poolDesc.structuredBufferMaxNum = 16384;
-            poolDesc.storageStructuredBufferMaxNum = 8192;
+            poolDesc.samplerMaxNum = 1024;
+            poolDesc.constantBufferMaxNum = 8192;
+            poolDesc.textureMaxNum = 8192;
+            poolDesc.storageTextureMaxNum = 2048;
+            poolDesc.bufferMaxNum = 2048;
+            poolDesc.storageBufferMaxNum = 2048;
+            poolDesc.structuredBufferMaxNum = 4096;
+            poolDesc.storageStructuredBufferMaxNum = 2048;
             poolDesc.flags = nri::DescriptorPoolBits::ALLOW_UPDATE_AFTER_SET;
 
             nri::Result res = nri.CreateDescriptorPool(*s_Device, poolDesc, s_DescriptorPool);

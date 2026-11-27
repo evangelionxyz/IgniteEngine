@@ -37,6 +37,8 @@ extern "C"
 
 namespace ignite::lua
 {
+    void SyncEntityWorldTransform(Entity entity);
+
     namespace
     {
         Scene *GetSceneUpvalue(lua_State *state)
@@ -447,6 +449,7 @@ namespace ignite::lua
                     tc.local.translation += glm::vec3(x, y, z);
                 }
                 tc.dirty = true;
+                SyncEntityWorldTransform(entity);
             }
             return 0;
         }
@@ -472,6 +475,7 @@ namespace ignite::lua
                 const glm::quat delta = glm::quat(glm::radians(eulerDeg));
                 tc.local.rotation = glm::normalize(delta * tc.local.rotation);
                 tc.dirty = true;
+                SyncEntityWorldTransform(entity);
             }
             return 0;
         }
@@ -490,6 +494,7 @@ namespace ignite::lua
                 {
                     tc.local.rotation = glm::quatLookAt(glm::normalize(dir), glm::normalize(up));
                     tc.dirty = true;
+                    SyncEntityWorldTransform(entity);
                 }
             }
             return 0;
@@ -621,6 +626,14 @@ namespace ignite::lua
                 if (auto actor = cc.character.lock())
                 {
                     actor->Move(disp, dt);
+                    if (entity.HasComponent<TransformComponent>())
+                    {
+                        auto &tc = entity.GetComponent<TransformComponent>();
+                        tc.local.translation = actor->GetPosition();
+                        tc.local.rotation = actor->GetRotation();
+                        tc.dirty = true;
+                        SyncEntityWorldTransform(entity);
+                    }
                 }
             }
             return 0;
@@ -642,6 +655,7 @@ namespace ignite::lua
                 {
                     entity.GetComponent<TransformComponent>().local.translation = pos;
                     entity.GetComponent<TransformComponent>().dirty = true;
+                    SyncEntityWorldTransform(entity);
                 }
             }
             return 0;
@@ -666,6 +680,7 @@ namespace ignite::lua
                 {
                     entity.GetComponent<TransformComponent>().local.rotation = q;
                     entity.GetComponent<TransformComponent>().dirty = true;
+                    SyncEntityWorldTransform(entity);
                 }
             }
             return 0;
@@ -1709,6 +1724,79 @@ namespace ignite::lua
         return Entity(it->second, scene);
     }
 
+    // Recompute the world transform of every descendant so children follow a
+    // parent that was moved from script during this same frame.
+    void SyncDescendantWorldTransforms(Scene *scene, Entity entity, const glm::mat4 &parentWorld)
+    {
+        if (!scene || !entity.IsValid() || !entity.HasComponent<TransformComponent>())
+            return;
+
+        auto &transform = entity.GetComponent<TransformComponent>();
+        const glm::mat4 worldMatrix = parentWorld * transform.local.GetMatrix();
+        if (entity.HasComponent<IDComponent>() && entity.GetParentUUID() != UUID(0))
+            Transform::Decompose(worldMatrix, transform.world);
+        else
+        {
+            transform.world.translation = transform.local.translation;
+            transform.world.rotation = transform.local.rotation;
+            transform.world.scale = transform.local.scale;
+        }
+        transform.dirty = true;
+
+        if (!entity.HasComponent<IDComponent>())
+            return;
+
+        const auto &idc = entity.GetComponent<IDComponent>();
+        const std::vector<UUID> children = idc.children;
+        for (UUID childUUID : children)
+        {
+            Entity child = SceneManager::GetEntity(scene, childUUID);
+            if (child.IsValid() && child.HasComponent<TransformComponent>())
+                SyncDescendantWorldTransforms(scene, child, worldMatrix);
+        }
+    }
+
+    // Recompute an entity's world transform from its parent chain and push the
+    // result down to every descendant.
+    void SyncEntityWorldTransform(Entity entity)
+    {
+        if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
+            return;
+
+        Scene *scene = entity.GetScene();
+        auto &transform = entity.GetComponent<TransformComponent>();
+
+        Entity parent;
+        if (entity.HasComponent<IDComponent>() && entity.GetParentUUID() != UUID(0) && scene)
+            parent = SceneManager::GetEntity(scene, entity.GetParentUUID());
+
+        if (parent.IsValid() && parent.HasComponent<TransformComponent>())
+        {
+            const auto &parentTr = parent.GetComponent<TransformComponent>();
+            Transform::Decompose(parentTr.world.GetMatrix() * transform.local.GetMatrix(), transform.world);
+        }
+        else
+        {
+            transform.world.translation = transform.local.translation;
+            transform.world.rotation = transform.local.rotation;
+            transform.world.scale = transform.local.scale;
+        }
+        transform.dirty = true;
+
+        if (!scene || !entity.HasComponent<IDComponent>())
+            return;
+
+        const auto &idc = entity.GetComponent<IDComponent>();
+        const glm::mat4 parentWorld = transform.world.GetMatrix();
+        const std::vector<UUID> children = idc.children;
+        for (UUID childUUID : children)
+        {
+            Entity child = SceneManager::GetEntity(scene, childUUID);
+            if (child.IsValid() && child.HasComponent<TransformComponent>())
+                SyncDescendantWorldTransforms(scene, child, parentWorld);
+        }
+    }
+
     void PushVector(lua_State *state, const glm::vec2 &v)
     {
         lua_createtable(state, 2, 2);
@@ -2533,9 +2621,9 @@ namespace ignite::lua
         case ComponentType::Transform:
         {
             auto &tc = entity.GetComponent<TransformComponent>();
-            if (strcmp(key, "position") == 0) { tc.local.translation = ReadVector(state, 3); tc.dirty = true; return 0; }
-            if (strcmp(key, "rotation") == 0) { tc.local.rotation = glm::quat(glm::radians(ReadVector(state, 3))); tc.dirty = true; return 0; }
-            if (strcmp(key, "scale") == 0) { tc.local.scale = ReadVector(state, 3); tc.dirty = true; return 0; }
+            if (strcmp(key, "position") == 0) { tc.local.translation = ReadVector(state, 3); tc.dirty = true; SyncEntityWorldTransform(entity); return 0; }
+            if (strcmp(key, "rotation") == 0) { tc.local.rotation = glm::quat(glm::radians(ReadVector(state, 3))); tc.dirty = true; SyncEntityWorldTransform(entity); return 0; }
+            if (strcmp(key, "scale") == 0) { tc.local.scale = ReadVector(state, 3); tc.dirty = true; SyncEntityWorldTransform(entity); return 0; }
             break;
         }
         case ComponentType::Rigidbody2D:

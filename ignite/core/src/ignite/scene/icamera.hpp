@@ -28,7 +28,7 @@ namespace ignite
     enum class AOMode : int
     {
         Off = 0,
-        LegacySSAO = 1,
+        SSAO = 1,
         GTAO = 2,
     };
 

@@ -55,12 +55,32 @@ namespace ignite
         Ultra = 3
     };
 
+    inline const char *AOModeToString(AOMode mode)
+    {
+        switch (mode)
+        {
+        case AOMode::Off:  return "NONE";
+        case AOMode::SSAO: return "SSAO";
+        case AOMode::GTAO: return "GTAO";
+        default:           return "GTAO";
+        }
+    }
+
+    inline AOMode AOModeFromString(const std::string &str)
+    {
+        if (str == "NONE" || str == "None" || str == "none" || str == "OFF" || str == "Off" || str == "off" || str == "Low" || str == "LOW")
+            return AOMode::Off;
+        if (str == "SSAO" || str == "ssao" || str == "Legacy SSAO")
+            return AOMode::SSAO;
+        return AOMode::GTAO;
+    }
+
     struct GraphicsScalability
     {
         ScalabilityLevel overall = ScalabilityLevel::High;
         ScalabilityLevel shadows = ScalabilityLevel::High;
         ScalabilityLevel globalIllumination = ScalabilityLevel::High;
-        ScalabilityLevel ambientOcclusion = ScalabilityLevel::High;
+        AOMode ambientOcclusion = AOMode::GTAO;
         ScalabilityLevel reflections = ScalabilityLevel::High;
         ScalabilityLevel resolutionScale = ScalabilityLevel::High;
         ScalabilityLevel postProcessing = ScalabilityLevel::High;
@@ -101,6 +121,7 @@ namespace ignite
         bool enableDepthPrepass = true;
         bool enableSpecularAA = true;
         bool enableSSR = true;
+        bool enableBloom = true;
         float ssrIntensity = 1.0f;
         float ssrMaxRoughness = 0.6f;
 
@@ -138,6 +159,9 @@ namespace ignite
 
         void ApplyOverallScalability(ScalabilityLevel level);
         void ApplyIndividualScalability();
+        void SyncToScene(Scene *scene, ICamera *editCamera = nullptr) const;
+        void SyncFromPostProcessing(const PostProcessing &pp);
+        void SyncFromDirectionalLight(uint32_t shadowResolution);
         bool SerializeToFile(const std::filesystem::path &filepath) const;
         bool DeserializeFromFile(const std::filesystem::path &filepath);
 

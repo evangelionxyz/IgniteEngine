@@ -180,9 +180,11 @@ namespace ignite
         deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
         constexpr bool enableValidation = false;
+        const char *d3d12ValEnv = std::getenv("IGNITE_D3D12_VALIDATION");
+        const bool enableD3D12Validation = (d3d12ValEnv && (strcmp(d3d12ValEnv, "1") == 0 || strcmp(d3d12ValEnv, "true") == 0));
 
-        deviceParams.enableDebugRuntime = enableValidation;
-        deviceParams.enableNRIValidation = enableValidation;
+        deviceParams.enableDebugRuntime = enableValidation || enableD3D12Validation;
+        deviceParams.enableNRIValidation = enableValidation || enableD3D12Validation;
         // Every validation check is individually switchable through "deviceParams.vkValidation" (see
         // "VulkanValidationSettings"): turn a check off once the class of error it reports is gone.
         // Core validation left on, everything expensive/opinionated opt-in only.

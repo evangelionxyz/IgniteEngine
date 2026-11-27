@@ -123,6 +123,7 @@ static void EvaluateSingleReflectionProbe(
     float3 R,
     float baseRoughness,
     float coatRoughness,
+    bool evaluateCoat,
     float3 pixelDiffuseGI,
     out float3 outBaseSpec,
     out float3 outCoatSpec)
@@ -132,14 +133,21 @@ static void EvaluateSingleReflectionProbe(
     float slice = probe.boxMinAndSlice.w;
 
     float baseMip = saturate(baseRoughness) * max(maxMip, 0.0f);
-    float coatMip = saturate(coatRoughness) * max(maxMip, 0.0f);
 
     float3 probeIrradiance = EvalProbeCaptureIrradiance(probe, N);
     float normFactor = ComputeProbeNormalizationFactor(pixelDiffuseGI, probeIrradiance, probe.capturePosAndNorm.w);
     float scale = normFactor * max(probe.influenceMaxAndInt.w, 0.0f);
 
     outBaseSpec = probeCubeArray.SampleLevel(linSampler, float4(lookupDir, slice), baseMip).rgb * scale;
-    outCoatSpec = probeCubeArray.SampleLevel(linSampler, float4(lookupDir, slice), coatMip).rgb * scale;
+    if (evaluateCoat)
+    {
+        float coatMip = saturate(coatRoughness) * max(maxMip, 0.0f);
+        outCoatSpec = probeCubeArray.SampleLevel(linSampler, float4(lookupDir, slice), coatMip).rgb * scale;
+    }
+    else
+    {
+        outCoatSpec = float3(0.0f, 0.0f, 0.0f);
+    }
 }
 
 static void EvaluateReflectionProbes(
@@ -148,6 +156,7 @@ static void EvaluateReflectionProbes(
     float3 R,
     float baseRoughness,
     float coatRoughness,
+    bool evaluateCoat,
     float3 pixelDiffuseGI,
     GIData gi,
     StructuredBuffer<ReflectionProbeGPU> probes,
@@ -211,7 +220,7 @@ static void EvaluateReflectionProbes(
 
     float3 b0, c0;
     EvaluateSingleReflectionProbe(probes[bestIdx0], probeCubeArray, linSampler, maxMip,
-        worldPos, N, R, baseRoughness, coatRoughness, pixelDiffuseGI, b0, c0);
+        worldPos, N, R, baseRoughness, coatRoughness, evaluateCoat, pixelDiffuseGI, b0, c0);
 
     if (bestIdx1 < 0)
     {
@@ -223,7 +232,7 @@ static void EvaluateReflectionProbes(
 
     float3 b1, c1;
     EvaluateSingleReflectionProbe(probes[bestIdx1], probeCubeArray, linSampler, maxMip,
-        worldPos, N, R, baseRoughness, coatRoughness, pixelDiffuseGI, b1, c1);
+        worldPos, N, R, baseRoughness, coatRoughness, evaluateCoat, pixelDiffuseGI, b1, c1);
 
     float w0 = bestWeight0;
     float w1 = (bestPrio0 > bestPrio1) ? ((1.0f - w0) * bestWeight1) : bestWeight1;
@@ -237,7 +246,7 @@ static void EvaluateReflectionProbes(
 
     float invTotal = 1.0f / max(totalW, 1e-4f);
     outBaseSpec = b0 * (w0 * invTotal) + b1 * (w1 * invTotal);
-    outCoatSpec = c0 * (w0 * invTotal) + c1 * (w1 * invTotal);
+    outCoatSpec = evaluateCoat ? (c0 * (w0 * invTotal) + c1 * (w1 * invTotal)) : float3(0.0f, 0.0f, 0.0f);
     outProbeWeight = saturate(totalW);
 }
 

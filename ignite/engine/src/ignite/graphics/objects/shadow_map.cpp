@@ -89,38 +89,38 @@ namespace ignite
         BindingCache::Clear();
     }
 
-    void CascadedShadowMap::BeginCascade(nri::CommandBuffer *cmd, int cascadeIndex, uint32_t frameIndex)
+    void CascadedShadowMap::BeginCascade(nri::CommandBuffer *cmd, int cascadeIndex, uint32_t /*frameIndex*/)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (frameIndex < m_CascadeFramebuffers.size() && cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
+        if (!m_CascadeFramebuffers.empty() && cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
         {
-            if (auto &cascadeRT = m_CascadeFramebuffers[frameIndex][cascadeIndex])
+            if (auto &cascadeRT = m_CascadeFramebuffers[0][cascadeIndex])
             {
                 cascadeRT->ClearDepthAttachment(cmd, 1.0f, 0);
             }
         }
     }
 
-    void CascadedShadowMap::EnsureShaderResourceLayout(nri::CommandBuffer *cmd, uint32_t frameIndex)
+    void CascadedShadowMap::EnsureShaderResourceLayout(nri::CommandBuffer *cmd, uint32_t /*frameIndex*/)
     {
         if (!cmd)
             return;
 
-        Ref<Texture> depthTex = GetDepthTexture(frameIndex);
+        Ref<Texture> depthTex = GetDepthTexture(0);
         if (!depthTex || !depthTex->GetHandle())
             return;
 
-        // If cascaded shadows have never been rendered for this frame slot, the depth array is still
+        // If cascaded shadows have never been rendered, the depth array is still
         // in its created, never-written layout. Transitioning that straight to a read-only layout is
         // invalid (the contents would be silently discarded), so materialize a defined depth state by
-        // clearing every cascade layer through its render target first. This is a one-time cost per slot.
+        // clearing every cascade layer through its render target first. This is a one-time cost.
         if (depthTex->GetCurrentLayout() == nri::Layout::UNDEFINED
-            && frameIndex < m_CascadeFramebuffers.size())
+            && !m_CascadeFramebuffers.empty())
         {
             for (int cascadeIndex = 0; cascadeIndex < NUM_CASCADES; ++cascadeIndex)
             {
-                if (auto &cascadeRT = m_CascadeFramebuffers[frameIndex][cascadeIndex])
+                if (auto &cascadeRT = m_CascadeFramebuffers[0][cascadeIndex])
                 {
                     cascadeRT->ClearDepthAttachment(cmd, 1.0f, 0);
                 }
@@ -150,10 +150,10 @@ namespace ignite
         depthTex->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER);
     }
 
-    Ref<Texture> CascadedShadowMap::GetDepthTexture(uint32_t frameIndex) const
+    Ref<Texture> CascadedShadowMap::GetDepthTexture(uint32_t /*frameIndex*/) const
     {
-        if (frameIndex < m_DepthTextures.size())
-            return m_DepthTextures[frameIndex];
+        if (!m_DepthTextures.empty())
+            return m_DepthTextures[0];
         return nullptr;
     }
 
@@ -292,7 +292,7 @@ namespace ignite
 
             // Rotation-invariant Z bounds from the sub-frustum bounding sphere + upstream/downstream padding
             // so farPlaneLS - nearPlaneLS never fluctuates as the camera rotates.
-            const float zPadding = glm::max(150.0f, m_ShadowDistance * 0.5f);
+            const float zPadding = glm::max(60.0f, m_ShadowDistance * 0.35f);
             const float minZ_LS = centerLS.z - safeExtent - zPadding;
             const float maxZ_LS = centerLS.z + safeExtent + zPadding;
 
@@ -388,10 +388,10 @@ namespace ignite
         m_GPUData.shadowTexelSize = (m_Resolution > 0) ? (1.0f / static_cast<float>(m_Resolution)) : (1.0f / 2048.0f);
     }
 
-    RenderTarget *CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex, uint32_t frameIndex) const
+    RenderTarget *CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex, uint32_t /*frameIndex*/) const
     {
-        if (frameIndex < m_CascadeFramebuffers.size() && cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
-            return m_CascadeFramebuffers[frameIndex][cascadeIndex].get();
+        if (!m_CascadeFramebuffers.empty() && cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
+            return m_CascadeFramebuffers[0][cascadeIndex].get();
         return nullptr;
     }
 
@@ -399,13 +399,17 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        uint32_t maxFrames = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
+        // Single graphics queue submits in FIFO order with explicit DEPTH_WRITE <-> SHADER_RESOURCE
+        // barriers between frames, so a single CSM depth array is race-free and saves 2/3 of shadow
+        // VRAM (e.g. 805 MB -> 268 MB at ULTRA 4096^2), preventing VRAM oversubscription on iGPUs.
+        constexpr uint32_t kCSMTextureCount = 1;
 
-        m_DepthTextures.resize(maxFrames);
-        m_CascadeFramebuffers.resize(maxFrames);
+        m_DepthTextures.resize(kCSMTextureCount);
+        m_CascadeFramebuffers.resize(kCSMTextureCount);
 
-        for (uint32_t f = 0; f < maxFrames; ++f)
+        for (uint32_t f = 0; f < kCSMTextureCount; ++f)
         {
+            // D32_SFLOAT enables native hardware HTILE fast-clear and HiZ compression on AMD RDNA2/RDNA3.
             constexpr nri::Format depthFormat = nri::Format::D32_SFLOAT;
 
             TextureCreateInfo depthCI;

@@ -318,10 +318,8 @@ float4 main(VSOutput input) : SV_Target
             float3 m2 = centerYCoCg * centerYCoCg;
             float3 minYCoCg = centerYCoCg;
             float3 maxYCoCg = centerYCoCg;
-            float3 minRGB = centerRGB;
-            float3 maxRGB = centerRGB;
-            float3 crossSumRGB = 0.0f;
 
+            const bool hasChromAb = (flags.w >= 0.5f);
             [unroll]
             for (int ny = -1; ny <= 1; ++ny)
             {
@@ -332,7 +330,10 @@ float4 main(VSOutput input) : SV_Target
                         continue;
 
                     float2 nUV = saturate(input.uv + float2(nx, ny) * sceneTexelSize);
-                    float3 nLinear = SampleSceneWithChromAb(nUV) + bloomContribution;
+                    float3 nScene = hasChromAb
+                        ? SampleSceneWithChromAb(nUV)
+                        : sceneTexture.SampleLevel(linearSampler, nUV, 0.0f).rgb;
+                    float3 nLinear = nScene + bloomContribution;
                     float3 nTonemapped = saturate(ApplyTonemap(nLinear, tonemapMode, exposure, gamma));
                     float3 sYCoCg = RGBToYCoCg(nTonemapped);
 
@@ -340,10 +341,6 @@ float4 main(VSOutput input) : SV_Target
                     m2 += sYCoCg * sYCoCg;
                     minYCoCg = min(minYCoCg, sYCoCg);
                     maxYCoCg = max(maxYCoCg, sYCoCg);
-                    minRGB = min(minRGB, nTonemapped);
-                    maxRGB = max(maxRGB, nTonemapped);
-                    if (abs(nx) + abs(ny) == 1)
-                        crossSumRGB += nTonemapped;
                 }
             }
 
@@ -374,17 +371,34 @@ float4 main(VSOutput input) : SV_Target
         }
     }
 
-    float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
-    float4 debugColor = debugTexture.SampleLevel(linearSampler, input.uv, 0.0f);
-    float4 gizmoColor = gizmoTexture.SampleLevel(linearSampler, input.uv, 0.0f);
-    
-    float3 finalColor = lerp(tonemappedScene, debugColor.rgb, debugColor.a);
-    finalColor = lerp(finalColor, uiColor.rgb, uiColor.a);
+    // padding_fog carries packed overlay presence bits (bit0=UI, bit1=Debug, bit2=Gizmo).
+    // When 0, fall back to legacy always-sample behavior (backwards compatible); when > 0, bit3 (8) marks bitmask active.
+    uint overlayMask = (uint)(padding_fog + 0.5f);
+    const bool useMask = ((overlayMask & 8u) != 0u);
+    const bool sampleUI = !useMask || ((overlayMask & 1u) != 0u);
+    const bool sampleDebug = !useMask || ((overlayMask & 2u) != 0u);
+    const bool sampleGizmo = !useMask || ((overlayMask & 4u) != 0u);
+
+    float3 finalColor = tonemappedScene;
+    if (sampleDebug)
+    {
+        float4 debugColor = debugTexture.SampleLevel(linearSampler, input.uv, 0.0f);
+        finalColor = lerp(finalColor, debugColor.rgb, debugColor.a);
+    }
+    if (sampleUI)
+    {
+        float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
+        finalColor = lerp(finalColor, uiColor.rgb, uiColor.a);
+    }
     if (taaParams.w > 0.5f)
     {
         float4 edgeColor = edgeDetection.SampleLevel(linearSampler, input.uv, 0.0f);
         finalColor = lerp(finalColor, edgeColor.rgb, saturate(edgeColor.a));
     }
-    finalColor = finalColor * (1.0f - saturate(gizmoColor.a)) + gizmoColor.rgb;
+    if (sampleGizmo)
+    {
+        float4 gizmoColor = gizmoTexture.SampleLevel(linearSampler, input.uv, 0.0f);
+        finalColor = finalColor * (1.0f - saturate(gizmoColor.a)) + gizmoColor.rgb;
+    }
     return float4(finalColor, 1.0f);
 }

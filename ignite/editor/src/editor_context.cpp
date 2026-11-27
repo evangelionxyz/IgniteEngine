@@ -8,7 +8,7 @@ namespace ignite {
 
     void EditorContext::Init()
     {
-        if (!s_EditorContextInstance)
+        if (s_EditorContextInstance)
             return;
 
         s_EditorContextInstance = new EditorContext();
@@ -16,7 +16,7 @@ namespace ignite {
 
     void EditorContext::Shutdown()
     {
-        if (!s_EditorContextInstance)
+        if (s_EditorContextInstance)
         {
             delete s_EditorContextInstance;
             s_EditorContextInstance = nullptr;

@@ -24,6 +24,9 @@ Texture2DArray shadowMap             : register(t1, space1);
 SamplerState   sampler0              : register(s0, space1);
 SamplerState   shadowSampler         : register(s1, space1);
 
+#ifdef IGN_OPAQUE_NO_DISCARD
+[earlydepthstencil]
+#endif
 PSOutput main(PixelVertexInput input, bool isFrontFace : SV_IsFrontFace)
 {
     return EvaluateMeshPixel(

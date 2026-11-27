@@ -112,6 +112,7 @@ namespace ignite
                     texCI.isNativeObject = attachment.isNativeObject;
                     texCI.nativeObjectPtr = attachment.nativeObjectPtr;
                     texCI.nativeObjectType = attachment.nativeObjectType;
+                    texCI.allowHostReadback = attachment.allowHostReadback;
                     texCI.dimension = nri::TextureType::TEXTURE_2D;
                     texCI.arraySize = std::max(attachment.arrayLayers, 1u);
 
@@ -172,7 +173,10 @@ namespace ignite
             return;
         }
 
-        GPUUploadSync::DeviceWaitIdle(deviceManager->GetDevice());
+        if (!m_ColorAttachmentViews.empty() || m_DepthAttachmentView != nullptr)
+        {
+            GPUUploadSync::DeviceWaitIdle(deviceManager->GetDevice());
+        }
         DestroyAttachmentViews();
         m_AttachmentsInitialized = false;
 
@@ -338,7 +342,7 @@ namespace ignite
         return nri::Format::UNKNOWN;
     }
 
-    void RenderTarget::BeginRendering(nri::CommandBuffer *commandBuffer, bool clearColor, bool clearDepth)
+    void RenderTarget::BeginRendering(nri::CommandBuffer *commandBuffer, bool clearColor, bool clearDepth, bool discardColor)
     {
         if (!commandBuffer || m_IsRendering)
             return;
@@ -349,33 +353,34 @@ namespace ignite
 
         const auto &nri = deviceManager->GetCoreInterface();
 
-        // Transition attachments into attachment layouts
-        std::vector<nri::TextureBarrierDesc> barriers;
-        barriers.reserve(m_ColorAttachments.size() + (m_DepthAttachment ? 1 : 0));
+        // Transition attachments into attachment layouts (stack-allocated to avoid per-pass heap allocs)
+        std::array<nri::TextureBarrierDesc, 9> barriers{};
+        uint32_t barrierCount = 0;
 
-        for (size_t i = 0; i < m_ColorAttachments.size(); ++i)
+        for (size_t i = 0; i < m_ColorAttachments.size() && barrierCount < barriers.size(); ++i)
         {
             if (!m_ColorAttachments[i] || !m_ColorAttachments[i]->GetHandle())
                 continue;
 
+            const nri::Layout curLayout = m_ColorAttachments[i]->GetCurrentLayout();
             nri::TextureBarrierDesc b = {};
             b.texture = m_ColorAttachments[i]->GetHandle();
-            if (m_ColorAttachments[i]->GetCurrentLayout() != nri::Layout::UNDEFINED)
+            if (curLayout != nri::Layout::UNDEFINED)
             {
-                b.before = { m_ColorAttachments[i]->GetCurrentAccess(), m_ColorAttachments[i]->GetCurrentLayout(), m_ColorAttachments[i]->GetCurrentStages() };
+                b.before = { m_ColorAttachments[i]->GetCurrentAccess(), curLayout, m_ColorAttachments[i]->GetCurrentStages() };
             }
             else if (m_AttachmentsInitialized && m_CreateInfo.colorAttachmentOverrides.empty())
             {
                 if (m_ColorAttachments[i]->GetCreateInfo().initialLayout == nri::Layout::PRESENT)
                 {
-                    b.before = { nri::AccessBits::NONE, nri::Layout::PRESENT, nri::StageBits::NONE };
+                    b.before = { nri::AccessBits::NONE, nri::Layout::PRESENT, nri::StageBits::COLOR_ATTACHMENT };
                 }
                 else
                 {
                     const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[i]->GetHandle());
                     if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
                     {
-                        b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                        b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                     }
                     else
                     {
@@ -387,17 +392,24 @@ namespace ignite
             {
                 b.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
             }
+
+            // Ensure PRESENT -> COLOR_ATTACHMENT transition orders after the COLOR_ATTACHMENT_OUTPUT acquire wait.
+            if (b.before.layout == nri::Layout::PRESENT && b.before.stages == nri::StageBits::NONE)
+            {
+                b.before.stages = nri::StageBits::COLOR_ATTACHMENT;
+            }
+
             b.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT, nri::StageBits::COLOR_ATTACHMENT };
             b.mipOffset = 0;
             b.mipNum = nri::REMAINING;
             b.layerOffset = 0;
             b.layerNum = nri::REMAINING;
             b.planes = nri::PlaneBits::ALL;
-            barriers.push_back(b);
+            barriers[barrierCount++] = b;
             m_ColorAttachments[i]->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
         }
 
-        if (m_DepthAttachment && m_DepthAttachment->GetHandle())
+        if (m_DepthAttachment && m_DepthAttachment->GetHandle() && barrierCount < barriers.size())
         {
             const auto &depthDesc = nri.GetTextureDesc(*m_DepthAttachment->GetHandle());
             const bool depthSupportsShaderResource = (depthDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0;
@@ -412,7 +424,7 @@ namespace ignite
             {
                 if (depthSupportsShaderResource)
                 {
-                    b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    b.before = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                 }
                 else
                 {
@@ -434,24 +446,25 @@ namespace ignite
             b.planes = HasStencilComponent(m_DepthAttachment->GetFormat())
                 ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL)
                 : nri::PlaneBits::DEPTH;
-            barriers.push_back(b);
+            barriers[barrierCount++] = b;
             m_DepthAttachment->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
         }
 
-        if (!barriers.empty())
+        if (barrierCount > 0)
         {
             nri::BarrierDesc barrierDesc = {};
             barrierDesc.textures = barriers.data();
-            barrierDesc.textureNum = static_cast<uint32_t>(barriers.size());
+            barrierDesc.textureNum = barrierCount;
             nri.CmdBarrier(*commandBuffer, barrierDesc);
         }
 
-        std::vector<nri::AttachmentDesc> colorAttachments(m_ColorAttachmentViews.size());
-        for (size_t i = 0; i < m_ColorAttachmentViews.size(); ++i)
+        const size_t colorAttCount = std::min<size_t>(m_ColorAttachmentViews.size(), 8);
+        std::array<nri::AttachmentDesc, 8> colorAttachments{};
+        for (size_t i = 0; i < colorAttCount; ++i)
         {
             colorAttachments[i] = {};
             colorAttachments[i].descriptor = m_ColorAttachmentViews[i];
-            colorAttachments[i].loadOp = clearColor ? nri::LoadOp::CLEAR : nri::LoadOp::LOAD;
+            colorAttachments[i].loadOp = (clearColor || discardColor) ? nri::LoadOp::CLEAR : nri::LoadOp::LOAD;
             colorAttachments[i].storeOp = nri::StoreOp::STORE;
 
             uint32_t idx = static_cast<uint32_t>(i);
@@ -466,8 +479,8 @@ namespace ignite
         }
 
         nri::RenderingDesc renderingDesc = {};
-        renderingDesc.colors = colorAttachments.empty() ? nullptr : colorAttachments.data();
-        renderingDesc.colorNum = static_cast<uint32_t>(colorAttachments.size());
+        renderingDesc.colors = colorAttCount == 0 ? nullptr : colorAttachments.data();
+        renderingDesc.colorNum = static_cast<uint32_t>(colorAttCount);
 
         if (m_DepthAttachmentView)
         {
@@ -519,10 +532,10 @@ namespace ignite
         const auto &nri = deviceManager->GetCoreInterface();
         nri.CmdEndRendering(*commandBuffer);
 
-        std::vector<nri::TextureBarrierDesc> barriers;
-        barriers.reserve(m_ColorAttachments.size() + (m_DepthAttachment ? 1 : 0));
+        std::array<nri::TextureBarrierDesc, 9> barriers{};
+        uint32_t barrierCount = 0;
 
-        for (size_t i = 0; i < m_ColorAttachments.size(); ++i)
+        for (size_t i = 0; i < m_ColorAttachments.size() && barrierCount < barriers.size(); ++i)
         {
             if (!m_ColorAttachments[i] || !m_ColorAttachments[i]->GetHandle())
                 continue;
@@ -539,7 +552,7 @@ namespace ignite
                 const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[i]->GetHandle());
                 if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
                 {
-                    b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                 }
                 else
                 {
@@ -551,11 +564,11 @@ namespace ignite
             b.layerOffset = 0;
             b.layerNum = nri::REMAINING;
             b.planes = nri::PlaneBits::ALL;
-            barriers.push_back(b);
+            barriers[barrierCount++] = b;
             m_ColorAttachments[i]->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
         }
 
-        if (m_DepthAttachment && m_DepthAttachment->GetHandle())
+        if (m_DepthAttachment && m_DepthAttachment->GetHandle() && barrierCount < barriers.size())
         {
             const auto &depthDesc = nri.GetTextureDesc(*m_DepthAttachment->GetHandle());
             const bool depthSupportsShaderResource = (depthDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0;
@@ -565,7 +578,7 @@ namespace ignite
                 nri::TextureBarrierDesc b = {};
                 b.texture = m_DepthAttachment->GetHandle();
                 b.before = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT, nri::StageBits::DEPTH_STENCIL_ATTACHMENT };
-                b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                 b.mipOffset = 0;
                 b.mipNum = nri::REMAINING;
                 b.layerOffset = 0;
@@ -573,7 +586,7 @@ namespace ignite
                 b.planes = HasStencilComponent(m_DepthAttachment->GetFormat())
                     ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL)
                     : nri::PlaneBits::DEPTH;
-                barriers.push_back(b);
+                barriers[barrierCount++] = b;
                 m_DepthAttachment->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
             }
             else
@@ -582,11 +595,11 @@ namespace ignite
             }
         }
 
-        if (!barriers.empty())
+        if (barrierCount > 0)
         {
             nri::BarrierDesc barrierDesc = {};
             barrierDesc.textures = barriers.data();
-            barrierDesc.textureNum = static_cast<uint32_t>(barriers.size());
+            barrierDesc.textureNum = barrierCount;
             nri.CmdBarrier(*commandBuffer, barrierDesc);
         }
 
@@ -696,7 +709,7 @@ namespace ignite
             const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[attachmentIndex]->GetHandle());
             if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
             {
-                barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
             }
             else
             {
@@ -785,7 +798,7 @@ namespace ignite
             const auto &colorDesc = nri.GetTextureDesc(*m_ColorAttachments[attachmentIndex]->GetHandle());
             if ((colorDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
             {
-                barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
             }
             else
             {
@@ -862,7 +875,7 @@ namespace ignite
         const auto &depthDesc = nri.GetTextureDesc(*m_DepthAttachment->GetHandle());
         if ((depthDesc.usage & nri::TextureUsageBits::SHADER_RESOURCE) != 0)
         {
-            barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            barrier.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
         }
         nri.CmdBarrier(*commandBuffer, barrierDesc);
         m_DepthAttachment->SetCurrentState(barrier.after.layout, barrier.after.access, barrier.after.stages);

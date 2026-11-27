@@ -93,7 +93,7 @@ namespace ignite
         m_OutlineJFA = OutlineJFA::Create();
         m_OutlineJFA->CreatePipeline();
 
-        m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+        m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::MEDIUM);
         m_RuntimeMaterial   = CreateRef<Material>();
 
         m_TerrainRenderer = CreateRef<TerrainRenderer>();
@@ -206,9 +206,11 @@ namespace ignite
         m_Has2DPreRenderCache = false;
 
         m_AnimatedPSOCache.clear();
+        m_AnimatedMaskedPSOCache.clear();
         m_TransparentAnimatedPSOCache.clear();
         m_AnimatedCSMPSOCache.clear();
         m_StaticPSOCache.clear();
+        m_StaticMaskedPSOCache.clear();
         m_TransparentStaticPSOCache.clear();
         m_StaticCSMPSOCache.clear();
         m_SelectStaticPSOCache.clear();
@@ -239,9 +241,13 @@ namespace ignite
         m_SSRs.clear();
 
         m_StaticDepthPrepassPSOCache.clear();
+        m_StaticMaskedDepthPrepassPSOCache.clear();
         m_AnimatedDepthPrepassPSOCache.clear();
+        m_AnimatedMaskedDepthPrepassPSOCache.clear();
         m_StaticReadOnlyDepthPSOCache.clear();
+        m_StaticMaskedReadOnlyDepthPSOCache.clear();
         m_AnimatedReadOnlyDepthPSOCache.clear();
+        m_AnimatedMaskedReadOnlyDepthPSOCache.clear();
         m_ColorPassDepthReadOnly = false;
 
         m_IBLPrefilter.reset();
@@ -445,7 +451,7 @@ namespace ignite
         }
 
         // 7. Check for Selection / Object ID
-        plan.requiresObjectId = !isGameCamera || !m_SelectedEntities.empty();
+        plan.requiresObjectId = (plan.HasRenderables() && !isGameCamera) || !m_SelectedEntities.empty();
 
         // 8. Check for Debug Overlays
         const bool wantsEntityNames = (drawDebug && sceneRenderSettings.showEntityNames) || m_Scene->showDebugEntityNames;
@@ -471,7 +477,7 @@ namespace ignite
 
         // 10. Gizmo & Post processing requirements
         plan.requiresGizmo = !isGameCamera && !m_GizmoDrawList.Empty();
-        plan.requiresBloom = postProcessing.enableBloom;
+        plan.requiresBloom = postProcessing.enableBloom && sceneRenderSettings.enableBloom;
         plan.requiresSSAO = postProcessing.enableSSAO;
         plan.requiresTAA = postProcessing.taaProperties.enable;
 
@@ -550,11 +556,14 @@ namespace ignite
             break;
         }
 
-        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
+        postProcessing.renderScale = glm::clamp(sceneRenderSettings.renderScale, 0.25f, 1.0f);
+        postProcessing.enableBloom = postProcessing.enableBloom && sceneRenderSettings.enableBloom;
 
         const AOMode effectiveAOMode = (sceneRenderSettings.aoModeOverride >= 0)
             ? static_cast<AOMode>(std::clamp(sceneRenderSettings.aoModeOverride, 0, 2))
             : (postProcessing.enableSSAO ? postProcessing.aoMode : AOMode::Off);
+        postProcessing.aoMode = effectiveAOMode;
+        postProcessing.enableSSAO = (effectiveAOMode != AOMode::Off);
         const bool needsPrepassConsumers = (effectiveAOMode == AOMode::GTAO) || sceneRenderSettings.enableSSR;
 
         // 1. Build render plan before opening the command buffer so all render target /
@@ -562,15 +571,13 @@ namespace ignite
         RenderPlan plan = BuildRenderPlan(camera, drawDebug, postProcessing, isGameCamera);
 
         {
-            if (m_CascadedShadowMap && m_Scene && m_Scene->registry)
+            if (m_CascadedShadowMap && m_Scene && m_Scene->registry && plan.hasActiveShadows)
             {
                 auto dirLightView = m_Scene->registry->view<DirectionalLightComponent>();
                 for (entt::entity e : dirLightView)
                 {
-                    const auto &light = dirLightView.get<DirectionalLightComponent>(e);
-                    const auto quality = (sceneRenderSettings.shadowQuality < static_cast<ShadowMapQuality>(light.shadowResolution))
-                        ? sceneRenderSettings.shadowQuality
-                        : static_cast<ShadowMapQuality>(light.shadowResolution);
+                    (void)e;
+                    const auto quality = sceneRenderSettings.shadowQuality;
                     if (m_CascadedShadowMap->GetQuality() != quality)
                     {
                         m_CascadedShadowMap->Resize(quality);
@@ -613,7 +620,7 @@ namespace ignite
                 target->prevSceneColorValid = false;
                 m_CompositeBindingSetCache.clear();
             }
-            const bool depthPrepassWillRun = sceneRenderSettings.enableDepthPrepass && needsPrepassConsumers && target->msaaSampleCount == 1;
+            const bool depthPrepassWillRun = sceneRenderSettings.enableDepthPrepass && needsPrepassConsumers;
             if (depthPrepassWillRun)
             {
                 EnsureDepthPrepassRT(target, renderWidth, renderHeight);
@@ -640,6 +647,14 @@ namespace ignite
             {
                 EnsureGizmoRT(target, baseWidth, baseHeight);
             }
+            if (sceneRenderSettings.enableFXAA)
+            {
+                EnsurePostProcessRT(target, baseWidth, baseHeight);
+            }
+            if (!isGameCamera && !m_SelectedEntities.empty())
+            {
+                EnsureSelectionRT(target, renderWidth, renderHeight);
+            }
             if (postProcessing.taaProperties.enable)
             {
                 EnsureTAAHistoryRT(target, baseWidth, baseHeight);
@@ -664,7 +679,7 @@ namespace ignite
                         b->Resize(bloomWidth, bloomHeight);
                 }
             }
-            if (effectiveAOMode == AOMode::LegacySSAO && target->msaaSampleCount == 1)
+            if (effectiveAOMode == AOMode::SSAO && target->msaaSampleCount == 1)
             {
                 // Ensure SSAOs are resized before recording if already created
                 if (auto it = m_SSAOs.find(camera); it != m_SSAOs.end())
@@ -682,6 +697,7 @@ namespace ignite
         nri::CommandBuffer *cmd = BeginCommandBuffer();
         if (!cmd)
             return;
+
         GPUTimer &gpuTimer = m_GPUTimers[GetActiveCommandBufferSlotIndex()];
         gpuTimer.BeginFrame(cmd);
         if (!gpuTimer.GetResultsMs().empty())
@@ -822,11 +838,9 @@ namespace ignite
             const auto height = target->compositeRT ? target->compositeRT->GetHeight() : m_ViewportHeight;
             const auto renderWidth = target->sceneRT ? target->sceneRT->GetWidth() : width;
             const auto renderHeight = target->sceneRT ? target->sceneRT->GetHeight() : height;
-            const bool depthPrepassEnabled = sceneRenderSettings.enableDepthPrepass
-                && needsPrepassConsumers
-                && plan.hasMeshes
-                && target->msaaSampleCount == 1
-                && target->depthPrepassRT != nullptr;
+            const bool depthPrepassEnabled = sceneRenderSettings.enableDepthPrepass && needsPrepassConsumers
+                && plan.hasMeshes && target->depthPrepassRT != nullptr;
+            const bool sharePrepassDepth = depthPrepassEnabled && target->msaaSampleCount == 1;
 
             // Configure loadOp=CLEAR values (folded into first BeginRendering of each pass;
             // only inactive-transitioning auxiliary targets execute a single combined clear).
@@ -892,8 +906,10 @@ namespace ignite
                 float sunIntensity = glm::clamp(m_SceneGPUData.sunColor.a, 0.1f, 5.0f);
                 float sunRadius = m_SceneGPUData.sunAngularRadius;
 
+                const uint32_t skyLutZone = gpuTimer.BeginZone(cmd, "ProceduralSkyLUT");
                 m_WorldEnvironment->environment->GetProceduralSky()->GetParams() = m_WorldEnvironment->atmosphereParams;
                 m_WorldEnvironment->environment->GetProceduralSky()->RenderLUTs(cmd, sunDir, sunCol, sunIntensity, sunRadius, camera->position);
+                gpuTimer.EndZone(cmd, skyLutZone);
             }
 
             {
@@ -901,11 +917,6 @@ namespace ignite
                 const uint32_t skyZone = gpuTimer.BeginZone(cmd, "SkyIBL");
                 UpdateSkyIBL(cmd, camera, frameContext);
                 gpuTimer.EndZone(cmd, skyZone);
-            }
-
-            if (BindlessSystem::HasPendingWrites())
-            {
-                BindlessSystem::FlushPendingWrites();
             }
 
             bool gtaoActive = false;
@@ -921,13 +932,15 @@ namespace ignite
                     gpuTimer.EndZone(cmd, prepassZone);
                 }
 
+                Ref<Texture> prepassDepthTex = target->depthPrepassRT->GetDepthAttachment();
+                const uint32_t effectSlot = target->prepassEffectSlotCursor++;
+
                 if (effectiveAOMode == AOMode::GTAO)
                 {
                     auto gtaoIt = m_GTAOs.find(camera);
-                    const uint32_t slotIdx = GetActiveCommandBufferSlotIndex();
                     Ref<GTAO> gtao = (gtaoIt != m_GTAOs.end() && !gtaoIt->second.empty())
-                        ? gtaoIt->second[slotIdx % gtaoIt->second.size()] : nullptr;
-                    if (gtao && gtao->GetAOTexture())
+                        ? gtaoIt->second[effectSlot % gtaoIt->second.size()] : nullptr;
+                    if (gtao && gtao->GetAOTexture() && prepassDepthTex)
                     {
                         IGN_PROFILE_SCOPE("SceneRenderer::GTAOPass");
                         const uint32_t gtaoZone = gpuTimer.BeginZone(cmd, "GTAO");
@@ -936,7 +949,7 @@ namespace ignite
                         gtaoQuality.stepsPerSlice = sceneRenderSettings.gtaoStepsPerSlice;
                         gtaoQuality.denoiseRadius = sceneRenderSettings.gtaoDenoiseRadius;
                         gtaoQuality.upsampleMode = sceneRenderSettings.gtaoUpsampleMode;
-                        gtao->Build(cmd, target->sceneRT->GetDepthAttachment(), target->depthPrepassRT->GetColorAttachment(0),
+                        gtao->Build(cmd, prepassDepthTex, target->depthPrepassRT->GetColorAttachment(0),
                             camera, postProcessing, m_TAAFrameIndex, gtaoQuality);
                         gpuTimer.EndZone(cmd, gtaoZone);
                         Ref<Texture> gtaoTex = gtao->GetAOTexture();
@@ -945,19 +958,18 @@ namespace ignite
                     }
                 }
 
-                if (sceneRenderSettings.enableSSR && target->prevSceneColorValid && target->prevSceneColor)
+                if (sceneRenderSettings.enableSSR && target->prevSceneColorValid && target->prevSceneColor && prepassDepthTex)
                 {
                     auto ssrIt = m_SSRs.find(camera);
-                    const uint32_t slotIdx = GetActiveCommandBufferSlotIndex();
                     const size_t ssrCount = (ssrIt != m_SSRs.end()) ? ssrIt->second.size() : 0;
-                    Ref<SSR> ssr = (ssrCount > 0) ? ssrIt->second[slotIdx % ssrCount] : nullptr;
-                    Ref<SSR> prevSsr = (ssrCount > 1) ? ssrIt->second[(slotIdx + ssrCount - 1) % ssrCount] : nullptr;
+                    Ref<SSR> ssr = (ssrCount > 0) ? ssrIt->second[effectSlot % ssrCount] : nullptr;
+                    Ref<SSR> prevSsr = (ssrCount > 1) ? ssrIt->second[(effectSlot + ssrCount - 1) % ssrCount] : nullptr;
                     Ref<Texture> prevSsrTex = prevSsr ? prevSsr->GetSSRTexture() : nullptr;
                     if (ssr && ssr->GetSSRTexture())
                     {
                         IGN_PROFILE_SCOPE("SceneRenderer::SSRPass");
                         const uint32_t ssrZone = gpuTimer.BeginZone(cmd, "SSR");
-                        ssr->Build(cmd, target->sceneRT->GetDepthAttachment(), target->depthPrepassRT->GetColorAttachment(0),
+                        ssr->Build(cmd, prepassDepthTex, target->depthPrepassRT->GetColorAttachment(0),
                             target->prevSceneColor, prevSsrTex, target->ssrHistoryValid, camera, projection, target->prevViewProj,
                             sceneRenderSettings.ssrMaxRoughness, m_TAAFrameIndex,
                             sceneRenderSettings.ssrMaxSteps, sceneRenderSettings.ssrBinarySearchSteps);
@@ -990,11 +1002,6 @@ namespace ignite
                 1.0f);
             frameContext->giBuffer.SetData(&m_GIGPUData, sizeof(m_GIGPUData));
 
-            if (BindlessSystem::HasPendingWrites())
-            {
-                BindlessSystem::FlushPendingWrites();
-            }
-
             // Simulate particle compute shaders before opening sceneFramebuffer graphics rendering
             if (plan.hasParticles && m_Scene && m_Scene->registry)
             {
@@ -1020,36 +1027,31 @@ namespace ignite
             }
 
             bool sceneColorCleared = false;
-            bool sceneDepthCleared = depthPrepassEnabled;
-            if (drawWorldEnv)
-            {
-                const Ref<GraphicsPipeline> envPSO = GetEnvironmentPSO(sceneFramebuffer, sceneRenderSettings.fillMode);
-                if (m_WorldEnvironment->environment->Draw(cmd, sceneFramebuffer, envPSO, frameContext->cameraBuffer, frameContext->sceneBuffer, true, !sceneDepthCleared))
-                {
-                    sceneColorCleared = true;
-                    sceneDepthCleared = true;
-                }
-            }
+            bool sceneDepthCleared = sharePrepassDepth;
 
-            m_ColorPassDepthReadOnly = depthPrepassEnabled;
+            m_ColorPassDepthReadOnly = sharePrepassDepth;
 
             RenderTarget *selectionFramebuffer = target->selectionRT
                 ? target->selectionRT->GetFramebuffer()
                 : nullptr;
             const uint32_t colorZone = gpuTimer.BeginZone(cmd, "ColorPass");
-            ColorPass(cmd, camera, frameContext, sceneFramebuffer, selectionFramebuffer, drawDebug, plan.has2D, sceneColorCleared, sceneDepthCleared);
+            ColorPass(cmd, camera, frameContext, sceneFramebuffer, selectionFramebuffer, drawDebug, plan.has2D, drawWorldEnv, sceneColorCleared, sceneDepthCleared);
             gpuTimer.EndZone(cmd, colorZone);
             m_ColorPassDepthReadOnly = false;
 
             if ((plan.hasWidgets || plan.hasScreenText) && target->widgetRT)
             {
+                const uint32_t uiZone = gpuTimer.BeginZone(cmd, "UIPass");
                 UIPass(cmd, camera, target->widgetRT->GetFramebuffer(), frameContext);
+                gpuTimer.EndZone(cmd, uiZone);
             }
 
             if (plan.requiresDebugOverlay && target->debugRT)
             {
+                const uint32_t debugZone = gpuTimer.BeginZone(cmd, "DebugPass");
                 RenderTarget *debugFramebuffer = target->debugRT->GetFramebuffer();
                 DebugPass(cmd, camera, debugFramebuffer, frameContext);
+                gpuTimer.EndZone(cmd, debugZone);
             }
 
             // MSAA resolve: if the scene was rendered with multiple samples, resolve to a
@@ -1058,6 +1060,7 @@ namespace ignite
             if (msaaActive)
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::MSAAResolve");
+                const uint32_t resolveZone = gpuTimer.BeginZone(cmd, "MSAAResolve");
                 Ref<Texture> msaaColor = target->sceneRT->GetColorAttachment(0);
                 Ref<Texture> resolvedColor = target->sceneResolvedRT->GetColorAttachment(0);
                 if (msaaColor && resolvedColor)
@@ -1090,13 +1093,13 @@ namespace ignite
                     nri.CmdResolveTexture(*cmd, *resolvedColor->GetHandle(), nullptr, *msaaColor->GetHandle(), nullptr, nri::ResolveOp::AVERAGE);
 
                     barriers[0].before = barriers[0].after;
-                    barriers[0].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    barriers[0].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                     barriers[1].before = barriers[1].after;
-                    barriers[1].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    barriers[1].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                     nri.CmdBarrier(*cmd, barrierDesc);
 
-                    resolvedColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
-                    msaaColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
+                    resolvedColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
+                    msaaColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
                 }
 
                 // R32_UINT cannot be hardware-resolved (MULTISAMPLE_RESOLVE unsupported), so resolve the
@@ -1106,12 +1109,14 @@ namespace ignite
                 {
                     ObjectIdResolvePass(cmd, target);
                 }
+                gpuTimer.EndZone(cmd, resolveZone);
             }
 
             // Copy single-sample HDR scene color into prevSceneColor for next frame's SSR.
             if (sceneRenderSettings.enableSSR && target->prevSceneColor)
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::SSRCopyPrevColor");
+                const uint32_t ssrCopyZone = gpuTimer.BeginZone(cmd, "SSRCopyPrevColor");
                 Ref<Texture> srcColor = (msaaActive && target->sceneResolvedRT)
                     ? target->sceneResolvedRT->GetColorAttachment(0)
                     : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : nullptr);
@@ -1147,18 +1152,19 @@ namespace ignite
                     nri.CmdCopyTexture(*cmd, *target->prevSceneColor->GetHandle(), nullptr, *srcColor->GetHandle(), nullptr);
 
                     barriers[0].before = barriers[0].after;
-                    barriers[0].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    barriers[0].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                     barriers[1].before = barriers[1].after;
                     barriers[1].after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE,
                         nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER };
                     nri.CmdBarrier(*cmd, barrierDesc);
 
-                    srcColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
+                    srcColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER);
                     target->prevSceneColor->SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE,
                         nri::StageBits::COMPUTE_SHADER | nri::StageBits::FRAGMENT_SHADER);
                     target->prevViewProj = camera->GetProjection() * camera->GetView();
                     target->prevSceneColorValid = true;
                 }
+                gpuTimer.EndZone(cmd, ssrCopyZone);
             }
 
             // Skip selection highlights/outlines for the game camera (gameplay viewport).
@@ -1194,8 +1200,9 @@ namespace ignite
             if (postProcessing.enableBloom)
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
+                const uint32_t bloomZone = gpuTimer.BeginZone(cmd, "Bloom");
                 const auto &blooms = GetOrCreateBlooms(camera);
-                Ref<Bloom> bloomInstance = blooms[frameContext->frameIndexInFlight];
+                Ref<Bloom> bloomInstance = blooms[frameContext->frameIndexInFlight % blooms.size()];
                 bloomInstance->settings.intensity = postProcessing.bloomIntensity;
                 bloomInstance->settings.knee = postProcessing.bloomKnee;
                 bloomInstance->settings.radius = postProcessing.bloomRadius;
@@ -1206,14 +1213,15 @@ namespace ignite
                 Ref<Texture> bloomSrc = (msaaActive && target->sceneResolvedRT) ? target->sceneResolvedRT->GetColorAttachment(0) : target->sceneRT->GetColorAttachment(0);
                 bloomInstance->Build(cmd, bloomSrc, m_CompositeVertexBuffer);
                 bloomTexture = bloomInstance->GetBloomTexture();
+                gpuTimer.EndZone(cmd, bloomZone);
             }
 
             Ref<Texture> ssaoTexture = nullptr;
-            if (effectiveAOMode == AOMode::LegacySSAO && !msaaActive)
+            if (effectiveAOMode == AOMode::SSAO && !msaaActive)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::HBAOPass", 0x404040FF);
                 const auto &SSAOs = GetOrCreateSSAOs(cmd, camera);
-                Ref<SSAO> ssaoInstance = SSAOs[frameContext->frameIndexInFlight];
+                Ref<SSAO> ssaoInstance = SSAOs[frameContext->frameIndexInFlight % SSAOs.size()];
                 ssaoInstance->Build(cmd, target->sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = ssaoInstance->GetAOTexture();
             }
@@ -1238,7 +1246,7 @@ namespace ignite
                     b.before = { gizmoSceneDepth->GetCurrentAccess(), gizmoSceneDepth->GetCurrentLayout(), gizmoSceneDepth->GetCurrentStages() };
                     if (b.before.layout == nri::Layout::UNDEFINED)
                         b.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
-                    b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                    b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER | nri::StageBits::COMPUTE_SHADER };
                     b.mipOffset = 0;
                     b.mipNum = nri::REMAINING;
                     b.layerOffset = 0;
@@ -1268,6 +1276,7 @@ namespace ignite
                 gizmoTexture = target->gizmoRT->GetColorAttachment(0);
             }
 
+            const uint32_t currHistoryIndex = static_cast<uint32_t>(m_TAAFrameIndex & 1u);
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
                 const uint32_t compositeZone = gpuTimer.BeginZone(cmd, "CompositePass");
@@ -1275,14 +1284,16 @@ namespace ignite
                 const bool hasExternalTarget = targetFramebuffer && target->compositeRT && targetFramebuffer != target->compositeRT->GetFramebuffer();
                 const bool mirrorCompositeForAgent = hasExternalTarget && AgentController::IsAutomationActive();
                 const bool enableOutline = !isGameCamera && (edgeTexture != nullptr);
+                const bool hasUI = plan.hasWidgets || plan.hasScreenText;
+                const bool hasDebug = plan.requiresDebugOverlay;
 
                 const bool taaUsesHistoryRT = postProcessing.taaProperties.enable
                     && !sceneRenderSettings.enableFXAA
-                    && target->taaHistoryRT[frameContext->frameIndexInFlight] != nullptr;
+                    && target->taaHistoryRT[currHistoryIndex] != nullptr;
 
                 if (sceneRenderSettings.enableFXAA && target->postProcessRT)
                 {
-                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, target->postProcessRT->GetFramebuffer(), enableOutline);
+                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, target->postProcessRT->GetFramebuffer(), enableOutline, hasUI, hasDebug);
 
                     IGN_PROFILE_SCOPE("SceneRenderer::FXAAPass");
                     FXAAPass(cmd, finalCompositeFB, target->postProcessRT->GetColorAttachment(0));
@@ -1295,8 +1306,8 @@ namespace ignite
                 {
                     // Render TAA directly into RGBA16F history RT to prevent 8-bit quantization/oil-painting
                     // artifacts at low blendFactor, then present to finalCompositeFB (and compositeRT if mirrored).
-                    Ref<RenderTarget> currHistoryRT = target->taaHistoryRT[frameContext->frameIndexInFlight];
-                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, currHistoryRT->GetFramebuffer(), enableOutline);
+                    Ref<RenderTarget> currHistoryRT = target->taaHistoryRT[currHistoryIndex];
+                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, currHistoryRT->GetFramebuffer(), enableOutline, hasUI, hasDebug);
 
                     Ref<Texture> historyColor = currHistoryRT->GetColorAttachment(0);
                     FXAAPass(cmd, finalCompositeFB, historyColor, true);
@@ -1307,16 +1318,16 @@ namespace ignite
                 }
                 else
                 {
-                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, finalCompositeFB, enableOutline);
+                    CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, finalCompositeFB, enableOutline, hasUI, hasDebug);
                     if (mirrorCompositeForAgent)
                     {
-                        CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, target->compositeRT->GetFramebuffer(), enableOutline);
+                        CompositePass(cmd, camera, frameContext, target, cameraLens, postProcessing, edgeTexture, bloomTexture, ssaoTexture, gizmoTexture, msaaActive, target->compositeRT->GetFramebuffer(), enableOutline, hasUI, hasDebug);
                     }
                 }
                 gpuTimer.EndZone(cmd, compositeZone);
             }
 
-            if (postProcessing.taaProperties.enable && target->taaHistoryRT[frameContext->frameIndexInFlight])
+            if (postProcessing.taaProperties.enable && target->taaHistoryRT[currHistoryIndex])
             {
                 target->taaHistoryValid = true;
                 target->taaPrevUnjitteredViewProj = target->currUnjitteredViewProj;
@@ -1333,11 +1344,6 @@ namespace ignite
 
         m_FramePacket.stats.shadowDrawCalls = static_cast<uint32_t>(Renderer::Stats.shadowDrawCallCount);
         m_FramePacket.stats.colorDrawCalls = static_cast<uint32_t>(Renderer::Stats.drawCallCount);
-
-        if (BindlessSystem::HasPendingWrites())
-        {
-            BindlessSystem::FlushPendingWrites();
-        }
 
         gpuTimer.Resolve(cmd);
         SubmitCommandBuffer(cmd);
@@ -2580,8 +2586,20 @@ namespace ignite
             else if (effectiveShadowDist <= 95.0f)
                 activeCascades = std::min(activeCascades, 3);
 
-            if (Ref<Texture> depthTex = m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight);
-                depthTex && depthTex->GetCurrentLayout() == nri::Layout::UNDEFINED)
+            Ref<Texture> depthTex = m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight);
+            const bool qualityOrSceneChanged = (m_CSMLastQuality != m_CascadedShadowMap->GetQuality())
+                || (m_CSMLastScene != m_Scene.get())
+                || !depthTex
+                || depthTex->GetCurrentLayout() == nri::Layout::UNDEFINED;
+            if (qualityOrSceneChanged)
+            {
+                m_CSMShadowCacheValid = false;
+                m_CSMCascadeInitialized.fill(false);
+                m_CSMLastQuality = m_CascadedShadowMap->GetQuality();
+                m_CSMLastScene = m_Scene.get();
+            }
+
+            if (depthTex && depthTex->GetCurrentLayout() == nri::Layout::UNDEFINED)
             {
                 for (int inactive = activeCascades; inactive < NUM_CASCADES; ++inactive)
                 {
@@ -2595,15 +2613,99 @@ namespace ignite
 
             m_CascadedShadowMap->ComputeMatrices(camera, m_FramePacket.sunDirection, effectiveShadowDist, activeCascades);
 
-            // Share cascade data with the main scene pass (cascadeIndex is unused there)
-            CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
-            sceneCascadeData.cascadeIndex = -1;
-
-            // Write the cascade data to the frame context buffer for use in the main scene pass
-            frameContext->csmBuffer.SetData(&sceneCascadeData, sizeof(sceneCascadeData));
-
-            for (int i = 0; i < activeCascades; ++i)
+            // Compute fast 64-bit state hash across cascades, camera, sun, and all shadow casters.
+            // When stationary (e.g. menus, paused, inspecting a scene), reuse the already-rendered CSM depth array.
+            uint64_t csmHash = 14695981039346656037ull;
+            auto hashBytes = [&](const void *ptr, size_t len)
             {
+                const uint8_t *b = static_cast<const uint8_t *>(ptr);
+                for (size_t k = 0; k < len; ++k)
+                {
+                    csmHash ^= static_cast<uint64_t>(b[k]);
+                    csmHash *= 1099511628211ull;
+                }
+            };
+            hashBytes(&activeCascades, sizeof(activeCascades));
+            hashBytes(&effectiveShadowDist, sizeof(effectiveShadowDist));
+            hashBytes(&m_FramePacket.sunDirection, sizeof(m_FramePacket.sunDirection));
+            const CSM_GPUData &computedCSM = m_CascadedShadowMap->GetGPUData();
+            hashBytes(computedCSM.lightViewProj, sizeof(computedCSM.lightViewProj));
+            hashBytes(&computedCSM.cascadeSplits, sizeof(computedCSM.cascadeSplits));
+            for (const StaticMeshPacketItem &item : m_FramePacket.staticMeshes)
+            {
+                if (!item.castShadow || !item.mesh) continue;
+                const void *meshPtr = item.mesh;
+                hashBytes(&meshPtr, sizeof(meshPtr));
+                hashBytes(&item.worldMatrix, sizeof(item.worldMatrix));
+            }
+            for (const SkeletalMeshPacketItem &item : m_FramePacket.skeletalMeshes)
+            {
+                if (!item.castShadow || !item.mesh) continue;
+                const void *meshPtr = item.mesh;
+                hashBytes(&meshPtr, sizeof(meshPtr));
+                hashBytes(&item.worldMatrix, sizeof(item.worldMatrix));
+                const size_t boneCount = item.component ? item.component->finalBoneTransforms.size() : 0;
+                hashBytes(&boneCount, sizeof(boneCount));
+                if (boneCount > 0)
+                {
+                    // Animated skeletal meshes invalidate shadow cache every frame
+                    const uint32_t animTick = m_CSMUpdateCounter + 1u;
+                    hashBytes(&animTick, sizeof(animTick));
+                }
+            }
+            for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
+            {
+                if (!tItem.castShadow || !tItem.component) continue;
+                const size_t chunkCount = tItem.component->chunks.size();
+                hashBytes(&chunkCount, sizeof(chunkCount));
+                hashBytes(&tItem.worldMatrix, sizeof(tItem.worldMatrix));
+            }
+
+            const bool csmCacheHit = m_CSMShadowCacheValid && csmHash == m_CSMShadowStateHash
+                && depthTex && depthTex->GetCurrentLayout() == nri::Layout::SHADER_RESOURCE;
+            if (csmCacheHit)
+            {
+                CSM_GPUData cachedSceneCascadeData = m_CascadedShadowMap->GetGPUData();
+                cachedSceneCascadeData.cascadeIndex = -1;
+                frameContext->csmBuffer.SetData(&cachedSceneCascadeData, sizeof(cachedSceneCascadeData));
+            }
+            else
+            {
+                const bool onlyCameraMoved = m_CSMShadowCacheValid && (csmHash != m_CSMShadowStateHash);
+                ++m_CSMUpdateCounter;
+
+                // Share cascade data with the main scene pass (cascadeIndex is unused there).
+                // For staggered far cascades (i >= 2) that reuse last frame's depth slice, keep their
+                // previously rendered lightViewProj matrix so projected shadows remain locked without swimming.
+                CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
+                sceneCascadeData.cascadeIndex = -1;
+
+                bool allCascadesRendered = true;
+                std::array<bool, NUM_CASCADES> renderCascade{};
+                for (int i = 0; i < activeCascades; ++i)
+                {
+                    const bool canStagger = (i >= 2) && onlyCameraMoved && m_CSMCascadeInitialized[i];
+                    const bool shouldRender = !canStagger || ((m_CSMUpdateCounter & 1u) == static_cast<uint32_t>(i & 1));
+                    renderCascade[i] = shouldRender;
+                    if (!shouldRender)
+                    {
+                        allCascadesRendered = false;
+                        sceneCascadeData.lightViewProj[i] = m_CSMCachedLightViewProj[i];
+                    }
+                    else
+                    {
+                        m_CSMCachedLightViewProj[i] = sceneCascadeData.lightViewProj[i];
+                    }
+                }
+
+                // Write the cascade data to the frame context buffer for use in the main scene pass
+                frameContext->csmBuffer.SetData(&sceneCascadeData, sizeof(sceneCascadeData));
+
+                for (int i = 0; i < activeCascades; ++i)
+                {
+                    if (!renderCascade[i])
+                        continue;
+                    m_CSMCascadeInitialized[i] = true;
                 IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
 
                 CSM_GPUData cascadeGpuData = sceneCascadeData;
@@ -2806,6 +2908,10 @@ namespace ignite
                     csmFramebuffer->BeginRendering(cmd, false, true);
                     csmFramebuffer->EndRendering(cmd);
                 }
+                }
+
+                m_CSMShadowStateHash = csmHash;
+                m_CSMShadowCacheValid = allCascadesRendered;
             }
         }
 
@@ -3033,7 +3139,7 @@ namespace ignite
             }
 
             const float range = std::max(light.range, 0.5f);
-            const AABB lightAABB(light.position - glm::vec3(range), light.position + glm::vec3(range));
+            const AABB lightAABB = AABB::FromMinMax(light.position - glm::vec3(range), light.position + glm::vec3(range));
             AABB spotConeAABB = lightAABB;
             if (light.isSpot)
             {
@@ -3322,16 +3428,28 @@ namespace ignite
             return;
         }
 
-        if (!m_StaticLocalShadowInitialized && m_StaticLocalShadowFaceRTs[0])
+        if (!m_StaticLocalShadowInitialized)
         {
-            m_StaticLocalShadowFaceRTs[0]->BeginRendering(cmd, true, true);
-            m_StaticLocalShadowFaceRTs[0]->EndRendering(cmd);
+            for (auto &rt : m_StaticLocalShadowFaceRTs)
+            {
+                if (rt)
+                {
+                    rt->BeginRendering(cmd, true, true);
+                    rt->EndRendering(cmd);
+                }
+            }
             m_StaticLocalShadowInitialized = true;
         }
-        if (!m_DynamicLocalShadowInitialized && m_DynamicLocalShadowFaceRTs[0])
+        if (!m_DynamicLocalShadowInitialized)
         {
-            m_DynamicLocalShadowFaceRTs[0]->BeginRendering(cmd, true, true);
-            m_DynamicLocalShadowFaceRTs[0]->EndRendering(cmd);
+            for (auto &rt : m_DynamicLocalShadowFaceRTs)
+            {
+                if (rt)
+                {
+                    rt->BeginRendering(cmd, true, true);
+                    rt->EndRendering(cmd);
+                }
+            }
             m_DynamicLocalShadowInitialized = true;
             m_DynamicLocalShadowDirtySlices.fill(0);
         }
@@ -3346,7 +3464,7 @@ namespace ignite
         auto hasMovableInLightBounds = [&](const LocalShadowLightItem &light) -> bool
         {
             const float range = std::max(light.range, 0.5f);
-            const AABB lightAABB(light.position - glm::vec3(range), light.position + glm::vec3(range));
+            const AABB lightAABB = AABB::FromMinMax(light.position - glm::vec3(range), light.position + glm::vec3(range));
 
             for (size_t i = 0; i < m_FramePacket.staticMeshes.size(); ++i)
             {
@@ -3531,7 +3649,7 @@ namespace ignite
 
     Ref<GraphicsPipeline> SceneRenderer::GetOrCreateDepthPrepassPSO(
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> &cache,
-        RenderTarget *framebuffer, nri::CullMode cullMode, const char *vertexShaderPath, EBindingLayout meshLayout)
+        RenderTarget *framebuffer, nri::CullMode cullMode, const char *vertexShaderPath, const char *pixelShaderPath, EBindingLayout meshLayout)
     {
         if (!framebuffer)
             return nullptr;
@@ -3550,7 +3668,7 @@ namespace ignite
         params.cullMode = cullMode;
 
         Ref<Shader> vertexShader = Shader::Create(vertexShaderPath, UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/depth_prepass.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+        Ref<Shader> pixelShader = Shader::Create(pixelShaderPath, UMBRA_SHADER_TYPE_PIXEL, false);
 
         Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create("GI Depth Normal Prepass");
         pipeline->SetShaders({ vertexShader, pixelShader })
@@ -3563,16 +3681,20 @@ namespace ignite
         return pipeline;
     }
 
-    Ref<GraphicsPipeline> SceneRenderer::GetStaticDepthPrepassPSO(RenderTarget *framebuffer, nri::CullMode cullMode)
+    Ref<GraphicsPipeline> SceneRenderer::GetStaticDepthPrepassPSO(RenderTarget *framebuffer, nri::CullMode cullMode, bool masked)
     {
-        return GetOrCreateDepthPrepassPSO(m_StaticDepthPrepassPSOCache, framebuffer, cullMode,
-            "resources/shaders/depth_prepass.vertex.hlsl", EBindingLayout::MESH_STATIC);
+        auto &cache = masked ? m_StaticMaskedDepthPrepassPSOCache : m_StaticDepthPrepassPSOCache;
+        const char *ps = masked ? "resources/shaders/depth_prepass.pixel.hlsl" : "resources/shaders/depth_prepass_opaque.pixel.hlsl";
+        return GetOrCreateDepthPrepassPSO(cache, framebuffer, cullMode,
+            "resources/shaders/depth_prepass.vertex.hlsl", ps, EBindingLayout::MESH_STATIC);
     }
 
-    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedDepthPrepassPSO(RenderTarget *framebuffer, nri::CullMode cullMode)
+    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedDepthPrepassPSO(RenderTarget *framebuffer, nri::CullMode cullMode, bool masked)
     {
-        return GetOrCreateDepthPrepassPSO(m_AnimatedDepthPrepassPSOCache, framebuffer, cullMode,
-            "resources/shaders/depth_prepass_anim.vertex.hlsl", EBindingLayout::MESH_ANIM);
+        auto &cache = masked ? m_AnimatedMaskedDepthPrepassPSOCache : m_AnimatedDepthPrepassPSOCache;
+        const char *ps = masked ? "resources/shaders/depth_prepass.pixel.hlsl" : "resources/shaders/depth_prepass_opaque.pixel.hlsl";
+        return GetOrCreateDepthPrepassPSO(cache, framebuffer, cullMode,
+            "resources/shaders/depth_prepass_anim.vertex.hlsl", ps, EBindingLayout::MESH_ANIM);
     }
 
     bool SceneRenderer::IsEntitySelected(entt::entity e) const
@@ -3663,7 +3785,8 @@ namespace ignite
                         continue;
 
                     const nri::CullMode cullMode = material ? material->GetCullMode() : nri::CullMode::FRONT;
-                    const Ref<GraphicsPipeline> staticPSO = GetStaticDepthPrepassPSO(depthPrepassFB, cullMode);
+                    const bool masked = material && material->GetType() == MaterialType::Masked;
+                    const Ref<GraphicsPipeline> staticPSO = GetStaticDepthPrepassPSO(depthPrepassFB, cullMode, masked);
                     if (!staticPSO || !staticPSO->GetHandle())
                         continue;
 
@@ -3705,6 +3828,13 @@ namespace ignite
                     if (!materialSet)
                         continue;
 
+                    const bool terrainMasked = material && material->GetType() == MaterialType::Masked;
+                    const Ref<GraphicsPipeline> chunkPSO = terrainMasked
+                        ? GetStaticDepthPrepassPSO(depthPrepassFB, nri::CullMode::FRONT, true)
+                        : terrainPSO;
+                    if (!chunkPSO || !chunkPSO->GetHandle())
+                        continue;
+
                     const auto &chunks = tItem.component->chunks;
                     for (size_t idx = 0; idx < chunks.size() && idx < cacheIt->second.size(); ++idx)
                     {
@@ -3721,9 +3851,9 @@ namespace ignite
                         key.indexBuffer = chunk.primitive->indexBuffer->GetHandle();
                         key.meshBindingSet = frameContext->staticMeshBindingSet->GetHandle();
                         key.materialBindingSet = materialSet->GetHandle();
-                        key.pipeline = terrainPSO->GetHandle();
+                        key.pipeline = chunkPSO->GetHandle();
                         m_DepthPrepassBatchBuilder.Submit(key, *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
-                            frameContext->staticMeshBindingSet, materialSet, terrainPSO,
+                            frameContext->staticMeshBindingSet, materialSet, chunkPSO,
                             chunk.primitive->indexBuffer->GetCount(), objectIndex, sizeof(VertexMeshStatic));
                     }
                 }
@@ -3792,7 +3922,8 @@ namespace ignite
                         continue;
 
                     const nri::CullMode cullMode = material ? material->GetCullMode() : nri::CullMode::FRONT;
-                    const Ref<GraphicsPipeline> animatedPSO = GetAnimatedDepthPrepassPSO(depthPrepassFB, cullMode);
+                    const bool masked = material && material->GetType() == MaterialType::Masked;
+                    const Ref<GraphicsPipeline> animatedPSO = GetAnimatedDepthPrepassPSO(depthPrepassFB, cullMode, masked);
                     if (!animatedPSO || !animatedPSO->GetHandle())
                         continue;
 
@@ -3859,7 +3990,7 @@ namespace ignite
         }
     }
 
-    void SceneRenderer::ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug, bool has2D, bool &sceneColorCleared, bool &sceneDepthCleared)
+    void SceneRenderer::ColorPass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext, RenderTarget *framebuffer, RenderTarget *selectionFramebuffer, bool drawDebug, bool has2D, bool drawSky, bool &sceneColorCleared, bool &sceneDepthCleared)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -3969,7 +4100,12 @@ namespace ignite
                             continue;
                         }
 
-                        auto meshPSO = GetStaticPSO(framebuffer, sceneRenderSettings.fillMode, matCullMode);
+                        const bool masked = (matType == MaterialType::Masked);
+                        auto meshPSO = GetStaticPSO(framebuffer, sceneRenderSettings.fillMode, matCullMode, masked);
+
+                        const glm::vec3 subCenter = subAABBPtr ? subAABBPtr->GetCenter() : glm::vec3(item.worldMatrix[3]);
+                        const glm::vec3 toCam = subCenter - camera->position;
+                        const float distSq = glm::dot(toCam, toCam);
 
                         BatchKey key;
                         key.vertexBuffer = *primitive->vertexBuffer;
@@ -3982,7 +4118,7 @@ namespace ignite
                             key, *primitive->vertexBuffer, *primitive->indexBuffer,
                             frameContext->staticMeshBindingSet,
                             materialBindingSet, meshPSO,
-                            primitive->indexBuffer->GetCount(), objectIndex);
+                            primitive->indexBuffer->GetCount(), objectIndex, sizeof(VertexMeshStatic), distSq);
                     }
                     Renderer::Stats.staticMeshCount++;
                 }
@@ -4011,6 +4147,11 @@ namespace ignite
                 if (!materialBindingSet)
                     continue;
 
+                const bool terrainMasked = material && material->GetType() == MaterialType::Masked;
+                auto terrainPSO = terrainMasked
+                    ? GetStaticPSO(framebuffer, sceneRenderSettings.fillMode, nri::CullMode::FRONT, true)
+                    : staticPSO;
+
                 const auto &chunks = tItem.component->chunks;
                 for (size_t idx = 0; idx < chunks.size(); ++idx)
                 {
@@ -4026,24 +4167,26 @@ namespace ignite
                         continue;
 
                     const uint32_t objectIndex = cacheIt->second[idx];
+                    const glm::vec3 toCam = worldBounds.GetCenter() - camera->position;
+                    const float distSq = glm::dot(toCam, toCam);
 
                     BatchKey key;
                     key.vertexBuffer = *chunk.primitive->vertexBuffer;
                     key.indexBuffer = *chunk.primitive->indexBuffer;
                     key.meshBindingSet = frameContext->staticMeshBindingSet->GetHandle();
                     key.materialBindingSet = materialBindingSet->GetHandle();
-                    key.pipeline = staticPSO ? staticPSO->GetHandle() : nullptr;
+                    key.pipeline = terrainPSO ? terrainPSO->GetHandle() : nullptr;
 
                     m_OpaqueBatchBuilder.Submit(
                         key, *chunk.primitive->vertexBuffer, *chunk.primitive->indexBuffer,
                         frameContext->staticMeshBindingSet,
-                        materialBindingSet, staticPSO,
-                        chunk.primitive->indexBuffer->GetCount(), objectIndex);
+                        materialBindingSet, terrainPSO,
+                        chunk.primitive->indexBuffer->GetCount(), objectIndex, sizeof(VertexMeshStatic), distSq);
                 }
             }
 
             // Flush all opaque static mesh batches (folds color/depth clear into first BeginRendering)
-            if (FlushOpaqueBatches(cmd, frameContext, framebuffer, !sceneColorCleared, !sceneDepthCleared))
+            if (FlushOpaqueBatches(cmd, frameContext, framebuffer, !sceneColorCleared, !sceneDepthCleared, !m_ColorPassDepthReadOnly))
             {
                 sceneColorCleared = true;
                 sceneDepthCleared = true;
@@ -4132,6 +4275,24 @@ namespace ignite
                 if (startedSkelColorPass && framebuffer->IsRendering())
                     framebuffer->EndRendering(cmd);
             }
+        }
+
+        // Sky/environment: drawn after opaque geometry so the depth buffer rejects
+        // every pixel the scene already covered. The sky shader writes a constant
+        // far-plane depth, so it only shades pixels still at the cleared depth.
+        if (drawSky && framebuffer && m_WorldEnvironment && m_WorldEnvironment->environment)
+        {
+            GPUTimer &gpuTimer = m_GPUTimers[GetActiveCommandBufferSlotIndex()];
+            const uint32_t skyZone = gpuTimer.BeginZone(cmd, "SkyPass");
+            const Ref<GraphicsPipeline> envPSO = GetEnvironmentPSO(framebuffer, sceneRenderSettings.fillMode);
+            if (m_WorldEnvironment->environment->Draw(cmd, framebuffer, envPSO,
+                frameContext->cameraBuffer, frameContext->sceneBuffer,
+                !sceneColorCleared, !sceneDepthCleared))
+            {
+                sceneColorCleared = true;
+                sceneDepthCleared = true;
+            }
+            gpuTimer.EndZone(cmd, skyZone);
         }
 
         // Draw debug grid directly into scene framebuffer before transparent meshes
@@ -5315,7 +5476,7 @@ namespace ignite
     void SceneRenderer::CompositePass(nri::CommandBuffer *cmd, ICamera *camera, FrameContext *frameContext,
         Ref<CameraRenderTarget> target, const CameraLens &lens, const PostProcessing &postProcessing,
         Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<Texture> gizmoTexture, bool msaaResolved,
-        RenderTarget *targetFramebuffer, bool enableOutline)
+        RenderTarget *targetFramebuffer, bool enableOutline, bool hasUI, bool hasDebug)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -5376,6 +5537,15 @@ namespace ignite
                 m_PostProcessingData.gamma = 2.2f;
                 m_PostProcessingData.fogDensity = 0.0f;
             }
+
+            // Pack active overlay presence bits into padding_fog (bit3=mask enabled, bit0=UI, bit1=Debug, bit2=Gizmo)
+            // so composite.pixel.hlsl skips full-screen texture fetches for inactive overlay passes.
+            const bool hasGizmo = (gizmoTexture != nullptr);
+            uint32_t overlayMask = 8u;
+            if (hasUI) overlayMask |= 1u;
+            if (hasDebug) overlayMask |= 2u;
+            if (hasGizmo) overlayMask |= 4u;
+            m_PostProcessingData.padding_fog = static_cast<float>(overlayMask);
         }
 
         m_CompositePostProcessBuffer.SetData(&m_PostProcessingData, sizeof(m_PostProcessingData));
@@ -5385,7 +5555,7 @@ namespace ignite
             return tex && tex->GetHandle() && tex->GetShaderResourceView() && tex->GetCurrentLayout() != nri::Layout::UNDEFINED;
         };
 
-        const uint32_t previousHistoryIndex = (frameContext->frameIndexInFlight + 2u) % 3u;
+        const uint32_t previousHistoryIndex = static_cast<uint32_t>((m_TAAFrameIndex ^ 1u) & 1u);
         Ref<Texture> rawTaaHistory = target->taaHistoryRT[previousHistoryIndex]
             ? target->taaHistoryRT[previousHistoryIndex]->GetColorAttachment(0)
             : nullptr;
@@ -5413,16 +5583,26 @@ namespace ignite
             return format == nri::Format::D24_UNORM_S8_UINT || format == nri::Format::D32_SFLOAT_S8_UINT;
         };
 
-        auto transitionToSRV = [&](Ref<Texture> &tex)
+        std::array<nri::TextureBarrierDesc, 10> batchedBarriers{};
+        std::array<Ref<Texture>, 10> batchedTextures{};
+        uint32_t batchedCount = 0;
+        auto queueTransitionToSRV = [&](Ref<Texture> tex)
         {
             if (tex && tex->GetHandle()
                 && tex->GetCurrentLayout() != nri::Layout::UNDEFINED
-                && tex->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE)
+                && tex->GetCurrentLayout() != nri::Layout::SHADER_RESOURCE
+                && batchedCount < batchedBarriers.size())
             {
-                nri::TextureBarrierDesc b = {};
+                for (uint32_t i = 0; i < batchedCount; ++i)
+                {
+                    if (batchedBarriers[i].texture == tex->GetHandle())
+                        return;
+                }
+                nri::TextureBarrierDesc &b = batchedBarriers[batchedCount];
+                b = {};
                 b.texture = tex->GetHandle();
                 b.before = { tex->GetCurrentAccess(), tex->GetCurrentLayout(), tex->GetCurrentStages() };
-                b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+                b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER };
                 b.mipOffset = 0;
                 b.mipNum = nri::REMAINING;
                 b.layerOffset = 0;
@@ -5430,42 +5610,52 @@ namespace ignite
                 b.planes = isDepthFormat(tex->GetFormat())
                     ? (hasStencil(tex->GetFormat()) ? (nri::PlaneBits::DEPTH | nri::PlaneBits::STENCIL) : nri::PlaneBits::DEPTH)
                     : nri::PlaneBits::ALL;
-
-                nri::BarrierDesc bd = {};
-                bd.textures = &b;
-                bd.textureNum = 1;
-                DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, bd);
-                tex->SetCurrentState(b.after.layout, b.after.access, b.after.stages);
+                batchedTextures[batchedCount] = std::move(tex);
+                ++batchedCount;
             }
         };
 
         const bool hasResolved = msaaResolved && target->sceneResolvedRT;
         Ref<Texture> compositeDepth = (target->sceneRT && target->sceneRT->GetDepthAttachment() && !hasResolved) ? target->sceneRT->GetDepthAttachment() : nullptr;
         Ref<Texture> compositeColor = hasResolved ? (target->sceneResolvedRT ? target->sceneResolvedRT->GetColorAttachment(0) : nullptr) : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : nullptr);
-        Ref<Texture> compositeObjectID = hasResolved
-            ? (target->sceneResolvedRT ? target->sceneResolvedRT->GetColorAttachment(1) : nullptr)
-            : (target->sceneRT ? target->sceneRT->GetColorAttachment(1) : nullptr);
+        Ref<Texture> compositeObjectID = (hasResolved && target->sceneResolvedRT && target->sceneResolvedRT->GetColorAttachmentCount() > 1)
+            ? target->sceneResolvedRT->GetColorAttachment(1)
+            : ((hasResolved && target->objectIdResolveRT)
+                ? target->objectIdResolveRT->GetColorAttachment(0)
+                : ((target->sceneRT && target->sceneRT->GetColorAttachmentCount() > 1) ? target->sceneRT->GetColorAttachment(1) : nullptr));
         Ref<Texture> compositeDebug = (target->debugRT ? target->debugRT->GetColorAttachment(0) : nullptr);
         Ref<Texture> compositeWidget = (target->widgetRT ? target->widgetRT->GetColorAttachment(0) : nullptr);
 
-        transitionToSRV(compositeColor);
-        transitionToSRV(compositeWidget);
-        transitionToSRV(edgeTexture);
-        transitionToSRV(bloomTexture);
-        transitionToSRV(ssaoTexture);
-        transitionToSRV(compositeDepth);
-        transitionToSRV(compositeDebug);
-        transitionToSRV(compositeObjectID);
-        transitionToSRV(taaHistoryTexture);
-        transitionToSRV(gizmoTexture);
+        queueTransitionToSRV(compositeColor);
+        queueTransitionToSRV(compositeWidget);
+        queueTransitionToSRV(edgeTexture);
+        queueTransitionToSRV(bloomTexture);
+        queueTransitionToSRV(ssaoTexture);
+        queueTransitionToSRV(compositeDepth);
+        queueTransitionToSRV(compositeDebug);
+        queueTransitionToSRV(compositeObjectID);
+        queueTransitionToSRV(taaHistoryTexture);
+        queueTransitionToSRV(gizmoTexture);
+
+        if (batchedCount > 0)
+        {
+            nri::BarrierDesc bd = {};
+            bd.textures = batchedBarriers.data();
+            bd.textureNum = batchedCount;
+            DeviceManager::GetInstance()->GetCoreInterface().CmdBarrier(*cmd, bd);
+            for (uint32_t i = 0; i < batchedCount; ++i)
+            {
+                batchedTextures[i]->SetCurrentState(batchedBarriers[i].after.layout, batchedBarriers[i].after.access, batchedBarriers[i].after.stages);
+            }
+        }
 
         const bool startedRendering = compositeFramebuffer && !compositeFramebuffer->IsRendering();
         if (startedRendering)
         {
-            compositeFramebuffer->SetClearColorAttachmentFloat(glm::vec4(0.0f), 0);
-            if (compositeFramebuffer->HasDepthAttachment())
+            const bool hasDepth = compositeFramebuffer->HasDepthAttachment();
+            if (hasDepth)
                 compositeFramebuffer->SetClearDepthAttachment(1.0f, 0);
-            compositeFramebuffer->BeginRendering(cmd, true, compositeFramebuffer->HasDepthAttachment());
+            compositeFramebuffer->BeginRendering(cmd, false, hasDepth, true);
         }
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
@@ -5742,11 +5932,14 @@ namespace ignite
     }
 
     // Helper to build a geometry pipeline for a framebuffer (once) and cache it.
-    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode)
+    Ref<GraphicsPipeline> SceneRenderer::GetAnimatedPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode, bool masked)
     {
-        auto &cache = m_ColorPassDepthReadOnly ? m_AnimatedReadOnlyDepthPSOCache : m_AnimatedPSOCache;
+        auto &cache = masked
+            ? (m_ColorPassDepthReadOnly ? m_AnimatedMaskedReadOnlyDepthPSOCache : m_AnimatedMaskedPSOCache)
+            : (m_ColorPassDepthReadOnly ? m_AnimatedReadOnlyDepthPSOCache : m_AnimatedPSOCache);
+        const char *ps = masked ? "resources/shaders/mesh_anim.pixel.hlsl" : "resources/shaders/mesh_anim_opaque.pixel.hlsl";
         return GetOrCreateMeshPSO(cache, framebuffer, fillMode, cullMode,
-            "resources/shaders/mesh_anim.vertex.hlsl", "resources/shaders/mesh_anim.pixel.hlsl",
+            "resources/shaders/mesh_anim.vertex.hlsl", ps,
             EBindingLayout::MESH_ANIM, false, !m_ColorPassDepthReadOnly);
     }
 
@@ -5757,11 +5950,14 @@ namespace ignite
             EBindingLayout::MESH_ANIM, true);
     }
 
-    Ref<GraphicsPipeline> SceneRenderer::GetStaticPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode)
+    Ref<GraphicsPipeline> SceneRenderer::GetStaticPSO(RenderTarget *framebuffer, nri::FillMode fillMode, nri::CullMode cullMode, bool masked)
     {
-        auto &cache = m_ColorPassDepthReadOnly ? m_StaticReadOnlyDepthPSOCache : m_StaticPSOCache;
+        auto &cache = masked
+            ? (m_ColorPassDepthReadOnly ? m_StaticMaskedReadOnlyDepthPSOCache : m_StaticMaskedPSOCache)
+            : (m_ColorPassDepthReadOnly ? m_StaticReadOnlyDepthPSOCache : m_StaticPSOCache);
+        const char *ps = masked ? "resources/shaders/mesh_static.pixel.hlsl" : "resources/shaders/mesh_static_opaque.pixel.hlsl";
         return GetOrCreateMeshPSO(cache, framebuffer, fillMode, cullMode,
-            "resources/shaders/mesh_static.vertex.hlsl", "resources/shaders/mesh_static.pixel.hlsl",
+            "resources/shaders/mesh_static.vertex.hlsl", ps,
             EBindingLayout::MESH_STATIC, false, !m_ColorPassDepthReadOnly);
     }
 
@@ -6365,7 +6561,7 @@ namespace ignite
         const bool hasDepthAttachment = framebuffer->HasDepthAttachment();
 
         GraphicsPipelineParams params;
-        params.enableBlend = true;
+        params.enableBlend = false;
         params.enableDepthWrite = hasDepthAttachment;
         params.enableDepthTest = hasDepthAttachment;
         params.enableDepthStencil = false;
@@ -6438,10 +6634,9 @@ namespace ignite
             createInfo.width = width;
             createInfo.height = height;
             createInfo.sampleCount = 1;
-            createInfo.attachments =
-            {
-                FramebufferAttachments{ "[Scene Object ID Resolve]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
-            };
+            FramebufferAttachments objIdResolveAtt{ "[Scene Object ID Resolve]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT };
+            objIdResolveAtt.allowHostReadback = true;
+            createInfo.attachments = { objIdResolveAtt };
             target->objectIdResolveRT = RenderTarget::Create(createInfo, "[Scene Renderer] Object ID Resolve RT");
         }
         else if (target->objectIdResolveRT->GetWidth() != width || target->objectIdResolveRT->GetHeight() != height)
@@ -6466,7 +6661,7 @@ namespace ignite
                 b.before = { nri::AccessBits::NONE, nri::Layout::UNDEFINED, nri::StageBits::NONE };
             else
                 b.before = { msaaObjectId->GetCurrentAccess(), msaaObjectId->GetCurrentLayout(), msaaObjectId->GetCurrentStages() };
-            b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER };
             b.mipNum = nri::REMAINING;
             b.layerNum = nri::REMAINING;
             b.planes = nri::PlaneBits::ALL;
@@ -6494,8 +6689,7 @@ namespace ignite
         if (!bindingSet || !bindingSet->GetHandle())
             return;
 
-        framebuffer->SetClearColorAttachmentUint(0xFFFFFFFFu, 0);
-        framebuffer->BeginRendering(cmd, true, false);
+        framebuffer->BeginRendering(cmd, false, false, true);
 
         nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *layout);
         nri.CmdSetPipeline(*cmd, *pso->GetHandle());
@@ -6564,7 +6758,7 @@ namespace ignite
             nri::TextureBarrierDesc b = {};
             b.texture = inputTexture->GetHandle();
             b.before = { inputTexture->GetCurrentAccess(), inputTexture->GetCurrentLayout(), inputTexture->GetCurrentStages() };
-            b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::ALL };
+            b.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE, nri::StageBits::FRAGMENT_SHADER };
             b.mipOffset = 0;
             b.mipNum = nri::REMAINING;
             b.layerOffset = 0;
@@ -6619,8 +6813,7 @@ namespace ignite
         const bool startedRendering = !framebuffer->IsRendering();
         if (startedRendering)
         {
-            framebuffer->SetClearColorAttachmentFloat(glm::vec4(0.0f), 0);
-            framebuffer->BeginRendering(cmd, true, false);
+            framebuffer->BeginRendering(cmd, false, false, true);
         }
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
@@ -6671,9 +6864,11 @@ namespace ignite
             ? target->sceneResolvedRT->GetColorAttachment(0)
             : (target->sceneRT ? target->sceneRT->GetColorAttachment(0) : nullptr);
         Ref<Texture> sceneColor = isTextureReady(rawSceneColor) ? rawSceneColor : Renderer::GetBlackTexture();
-        Ref<Texture> rawObjectIDTex = hasResolved
+        Ref<Texture> rawObjectIDTex = (hasResolved && target->sceneResolvedRT->GetColorAttachmentCount() > 1)
             ? target->sceneResolvedRT->GetColorAttachment(1)
-            : (target->sceneRT ? target->sceneRT->GetColorAttachment(1) : nullptr);
+            : ((hasResolved && target->objectIdResolveRT)
+                ? target->objectIdResolveRT->GetColorAttachment(0)
+                : ((target->sceneRT && target->sceneRT->GetColorAttachmentCount() > 1) ? target->sceneRT->GetColorAttachment(1) : nullptr));
         Ref<Texture> objectIDTex = isTextureReady(rawObjectIDTex) ? rawObjectIDTex : Renderer::GetBlackUIntTexture();
 
         CompositeBindingKey key
@@ -6747,6 +6942,16 @@ namespace ignite
             framebuffer->BeginRendering(cmd, clearColor, clearDepth);
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        nri::PipelineLayout *lastLayout = nullptr;
+        nri::Pipeline *lastPipeline = nullptr;
+        nri::DescriptorSet *lastSet0 = nullptr;
+        nri::DescriptorSet *lastSet1 = nullptr;
+        bool boundSet2 = false;
+        nri::Buffer *lastVB = nullptr;
+        uint32_t lastStride = 0;
+        nri::Buffer *lastIB = nullptr;
+        nri::DescriptorSet *bindlessSet = BindlessSystem::GetDescriptorSet();
+
         for (size_t i = 0; i < batches.size(); ++i)
         {
             const DrawBatch &batch = batches[i];
@@ -6754,20 +6959,54 @@ namespace ignite
                 || !batch.pipeline || !batch.pipeline->GetHandle())
                 continue;
 
-            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *batch.pipeline->GetPipelineLayout());
-            nri.CmdSetPipeline(*cmd, *batch.pipeline->GetHandle());
-            nri::SetDescriptorSetDesc set0 = { 0, batch.meshBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
-            nri::SetDescriptorSetDesc set1 = { 1, batch.materialBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
-            nri::SetDescriptorSetDesc set2 = { 2, BindlessSystem::GetDescriptorSet(), nri::BindPoint::GRAPHICS };
-            nri.CmdSetDescriptorSet(*cmd, set0);
-            nri.CmdSetDescriptorSet(*cmd, set1);
-            nri.CmdSetDescriptorSet(*cmd, set2);
+            nri::PipelineLayout *layout = batch.pipeline->GetPipelineLayout();
+            if (layout != lastLayout)
+            {
+                nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *layout);
+                lastLayout = layout;
+                lastSet0 = nullptr;
+                lastSet1 = nullptr;
+                boundSet2 = false;
+            }
+            if (batch.pipeline->GetHandle() != lastPipeline)
+            {
+                nri.CmdSetPipeline(*cmd, *batch.pipeline->GetHandle());
+                lastPipeline = batch.pipeline->GetHandle();
+            }
+            if (batch.meshBindingSet->GetHandle() != lastSet0)
+            {
+                nri::SetDescriptorSetDesc set0 = { 0, batch.meshBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set0);
+                lastSet0 = batch.meshBindingSet->GetHandle();
+            }
+            if (batch.materialBindingSet->GetHandle() != lastSet1)
+            {
+                nri::SetDescriptorSetDesc set1 = { 1, batch.materialBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set1);
+                lastSet1 = batch.materialBindingSet->GetHandle();
+            }
+            if (!boundSet2)
+            {
+                nri::SetDescriptorSetDesc set2 = { 2, bindlessSet, nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set2);
+                boundSet2 = true;
+            }
 
-            nri::VertexBufferDesc vbDesc = {};
-            vbDesc.buffer = batch.vertexBuffer;
-            vbDesc.stride = batch.vertexStride ? batch.vertexStride : sizeof(VertexMeshStatic);
-            nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
-            nri.CmdSetIndexBuffer(*cmd, *batch.indexBuffer, 0, nri::IndexType::UINT32);
+            const uint32_t stride = batch.vertexStride ? batch.vertexStride : sizeof(VertexMeshStatic);
+            if (batch.vertexBuffer != lastVB || stride != lastStride)
+            {
+                nri::VertexBufferDesc vbDesc = {};
+                vbDesc.buffer = batch.vertexBuffer;
+                vbDesc.stride = stride;
+                nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+                lastVB = batch.vertexBuffer;
+                lastStride = stride;
+            }
+            if (batch.indexBuffer != lastIB)
+            {
+                nri.CmdSetIndexBuffer(*cmd, *batch.indexBuffer, 0, nri::IndexType::UINT32);
+                lastIB = batch.indexBuffer;
+            }
 
             const uint32_t base = globalBase + baseOffsets[i];
             nri::SetRootConstantsDesc root = {};
@@ -6793,14 +7032,14 @@ namespace ignite
     // Each DrawBatch contains N instances sharing the same vertex buffer, index buffer,
     // material binding set, and PSO. The object indices are uploaded to the
     // InstanceIndexBuffer and referenced via push constant base offset.
-    bool SceneRenderer::FlushOpaqueBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, bool clearColor, bool clearDepth)
+    bool SceneRenderer::FlushOpaqueBatches(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, bool clearColor, bool clearDepth, bool sortFrontToBack)
     {
         if (m_OpaqueBatchBuilder.IsEmpty() || !framebuffer)
             return false;
 
         IGN_PROFILE_SCOPE("SceneRenderer::FlushOpaqueBatches");
 
-        m_OpaqueBatchBuilder.Finalize();
+        m_OpaqueBatchBuilder.Finalize(sortFrontToBack);
         const auto &batches = m_OpaqueBatchBuilder.GetBatches();
 
         // Batch upload all instance indices upfront in a single contiguous writeBuffer call
@@ -6825,6 +7064,15 @@ namespace ignite
             framebuffer->BeginRendering(cmd, clearColor, clearDepth);
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        nri::PipelineLayout *lastLayout = nullptr;
+        nri::Pipeline *lastPipeline = nullptr;
+        nri::DescriptorSet *lastSet0 = nullptr;
+        nri::DescriptorSet *lastSet1 = nullptr;
+        bool boundSet2 = false;
+        nri::Buffer *lastVB = nullptr;
+        uint32_t lastStride = 0;
+        nri::Buffer *lastIB = nullptr;
+        nri::DescriptorSet *bindlessSet = BindlessSystem::GetDescriptorSet();
 
         for (size_t i = 0; i < batches.size(); ++i)
         {
@@ -6834,22 +7082,56 @@ namespace ignite
 
             const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
 
-            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *batch.pipeline->GetPipelineLayout());
-            nri.CmdSetPipeline(*cmd, *batch.pipeline->GetHandle());
+            nri::PipelineLayout *layout = batch.pipeline->GetPipelineLayout();
+            if (layout != lastLayout)
+            {
+                nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *layout);
+                lastLayout = layout;
+                lastSet0 = nullptr;
+                lastSet1 = nullptr;
+                boundSet2 = false;
+            }
+            if (batch.pipeline->GetHandle() != lastPipeline)
+            {
+                nri.CmdSetPipeline(*cmd, *batch.pipeline->GetHandle());
+                lastPipeline = batch.pipeline->GetHandle();
+            }
 
-            nri::SetDescriptorSetDesc set0 = { 0, batch.meshBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
-            nri::SetDescriptorSetDesc set1 = { 1, batch.materialBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
-            nri::SetDescriptorSetDesc set2 = { 2, BindlessSystem::GetDescriptorSet(), nri::BindPoint::GRAPHICS };
-            nri.CmdSetDescriptorSet(*cmd, set0);
-            nri.CmdSetDescriptorSet(*cmd, set1);
-            nri.CmdSetDescriptorSet(*cmd, set2);
+            if (batch.meshBindingSet->GetHandle() != lastSet0)
+            {
+                nri::SetDescriptorSetDesc set0 = { 0, batch.meshBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set0);
+                lastSet0 = batch.meshBindingSet->GetHandle();
+            }
+            if (batch.materialBindingSet->GetHandle() != lastSet1)
+            {
+                nri::SetDescriptorSetDesc set1 = { 1, batch.materialBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set1);
+                lastSet1 = batch.materialBindingSet->GetHandle();
+            }
+            if (!boundSet2)
+            {
+                nri::SetDescriptorSetDesc set2 = { 2, bindlessSet, nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set2);
+                boundSet2 = true;
+            }
 
-            nri::VertexBufferDesc vbDesc = {};
-            vbDesc.buffer = batch.vertexBuffer;
-            vbDesc.offset = 0;
-            vbDesc.stride = batch.vertexStride ? batch.vertexStride : static_cast<uint32_t>(sizeof(VertexMeshStatic));
-            nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
-            nri.CmdSetIndexBuffer(*cmd, *batch.indexBuffer, 0, nri::IndexType::UINT32);
+            const uint32_t stride = batch.vertexStride ? batch.vertexStride : static_cast<uint32_t>(sizeof(VertexMeshStatic));
+            if (batch.vertexBuffer != lastVB || stride != lastStride)
+            {
+                nri::VertexBufferDesc vbDesc = {};
+                vbDesc.buffer = batch.vertexBuffer;
+                vbDesc.offset = 0;
+                vbDesc.stride = stride;
+                nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+                lastVB = batch.vertexBuffer;
+                lastStride = stride;
+            }
+            if (batch.indexBuffer != lastIB)
+            {
+                nri.CmdSetIndexBuffer(*cmd, *batch.indexBuffer, 0, nri::IndexType::UINT32);
+                lastIB = batch.indexBuffer;
+            }
 
             nri::SetRootConstantsDesc rootConstDesc = {};
             rootConstDesc.rootConstantIndex = 0;
@@ -6917,6 +7199,12 @@ namespace ignite
             csmFramebuffer->BeginRendering(cmd, false, clearDepth);
 
         const auto &nri = DeviceManager::GetInstance()->GetCoreInterface();
+        nri::PipelineLayout *lastLayout = nullptr;
+        nri::Pipeline *lastPipeline = nullptr;
+        nri::DescriptorSet *lastSet0 = nullptr;
+        nri::Buffer *lastVB = nullptr;
+        uint32_t lastStride = 0;
+        nri::Buffer *lastIB = nullptr;
 
         for (size_t i = 0; i < batches.size(); ++i)
         {
@@ -6926,18 +7214,42 @@ namespace ignite
 
             const uint32_t baseOffset = globalBaseOffset + batchBaseOffsets[i];
 
-            nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *batch.pipeline->GetPipelineLayout());
-            nri.CmdSetPipeline(*cmd, *batch.pipeline->GetHandle());
+            nri::PipelineLayout *layout = batch.pipeline->GetPipelineLayout();
+            if (layout != lastLayout)
+            {
+                nri.CmdSetPipelineLayout(*cmd, nri::BindPoint::GRAPHICS, *layout);
+                lastLayout = layout;
+                lastSet0 = nullptr;
+            }
+            if (batch.pipeline->GetHandle() != lastPipeline)
+            {
+                nri.CmdSetPipeline(*cmd, *batch.pipeline->GetHandle());
+                lastPipeline = batch.pipeline->GetHandle();
+            }
 
-            nri::SetDescriptorSetDesc set0 = { 0, batch.meshBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
-            nri.CmdSetDescriptorSet(*cmd, set0);
+            if (batch.meshBindingSet->GetHandle() != lastSet0)
+            {
+                nri::SetDescriptorSetDesc set0 = { 0, batch.meshBindingSet->GetHandle(), nri::BindPoint::GRAPHICS };
+                nri.CmdSetDescriptorSet(*cmd, set0);
+                lastSet0 = batch.meshBindingSet->GetHandle();
+            }
 
-            nri::VertexBufferDesc vbDesc = {};
-            vbDesc.buffer = batch.vertexBuffer;
-            vbDesc.offset = 0;
-            vbDesc.stride = batch.vertexStride ? batch.vertexStride : static_cast<uint32_t>(sizeof(VertexMeshStatic));
-            nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
-            nri.CmdSetIndexBuffer(*cmd, *batch.indexBuffer, 0, nri::IndexType::UINT32);
+            const uint32_t stride = batch.vertexStride ? batch.vertexStride : static_cast<uint32_t>(sizeof(VertexMeshStatic));
+            if (batch.vertexBuffer != lastVB || stride != lastStride)
+            {
+                nri::VertexBufferDesc vbDesc = {};
+                vbDesc.buffer = batch.vertexBuffer;
+                vbDesc.offset = 0;
+                vbDesc.stride = stride;
+                nri.CmdSetVertexBuffers(*cmd, 0, &vbDesc, 1);
+                lastVB = batch.vertexBuffer;
+                lastStride = stride;
+            }
+            if (batch.indexBuffer != lastIB)
+            {
+                nri.CmdSetIndexBuffer(*cmd, *batch.indexBuffer, 0, nri::IndexType::UINT32);
+                lastIB = batch.indexBuffer;
+            }
 
             nri::SetRootConstantsDesc rootConstDesc = {};
             rootConstDesc.rootConstantIndex = 0;
@@ -7125,9 +7437,10 @@ namespace ignite
                 }
                 else
                 {
+                    const bool masked = (materialType == MaterialType::Masked);
                     auto meshPSO = isSkeletal
-                        ? GetAnimatedPSO(framebuffer, sceneRenderSettings.fillMode, material ? material->GetCullMode() : nri::CullMode::FRONT)
-                        : GetStaticPSO(framebuffer, sceneRenderSettings.fillMode, material ? material->GetCullMode() : nri::CullMode::FRONT);
+                        ? GetAnimatedPSO(framebuffer, sceneRenderSettings.fillMode, material ? material->GetCullMode() : nri::CullMode::FRONT, masked)
+                        : GetStaticPSO(framebuffer, sceneRenderSettings.fillMode, material ? material->GetCullMode() : nri::CullMode::FRONT, masked);
                     if (!meshPSO || !meshPSO->GetHandle())
                         continue;
 

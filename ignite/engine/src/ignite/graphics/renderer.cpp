@@ -153,6 +153,7 @@ namespace ignite
 
         BindingCache::Shutdown();
         BindingSet::ShutdownPool();
+        Texture::ClearRetiredStagingBuffers(0, true);
         BindlessSystem::Shutdown();
     }
 
@@ -189,6 +190,7 @@ namespace ignite
         BindingSet::AdvanceFrame(frameCounter);
         BindlessSystem::FlushPendingWrites();
         Renderer2D::ClearRetiredBuffers(frameCounter);
+        Texture::ClearRetiredStagingBuffers(frameCounter);
 
         auto &frame = m_Frames[frameCounter % m_MaxFramesInFlight];
         frame.frameIndexInFlight = static_cast<uint32_t>(frameCounter % m_MaxFramesInFlight);
