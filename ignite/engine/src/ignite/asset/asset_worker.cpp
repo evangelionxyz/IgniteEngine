@@ -149,4 +149,32 @@ namespace ignite
             assetJob();
         });
     }
+
+    void AssetWorker::SubmitBackgroundJob(AssetJob assetJob)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!assetJob)
+        {
+            return;
+        }
+
+        WorkerManager::Get().GetAssetPool().EnqueueTask(
+            [assetJob = std::move(assetJob)]() mutable
+            {
+                try
+                {
+                    IGN_PROFILE_SCOPE_COLOR("AssetWorker::Background", 0x00AABCFF);
+                    assetJob();
+                }
+                catch (const std::exception &e)
+                {
+                    LOG_ERROR("[Asset Worker] Background job failed: {}", e.what());
+                }
+                catch (...)
+                {
+                    LOG_ERROR("[Asset Worker] Background job failed with an unknown error");
+                }
+            });
+    }
 }

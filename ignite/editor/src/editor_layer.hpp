@@ -157,6 +157,7 @@ namespace ignite
         void AddContentBrowserPanel();
         void ReloadContentBrowserPanels() const;
         uint32_t GetOpenContentBrowserCount() const;
+        void RevealAssetInContentBrowser(AssetHandle handle);
 
         void UIProjectCreation();
         void UISettings();

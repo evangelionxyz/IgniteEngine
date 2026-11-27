@@ -1590,6 +1590,17 @@ namespace ignite
                     ImGui::OpenPopup("##add_component_context");
                 }
 
+                auto drawRevealAssetButton = [&](AssetHandle handle, const char *uniqueId)
+                {
+                    if (handle == AssetHandle(0) || !m_EditorLayer)
+                        return;
+                    ImGui::SameLine(0.0f, 4.0f);
+                    if (UI::IconButton(uniqueId, ICON_LC_FOLDER_SEARCH, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Show in Content Browser"))
+                    {
+                        m_EditorLayer->RevealAssetInContentBrowser(handle);
+                    }
+                };
+
             // transform component
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
             {
@@ -1741,6 +1752,7 @@ namespace ignite
 
                     if (c.prefabHandle != AssetHandle(0))
                     {
+                        drawRevealAssetButton(c.prefabHandle, "##RevealPrefab");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearPrefab", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Prefab"))
                         {
@@ -1822,6 +1834,7 @@ namespace ignite
 
                     if (isWidgetLoaded)
                     {
+                        drawRevealAssetButton(c.widgetHandle, "##RevealWidget");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearWidget", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Widget"))
                         {
@@ -1862,7 +1875,7 @@ namespace ignite
                 {
                     const bool hasHDR = c.hdrHandle != AssetHandle(0);
                     std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
-                    UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [ &c, assetManager, this, &hasHDR ]()
+                    UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [ &c, assetManager, this, &hasHDR, &drawRevealAssetButton ]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -1883,6 +1896,7 @@ namespace ignite
 
                         if (hasHDR)
                         {
+                            drawRevealAssetButton(c.hdrHandle, "##RevealHDR");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearHDR", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear HDR"))
                             {
@@ -2128,7 +2142,7 @@ namespace ignite
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
                 std::string mat2dLabel = isMat2dLoaded ? assetManager->GetAssetDisplayName(c.materialHandle) : "Drag Here";
-                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [ &c, &selectedEntity, &isMat2dLoaded, assetManager, this ]()
+                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [ &c, &selectedEntity, &isMat2dLoaded, assetManager, this, &drawRevealAssetButton ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -2149,6 +2163,7 @@ namespace ignite
 
                     if (isMat2dLoaded)
                     {
+                        drawRevealAssetButton(c.materialHandle, "##RevealMat2D");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearMat2D", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material 2D"))
                         {
@@ -2171,7 +2186,7 @@ namespace ignite
                     // Texture on sprite 2d
                     const bool isTextureLoaded = c.handle != AssetHandle(0);
                     const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [ &c, &isTextureLoaded, this, assetManager, &selectedEntity ]()
+                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [ &c, &isTextureLoaded, this, assetManager, &selectedEntity, &drawRevealAssetButton ]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -2206,6 +2221,7 @@ namespace ignite
 
                         if (isTextureLoaded)
                         {
+                            drawRevealAssetButton(c.handle, "##RevealTexture");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearTexture", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Texture"))
                             {
@@ -2397,7 +2413,7 @@ namespace ignite
                     ImGui::SameLine(0.0f, 8.0f);
                     ImGui::BeginGroup();
                     const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
-                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 60.0f : 4.0f)), thumbSize));
                     if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
                         AssetMetaData meta = assetManager->GetMetaData(handle);
@@ -2420,6 +2436,7 @@ namespace ignite
                     }
                     if (handle != AssetHandle(0))
                     {
+                        drawRevealAssetButton(handle, "##RevealSlot");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
                         {
@@ -2575,7 +2592,7 @@ namespace ignite
                     ImGui::SameLine(0.0f, 8.0f);
                     ImGui::BeginGroup();
                     const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
-                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 60.0f : 4.0f)), thumbSize));
                     if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
                         AssetMetaData meta = assetManager->GetMetaData(handle);
@@ -2598,6 +2615,7 @@ namespace ignite
                     }
                     if (handle != AssetHandle(0))
                     {
+                        drawRevealAssetButton(handle, "##RevealSlot");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
                         {
@@ -2683,7 +2701,7 @@ namespace ignite
                         // Animator
                         bool isAnimatorLoaded = c.runtimeAnimatorHandle != AssetHandle(0);
                         std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.runtimeAnimatorHandle) : "Drag Here";
-                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [ &c, this, &sm, &isAnimatorLoaded, assetManager ]()
+                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [ &c, this, &sm, &isAnimatorLoaded, assetManager, &drawRevealAssetButton ]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -2712,6 +2730,7 @@ namespace ignite
 
                             if (isAnimatorLoaded)
                             {
+                                drawRevealAssetButton(c.runtimeAnimatorHandle, "##RevealAnimator");
                                 ImGui::SameLine(0.0f, 4.0f);
                                 if (UI::IconButton("##ClearAnimator", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Animator"))
                                 {
@@ -2759,7 +2778,7 @@ namespace ignite
                                         bool isAttached = attachedMeshHandle != AssetHandle(0);
                                         const std::string socketMeshLabel = assetManager->GetAssetDisplayName(attachedMeshHandle);
 
-                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [ this, &c, socketName = socket.name, assetManager, isAttached, &selectedEntity ]()
+                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [ this, &c, socketName = socket.name, assetManager, isAttached, attachedMeshHandle, &selectedEntity, &drawRevealAssetButton ]()
                                         {
                                             if (ImGui::BeginDragDropTarget())
                                             {
@@ -2781,6 +2800,8 @@ namespace ignite
 
                                             if (isAttached)
                                             {
+                                                const std::string revealSockId = std::format("##RevealSocket_{}", socketName);
+                                                drawRevealAssetButton(attachedMeshHandle, revealSockId.c_str());
                                                 ImGui::SameLine(0.0f, 4.0f);
                                                 const std::string clearSockId = std::format("##ClearSocket_{}", socketName);
                                                 if (UI::IconButton(clearSockId.c_str(), ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Socket Mesh"))
@@ -3583,6 +3604,7 @@ namespace ignite
 
                     if (isFontLoaded)
                     {
+                        drawRevealAssetButton(c.fontHandle, "##RevealTextFont");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearTextFont", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Font"))
                         {
@@ -3593,7 +3615,7 @@ namespace ignite
 
                 const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
                 std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
-                UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [ &c, this, assetManager, &isMaterialLoaded ]()
+                UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [ &c, this, assetManager, &isMaterialLoaded, &drawRevealAssetButton ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -3611,6 +3633,7 @@ namespace ignite
 
                     if (isMaterialLoaded)
                     {
+                        drawRevealAssetButton(c.material2dHandle, "##RevealTextMaterial");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearTextMaterial", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material"))
                         {
@@ -3637,7 +3660,7 @@ namespace ignite
                 const bool isLoaded = c.handle != AssetHandle(0);
                 std::string label = isLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 
-                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [ &c, this, &isLoaded, assetManager ]()
+                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [ &c, this, &isLoaded, assetManager, &drawRevealAssetButton ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -3662,6 +3685,7 @@ namespace ignite
 
                     if (isLoaded)
                     {
+                        drawRevealAssetButton(c.handle, "##RevealAudio");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearAudio", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Audio"))
                         {
@@ -4504,6 +4528,7 @@ namespace ignite
 
                     if (isLoaded)
                     {
+                        drawRevealAssetButton(component.scriptHandle, "##RevealLuaScript");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearLuaScript", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Script"))
                         {
@@ -4869,6 +4894,7 @@ namespace ignite
 
                         if (hasExternalHeightmap)
                         {
+                            drawRevealAssetButton(c.heightmapHandle, "##RevealHeightmap");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearHeightmap", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Heightmap"))
                             {
@@ -4993,6 +5019,7 @@ namespace ignite
 
                         if (isMaterialLoaded)
                         {
+                            drawRevealAssetButton(c.materialHandle, "##RevealTerrainMat");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearMaterial", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material"))
                             {
@@ -5106,7 +5133,7 @@ namespace ignite
                 ImGui::SeparatorText("Texture (Optional)");
                 const bool isTextureLoaded = c.settings.textureHandle != AssetHandle(0);
                 const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.settings.textureHandle) : "Drag Texture Here";
-                UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, assetManager]()
+                UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, assetManager, &drawRevealAssetButton]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -5125,6 +5152,7 @@ namespace ignite
 
                     if (isTextureLoaded)
                     {
+                        drawRevealAssetButton(c.settings.textureHandle, "##RevealParticleTex");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearParticleTex", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Texture"))
                         {

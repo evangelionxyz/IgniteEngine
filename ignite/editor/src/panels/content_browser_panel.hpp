@@ -66,6 +66,8 @@ namespace ignite
 
         void LoadProjectFiles();
         void RefreshFiles();
+        bool RevealAsset(AssetHandle handle);
+        bool RevealPath(const std::filesystem::path &fullPath);
 
     private:
         void RefreshEntryPathList();
@@ -175,6 +177,9 @@ namespace ignite
         std::vector<std::filesystem::path> m_ActiveDragItems;
         std::vector<std::filesystem::path> m_PendingDragDropSources;
         std::filesystem::path m_PendingDragDropTargetDirectory;
+        std::filesystem::path m_PendingScrollToPath;
+        bool m_PendingFocusWindow = false;
+        bool m_ClearSearchRequested = false;
         char m_PopupInputBuffer[1024] = { 0 }; // used for create/rename names
     };
 }

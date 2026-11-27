@@ -127,19 +127,43 @@ namespace ignite
                 if (const auto *light = scene->registry->try_get<DirectionalLightComponent>(e); light && light->bakeIndirect)
                 {
                     AppendTag(record.bytes, 10u);
-                    AppendBytes(record.bytes, *light);
+                    AppendBytes(record.bytes, light->color);
+                    AppendBytes(record.bytes, light->intensity);
+                    AppendBytes(record.bytes, light->angularRadius);
+                    AppendBytes(record.bytes, light->cascadeShadow);
+                    AppendBytes(record.bytes, light->bakeIndirect);
                 }
                 if (const auto *light = scene->registry->try_get<PointLightComponent>(e);
                     light && (light->bakeIndirect || (light->castShadow && light->bakeStaticShadow)))
                 {
                     AppendTag(record.bytes, 11u);
-                    AppendBytes(record.bytes, *light);
+                    AppendBytes(record.bytes, light->color);
+                    AppendBytes(record.bytes, light->intensity);
+                    AppendBytes(record.bytes, light->range);
+                    AppendBytes(record.bytes, light->enabled);
+                    AppendBytes(record.bytes, light->bakeIndirect);
+                    AppendBytes(record.bytes, light->constantAttenuation);
+                    AppendBytes(record.bytes, light->linearAttenuation);
+                    AppendBytes(record.bytes, light->quadraticAttenuation);
+                    AppendBytes(record.bytes, light->castShadow);
+                    AppendBytes(record.bytes, light->bakeStaticShadow);
                 }
                 if (const auto *light = scene->registry->try_get<SpotLightComponent>(e);
                     light && (light->bakeIndirect || (light->castShadow && light->bakeStaticShadow)))
                 {
                     AppendTag(record.bytes, 12u);
-                    AppendBytes(record.bytes, *light);
+                    AppendBytes(record.bytes, light->color);
+                    AppendBytes(record.bytes, light->intensity);
+                    AppendBytes(record.bytes, light->range);
+                    AppendBytes(record.bytes, light->enabled);
+                    AppendBytes(record.bytes, light->bakeIndirect);
+                    AppendBytes(record.bytes, light->constantAttenuation);
+                    AppendBytes(record.bytes, light->linearAttenuation);
+                    AppendBytes(record.bytes, light->quadraticAttenuation);
+                    AppendBytes(record.bytes, light->innerConeAngle);
+                    AppendBytes(record.bytes, light->outerConeAngle);
+                    AppendBytes(record.bytes, light->castShadow);
+                    AppendBytes(record.bytes, light->bakeStaticShadow);
                 }
             }
 
@@ -152,7 +176,17 @@ namespace ignite
                 AppendBytes(record.bytes, environment->gamma);
                 AppendBytes(record.bytes, environment->ambient);
                 AppendBytes(record.bytes, environment->enableIBL);
-                AppendBytes(record.bytes, environment->atmosphereParams);
+                const AtmosphereParams &atmo = environment->atmosphereParams;
+                AppendBytes(record.bytes, atmo.rayleighScattering);
+                AppendBytes(record.bytes, atmo.rayleighDensityH);
+                AppendBytes(record.bytes, atmo.mieScattering);
+                AppendBytes(record.bytes, atmo.mieDensityH);
+                AppendBytes(record.bytes, atmo.mieExtinction);
+                AppendBytes(record.bytes, atmo.mieG);
+                AppendBytes(record.bytes, atmo.ozoneAbsorption);
+                AppendBytes(record.bytes, atmo.planetRadius);
+                AppendBytes(record.bytes, atmo.atmosphereRadius);
+                AppendBytes(record.bytes, atmo.groundAlbedo);
             }
 
             if (record.bytes.size() > sizeof(entityID))

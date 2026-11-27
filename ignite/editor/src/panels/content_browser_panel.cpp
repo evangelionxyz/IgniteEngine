@@ -343,6 +343,74 @@ namespace ignite
         RefreshAssetTree();
     }
 
+    bool ContentBrowserPanel::RevealAsset(AssetHandle handle)
+    {
+        if (handle == AssetHandle(0) || !m_EditorLayer)
+        {
+            return false;
+        }
+
+        AssetManager *am = m_AssetManager ? m_AssetManager : AssetManager::GetInstance();
+        Ref<Project> project = m_EditorLayer->GetActiveProject();
+        if (!am || !project)
+        {
+            return false;
+        }
+
+        const AssetMetaData metadata = am->GetMetaData(handle);
+        if (metadata.type == AssetType::Invalid || metadata.filepath.empty())
+        {
+            return false;
+        }
+
+        const std::filesystem::path fullPath = metadata.filepath.is_absolute()
+            ? metadata.filepath
+            : project->GetProjectFilepath(metadata.filepath);
+        return RevealPath(fullPath);
+    }
+
+    bool ContentBrowserPanel::RevealPath(const std::filesystem::path &fullPath)
+    {
+        if (fullPath.empty())
+        {
+            return false;
+        }
+
+        const std::filesystem::path targetPath = fullPath.lexically_normal();
+        std::error_code ec;
+        if (!std::filesystem::exists(targetPath, ec))
+        {
+            return false;
+        }
+
+        const bool isDir = std::filesystem::is_directory(targetPath, ec);
+        const std::filesystem::path targetDir = (isDir ? targetPath : targetPath.parent_path()).lexically_normal();
+        if (targetDir.empty())
+        {
+            return false;
+        }
+
+        if (targetDir != m_CurrentDirectory)
+        {
+            if (!m_CurrentDirectory.empty())
+            {
+                m_BackwardPathStack.push(m_CurrentDirectory);
+            }
+            while (!m_ForwardPathStack.empty())
+            {
+                m_ForwardPathStack.pop();
+            }
+            m_CurrentDirectory = targetDir;
+        }
+
+        m_SelectedFileTree = targetPath;
+        m_SelectedItems = { targetPath };
+        m_PendingScrollToPath = targetPath;
+        m_PendingFocusWindow = true;
+        m_ClearSearchRequested = true;
+        return true;
+    }
+
     void ContentBrowserPanel::RefreshFiles()
     {
         auto project = m_EditorLayer->GetActiveProject();
@@ -501,6 +569,12 @@ namespace ignite
         const auto &theme = UI::GetTheme();
         const float scale = std::max(UI::GetDpiScale(), 1.0f);
 
+        if (m_PendingFocusWindow)
+        {
+            ImGui::SetNextWindowFocus();
+            m_PendingFocusWindow = false;
+        }
+
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * scale, 6.0f * scale));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * scale, 6.0f * scale));
         const bool windowOpen = ImGui::Begin(m_WindowTitle.c_str(), &m_IsOpen);
@@ -518,6 +592,12 @@ namespace ignite
             // Searching variables
             static bool recursiveSearch = true;
             static char buffer[256] = { 0 };
+            if (m_ClearSearchRequested)
+            {
+                buffer[0] = '\0';
+                m_CachedSearchQuery.clear();
+                m_ClearSearchRequested = false;
+            }
 
             const auto &projectDir = m_EditorLayer->GetActiveProject()->GetDirectory();
 
@@ -920,6 +1000,28 @@ namespace ignite
                         const int rowCount = (itemCount + itemPerRow - 1) / itemPerRow;
                         const float rowHeight = cardHeight + spacing;
                         const float cursorStartY = ImGui::GetCursorPosY();
+
+                        if (!m_PendingScrollToPath.empty() && !searchActive)
+                        {
+                            int foundIdx = -1;
+                            for (int idx = 0; idx < itemCount; ++idx)
+                            {
+                                const std::filesystem::path nodePath = m_TreeNodes[node->sortedChildren[static_cast<size_t>(idx)]].fullPath.lexically_normal();
+                                std::error_code eqEc;
+                                if (nodePath == m_PendingScrollToPath || std::filesystem::equivalent(nodePath, m_PendingScrollToPath, eqEc))
+                                {
+                                    foundIdx = idx;
+                                    break;
+                                }
+                            }
+                            if (foundIdx >= 0)
+                            {
+                                const int targetRow = foundIdx / itemPerRow;
+                                const float targetScrollY = std::max(0.0f, static_cast<float>(targetRow) * rowHeight - ImGui::GetWindowHeight() * 0.35f);
+                                ImGui::SetScrollY(targetScrollY);
+                            }
+                            m_PendingScrollToPath.clear();
+                        }
 
                         ImGuiListClipper clipper;
                         clipper.Begin(rowCount, rowHeight);
@@ -3412,7 +3514,7 @@ namespace ignite
         int thumbnailSize = m_ThumbnailSize;
         const uint64_t requestGeneration = s_SharedThumbnailLoadGeneration;
 
-        AssetWorker::SubmitJob("Generating thumbnails...", [this, capturedPath, thumbnailSize, requestGeneration]()
+        AssetWorker::SubmitBackgroundJob([this, capturedPath, thumbnailSize, requestGeneration]()
         {
             // -----------------------------------------------------------------------
             // WORKER THREAD: Load raw CPU pixels only — NO GPU objects created here.

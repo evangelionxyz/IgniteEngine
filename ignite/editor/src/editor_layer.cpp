@@ -250,6 +250,28 @@ namespace ignite
         return openCount;
     }
 
+    void EditorLayer::RevealAssetInContentBrowser(AssetHandle handle)
+    {
+        if (handle == AssetHandle(0))
+        {
+            return;
+        }
+
+        for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
+        {
+            if (panel && panel->IsOpen())
+            {
+                panel->RevealAsset(handle);
+                return;
+            }
+        }
+
+        if (m_ContentBrowserPanel)
+        {
+            m_ContentBrowserPanel->RevealAsset(handle);
+        }
+    }
+
     void EditorLayer::OnUpdate(const float deltaTime)
     {
         Layer::OnUpdate(deltaTime);
@@ -1318,11 +1340,11 @@ namespace ignite
             }
             ImGui::EndDisabled();
 
-            if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && IsSceneGIOutOfDate(m_ActiveScene.get()))
+            if (m_ActiveScene && m_ActiveProject && !m_State.isLoading && m_CachedAllSceneAssetsReady && IsSceneGIOutOfDate(m_ActiveScene.get()))
             {
                 ImGui::SameLine();
                 const bool isBaking = m_GIBaker && m_GIBaker->IsBaking();
-                if (UI::Button("GI Out of Date - Rebake", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), ICON_LC_SPARKLES, isBaking, isBaking))
+                if (UI::Button("GI Out of Date - Rebake", UI::ButtonVariant::Primary, UI::ButtonSize::Small, ImVec2(0.0f, 24.0f), nullptr, isBaking, isBaking))
                 {
                     Entity bakeVolume;
                     if (m_ScenePanel)
