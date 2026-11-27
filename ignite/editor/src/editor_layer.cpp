@@ -2475,40 +2475,46 @@ namespace ignite
         // Reload project files
         ReloadContentBrowserPanels();
 
-        // Get Project default scene (use immediate load for synchronous path)
-        AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
-        if (defSceneAssetHandle != AssetHandle(0))
+        AssetWorker::SubmitJob([this]()
         {
-            // Use GetAssetImmediate since we're on main thread and need synchronous load
-            if (Ref<Scene> activeScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(defSceneAssetHandle))
+            // Get Project default scene (use immediate load for synchronous path)
+            AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
+            if (defSceneAssetHandle != AssetHandle(0))
             {
-                m_EditorScene = SceneManager::Copy(activeScene);
-                m_EditorScene->SetDirtyFlag(false);
-                SetActiveScene(m_EditorScene);
+                // Use GetAssetImmediate since we're on main thread and need synchronous load
+                if (Ref<Scene> activeScene = AssetManager::GetInstance()->GetAssetImmediate<Scene>(defSceneAssetHandle))
+                {
+                    m_EditorScene = SceneManager::Copy(activeScene);
+                    m_EditorScene->SetDirtyFlag(false);
+                    SetActiveScene(m_EditorScene);
 
-                const auto &[assetFilepath, assetType] = AssetManager::GetInstance()->GetMetaData(activeScene->handle);
+                    const auto &[assetFilepath, assetType] = AssetManager::GetInstance()->GetMetaData(activeScene->handle);
 
-                m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
-                m_CurrentSceneHandle = activeScene->handle;
+                    m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
+                    m_CurrentSceneHandle = activeScene->handle;
+                    m_PendingSceneThumbnailCapture = true;
+                    m_SceneThumbnailWaitFrames = 0;
+                }
+                else
+                {
+                    // Create a default scene if load failed
+                    NewScene();
+                }
             }
             else
             {
-                // Create a default scene if load failed
+                // Create a default scene
                 NewScene();
             }
-        }
-        else
-        {
-            // Create a default scene
-            NewScene();
-        }
 
-        DeserializeEditorState();
-        if (m_SceneRenderer && m_ActiveProject && std::filesystem::exists(m_ActiveProject->GetDirectory() / "GameSettings.ign"))
-        {
-            m_SceneRenderer->sceneRenderSettings.SyncToScene(m_ActiveScene.get(), m_ScenePanel ? &m_ScenePanel->GetViewportCamera() : nullptr);
-        }
-        m_State.isLoading = false;
+            DeserializeEditorState();
+            if (m_SceneRenderer && m_ActiveProject && std::filesystem::exists(m_ActiveProject->GetDirectory() / "GameSettings.ign"))
+            {
+                m_SceneRenderer->sceneRenderSettings.SyncToScene(m_ActiveScene.get(), m_ScenePanel ? &m_ScenePanel->GetViewportCamera() : nullptr);
+            }
+            m_State.isLoading = false;
+        });
+
     }
 
     void EditorLayer::OnFileImport(const FileImportPayload &payload)
