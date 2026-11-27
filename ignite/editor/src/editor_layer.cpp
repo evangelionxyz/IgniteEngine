@@ -31,6 +31,7 @@
 #include "ignite/graphics/window.hpp"
 #include "ignite/globals/globals.hpp"
 #include "ignite/serializer/scene_serializer.hpp"
+#include "ignite/serializer/binary_serializer.hpp"
 #include "editor_context.hpp"
 
 #include "stb_image_write.h"
@@ -875,6 +876,81 @@ namespace ignite
                 }
             }
             m_State.takeScreenshot = false;
+        }
+
+        // Capture a Scene asset thumbnail from the editor camera only after opening/saving a scene
+        // and letting its assets & initial lighting frames settle.
+        if (m_PendingSceneThumbnailCapture
+            && m_ActiveProject && m_ActiveScene
+            && !m_ActiveScene->IsPlaying()
+            && !m_InPrefabIsolationMode
+            && !m_State.isLoading
+            && m_CachedAllSceneAssetsReady
+            && m_CurrentSceneHandle != AssetHandle(0)
+            && !m_CurrentSceneFilePath.empty()
+            && m_ScenePanel && m_ScenePanel->m_Data.sceneViewportEditorVisible)
+        {
+            if (++m_SceneThumbnailWaitFrames >= 10)
+            {
+                auto target = m_SceneRenderer ? m_SceneRenderer->GetRenderTarget(editCamera) : nullptr;
+                auto sceneTexture = (target && target->compositeRT) ? target->compositeRT->GetColorAttachment(0) : nullptr;
+                if (sceneTexture && sceneTexture->GetWidth() > 0 && sceneTexture->GetHeight() > 0)
+                {
+                    const uint32_t srcW = sceneTexture->GetWidth();
+                    const uint32_t srcH = sceneTexture->GetHeight();
+                    std::vector<uint8_t> rawPixels(static_cast<size_t>(srcW) * srcH * 4u);
+
+                    if (sceneTexture->ReadPixelData(rawPixels.data(), rawPixels.size()))
+                    {
+                        m_PendingSceneThumbnailCapture = false;
+
+                        std::filesystem::path fullScenePath = m_CurrentSceneFilePath.is_absolute()
+                            ? m_CurrentSceneFilePath
+                            : m_ActiveProject->GetProjectFilepath(m_CurrentSceneFilePath);
+                        fullScenePath = fullScenePath.lexically_normal();
+
+                        const AssetHandle sceneHandle = m_CurrentSceneHandle;
+                        const std::filesystem::path cachePath = ThumbnailGenerator::GetCacheFilepath(
+                            m_ActiveProject.get(), sceneHandle, fullScenePath);
+
+                        AssetWorker::SubmitBackgroundJob([rawPixels = std::move(rawPixels), srcW, srcH, fullScenePath, cachePath, sceneHandle]() mutable
+                        {
+                            constexpr uint32_t kMaxThumbDim = 256u;
+                            uint32_t dstW = kMaxThumbDim;
+                            uint32_t dstH = kMaxThumbDim;
+                            if (srcW >= srcH)
+                            {
+                                dstW = std::min(srcW, kMaxThumbDim);
+                                dstH = std::max(1u, static_cast<uint32_t>(std::lround(static_cast<double>(srcH) * dstW / srcW)));
+                            }
+                            else
+                            {
+                                dstH = std::min(srcH, kMaxThumbDim);
+                                dstW = std::max(1u, static_cast<uint32_t>(std::lround(static_cast<double>(srcW) * dstH / srcH)));
+                            }
+
+                            std::vector<uint8_t> thumbPixels(static_cast<size_t>(dstW) * dstH * 4u);
+                            texture_utils::DownSample(
+                                rawPixels.data(), thumbPixels.data(),
+                                static_cast<int>(srcW), static_cast<int>(srcH),
+                                static_cast<int>(dstW), static_cast<int>(dstH), 4);
+
+                            ThumbnailBinaryData binData{};
+                            binData.width = dstW;
+                            binData.height = dstH;
+                            binData.channels = 4;
+                            binData.sourceTimestamp = ThumbnailGenerator::GetFileTimestamp(fullScenePath);
+                            binData.assetHandle = static_cast<uint64_t>(sceneHandle);
+                            binData.pixels = std::move(thumbPixels);
+
+                            if (BinarySerializer::SerializeThumbnail(binData, cachePath))
+                            {
+                                ContentBrowserPanel::NotifySceneThumbnailUpdated(fullScenePath);
+                            }
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -1839,6 +1915,8 @@ namespace ignite
 
         m_CurrentSceneFilePath = filepath;
         m_CurrentSceneHandle = sceneToSave->handle;
+        m_PendingSceneThumbnailCapture = true;
+        m_SceneThumbnailWaitFrames = 0;
     }
 
     void EditorLayer::SaveSceneAs()
@@ -1917,6 +1995,8 @@ namespace ignite
 
                     m_CurrentSceneFilePath = filepath;
                     m_CurrentSceneHandle = sceneHandle;
+                    m_PendingSceneThumbnailCapture = true;
+                    m_SceneThumbnailWaitFrames = 0;
 
                     AssetWorker::ReportStatus("Ready", 0.0f);
                 });

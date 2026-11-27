@@ -413,6 +413,13 @@ namespace ignite
 
     ScenePanel::~ScenePanel()
     {
+        if (m_EditorCameraMouseLocked)
+        {
+            m_EditorCameraMouseLocked = false;
+            m_EditorCameraLockJustEngaged = false;
+            InputSystem::ResetCursorState();
+        }
+
         if (m_EditorLayer)
         {
             m_EditorLayer->m_ScenePanel = nullptr;
@@ -423,6 +430,13 @@ namespace ignite
     {
         if (m_Scene == scene)
             return;
+
+        if (m_EditorCameraMouseLocked)
+        {
+            m_EditorCameraMouseLocked = false;
+            m_EditorCameraLockJustEngaged = false;
+            InputSystem::ResetCursorState();
+        }
 
         m_Scene = scene;
         m_SelectedEntities.clear();
@@ -5370,13 +5384,23 @@ namespace ignite
                 {
                     m_SceneFocused = false;
                     m_SceneFocusCooldown = 0;
-                    if (activeCursorMode != CursorMode::Normal || requestedCursorMode != CursorMode::Normal || InputSystem::IsCursorForceUnlocked())
+                    if (!m_EditorCameraMouseLocked && (activeCursorMode != CursorMode::Normal || requestedCursorMode != CursorMode::Normal || InputSystem::IsCursorForceUnlocked()))
                     {
                         InputSystem::ResetCursorState();
+                    }
+                    else if (m_EditorCameraMouseLocked)
+                    {
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_None);
                     }
                 }
                 else
                 {
+                    if (m_EditorCameraMouseLocked)
+                    {
+                        m_EditorCameraMouseLocked = false;
+                        m_EditorCameraLockJustEngaged = false;
+                        InputSystem::ResetCursorState();
+                    }
                     if (m_SceneFocusCooldown > 0)
                     {
                         m_SceneFocusCooldown--;
@@ -6359,6 +6383,122 @@ namespace ignite
         }
 
         ImGui::SameLine();
+        if (UI::IconButton("##editor_camera_settings", ICON_LC_SLIDERS_HORIZONTAL, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Editor Camera Settings"))
+        {
+            ImGui::OpenPopup("##EditorCameraSettingsPopup");
+        }
+
+        if (ImGui::BeginPopup("##EditorCameraSettingsPopup"))
+        {
+            ImGui::TextUnformatted("Editor Camera Settings");
+            ImGui::Separator();
+
+            bool changed = false;
+            bool projectionChanged = false;
+
+            ImGui::PushItemWidth(140.0f);
+
+            float flySpeed = m_EditorCamera.GetFlySpeed();
+            if (ImGui::DragFloat("Fly Speed", &flySpeed, 0.25f, 0.1f, 500.0f, "%.2f"))
+            {
+                m_EditorCamera.SetFlySpeed(flySpeed);
+                changed = true;
+            }
+
+            if (ImGui::DragFloat("Mouse Sensitivity", &m_EditorCamera.controls.mouseSensitivity, 0.0001f, 0.0002f, 0.05f, "%.4f"))
+                changed = true;
+
+            if (ImGui::DragFloat("Pan Sensitivity", &m_EditorCamera.controls.panSensitivity, 0.0001f, 0.0001f, 0.05f, "%.4f"))
+                changed = true;
+
+            if (ImGui::DragFloat("Zoom Sensitivity", &m_EditorCamera.controls.zoomSensitivity, 0.05f, 0.1f, 20.0f, "%.2f"))
+                changed = true;
+
+            ImGui::Separator();
+
+            if (ImGui::Checkbox("Enable Inertia", &m_EditorCamera.controls.enableInertia))
+                changed = true;
+
+            if (ImGui::SliderFloat("Inertia Damping", &m_EditorCamera.controls.inertiaDamping, 0.0f, 0.99f, "%.2f"))
+                changed = true;
+
+            if (ImGui::SliderFloat("Zoom Damping", &m_EditorCamera.controls.zoomDamping, 0.0f, 0.99f, "%.2f"))
+                changed = true;
+
+            float focusSpeed = m_EditorCamera.GetFocusSpeed();
+            if (ImGui::DragFloat("Focus Speed", &focusSpeed, 0.25f, 1.0f, 50.0f, "%.1f"))
+            {
+                m_EditorCamera.SetFocusSpeed(focusSpeed);
+                changed = true;
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::SliderFloat("FOV", &m_EditorCamera.fov, 15.0f, 120.0f, "%.1f"))
+            {
+                changed = true;
+                projectionChanged = true;
+            }
+
+            if (ImGui::DragFloat("Near Plane", &m_EditorCamera.nearPlane, 0.01f, 0.005f, 10.0f, "%.3f"))
+            {
+                m_EditorCamera.nearPlane = std::max(0.001f, m_EditorCamera.nearPlane);
+                changed = true;
+                projectionChanged = true;
+            }
+
+            if (ImGui::DragFloat("Far Plane", &m_EditorCamera.farPlane, 5.0f, 10.0f, 10000.0f, "%.1f"))
+            {
+                m_EditorCamera.farPlane = std::max(m_EditorCamera.nearPlane + 1.0f, m_EditorCamera.farPlane);
+                changed = true;
+                projectionChanged = true;
+            }
+
+            ImGui::PopItemWidth();
+            ImGui::Separator();
+
+            if (UI::Button("Reset Defaults", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+            {
+                m_EditorCamera.ResetControlSettings();
+                changed = true;
+                projectionChanged = true;
+            }
+
+            if (projectionChanged)
+            {
+                const glm::uvec2 vp = m_EditorCamera.GetViewportSize();
+                if (vp.x > 0 && vp.y > 0)
+                {
+                    m_EditorCamera.UpdateProjection(vp.x, vp.y);
+                }
+            }
+
+            if (changed)
+            {
+                auto syncSettings = [this](std::optional<EditorCamera> &cachedCam)
+                {
+                    if (!cachedCam.has_value())
+                        return;
+                    cachedCam->controls = m_EditorCamera.controls;
+                    cachedCam->SetFlySpeed(m_EditorCamera.GetFlySpeed());
+                    cachedCam->SetFocusSpeed(m_EditorCamera.GetFocusSpeed());
+                    cachedCam->fov = m_EditorCamera.fov;
+                    cachedCam->nearPlane = m_EditorCamera.nearPlane;
+                    cachedCam->farPlane = m_EditorCamera.farPlane;
+                    const glm::uvec2 vp = cachedCam->GetViewportSize();
+                    if (vp.x > 0 && vp.y > 0)
+                    {
+                        cachedCam->UpdateProjection(vp.x, vp.y);
+                    }
+                };
+                syncSettings(m_EditorCamera2D);
+                syncSettings(m_EditorCamera3D);
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
@@ -6972,8 +7112,38 @@ namespace ignite
             // LOG_INFO(j->ToString());
         }
 
+        const bool isPlayOrSimulate = m_Scene && m_Scene->IsRunning();
+        const bool rmbMmbDown = InputSystem::IsMouseButtonPressed(Mouse::ButtonRight) || InputSystem::IsMouseButtonPressed(Mouse::ButtonMiddle);
+        if (!isPlayOrSimulate && m_Data.sceneViewportEditorVisible && !m_Gizmo.IsManipulating())
+        {
+            if (!m_EditorCameraMouseLocked && m_IsHovered && rmbMmbDown)
+            {
+                m_EditorCameraMouseLocked = true;
+                m_EditorCameraLockJustEngaged = true;
+                InputSystem::SetCursorMode(CursorMode::Disabled);
+            }
+            else if (m_EditorCameraMouseLocked && !rmbMmbDown)
+            {
+                m_EditorCameraMouseLocked = false;
+                m_EditorCameraLockJustEngaged = false;
+                InputSystem::ResetCursorState();
+            }
+        }
+        else if (m_EditorCameraMouseLocked)
+        {
+            m_EditorCameraMouseLocked = false;
+            m_EditorCameraLockJustEngaged = false;
+            InputSystem::ResetCursorState();
+        }
+
         m_EditorCamera.UpdateMouseState();
-        if (m_IsHovered && !m_Gizmo.IsManipulating())
+        if (m_EditorCameraLockJustEngaged)
+        {
+            m_EditorCamera.mouse.delta = glm::vec2(0.0f);
+            m_EditorCameraLockJustEngaged = false;
+        }
+
+        if ((m_IsHovered || m_EditorCameraMouseLocked) && !m_Gizmo.IsManipulating())
         {
             switch (m_EditorCamera.GetNavigationMode())
             {

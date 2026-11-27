@@ -41,8 +41,9 @@ namespace ignite
 
     struct CameraMouseState
     {
-        glm::vec2 position;
-        glm::vec2 lastPosition;
+        glm::vec2 position{ 0.0f, 0.0f };
+        glm::vec2 lastPosition{ 0.0f, 0.0f };
+        glm::vec2 delta{ 0.0f, 0.0f };
         glm::ivec2 scroll{ 0, 0 };
         bool leftButtonDown = false;
         bool middleButtonDown = false;

@@ -60,6 +60,7 @@ namespace ignite
 
         static void ReleaseSharedResources();
         static Ref<Texture> GetAssetThumbnail(AssetHandle handle, AssetManager *assetManager, Project *project);
+        static void NotifySceneThumbnailUpdated(const std::filesystem::path &sceneFullPath);
 
         virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;
@@ -108,6 +109,7 @@ namespace ignite
         Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory);
         ImVec2 CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const;
         void StartThumbnailLoad(const std::filesystem::path &filepath);
+        void StartCachedSceneThumbnailLoad(const std::filesystem::path &filepath);
         void StartSceneThumbnailLoad(const std::filesystem::path &filepath, AssetType type);
         static void InvalidateThumbnailForAsset(const AssetChangeSignal &signal);
         void UnloadUnusedThumbnails();
@@ -159,6 +161,7 @@ namespace ignite
         static std::unordered_map<std::filesystem::path, FileThumbnail> s_SharedThumbnails;
         static std::queue<std::filesystem::path> s_SharedPendingThumbnailLoads;
         static std::unordered_set<std::filesystem::path> s_SharedThumbnailLoadsInFlight;
+        static std::unordered_set<std::filesystem::path> s_SharedMissingSceneThumbnails;
         static uint64_t s_SharedThumbnailLoadGeneration;
         static uint64_t s_SharedCurrentFrame;
         static SignalToken s_AssetChangeSignalToken;

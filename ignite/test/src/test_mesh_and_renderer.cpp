@@ -327,6 +327,83 @@ TEST(RendererShadowAndCamera, EditorCameraSetTargetAndDistancePreserved)
     EXPECT_NEAR(editorCam.position.z, 18.0f, 1e-3f);
 }
 
+TEST(RendererShadowAndCamera, EditorCameraInterpolationIsFrameRateIndependent)
+{
+    auto runInertiaScenario = [](float dt, int steps)
+    {
+        EditorCamera cam("InertiaTestCam");
+        cam.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+        cam.SetDistance(15.0f);
+        cam.SetTarget(glm::vec3(0.0f));
+        cam.yaw = 0.5f;
+        cam.pitch = 0.2f;
+        cam.controls.enableInertia = true;
+        cam.controls.inertiaDamping = 0.9f;
+        cam.controls.zoomDamping = 0.65f;
+
+        // Kick orbit, pan, and scroll velocities once
+        cam.mouse.rightButtonDown = true;
+        cam.mouse.middleButtonDown = false;
+        cam.mouse.delta = glm::vec2(20.0f, -10.0f);
+        cam.HandleOrbit(dt);
+
+        cam.mouse.rightButtonDown = false;
+        cam.mouse.middleButtonDown = true;
+        cam.mouse.delta = glm::vec2(12.0f, 8.0f);
+        cam.HandlePan(dt);
+
+        cam.mouse.middleButtonDown = false;
+        cam.mouse.delta = glm::vec2(0.0f);
+        cam.mouse.scroll = glm::ivec2(0, 3);
+        cam.HandleZoom(dt);
+
+        for (int i = 0; i < steps; ++i)
+        {
+            cam.ApplyInertia(dt);
+            cam.UpdateCameraPosition(dt);
+        }
+        return cam;
+    };
+
+    // Total simulated time = 0.5s at 60 FPS (30 steps) vs 15 FPS (8 steps -> ~0.533s; use exact 60 steps @ 1/120 vs 15 steps @ 1/30 vs 5 steps @ 1/10 = 0.5s!)
+    const EditorCamera cam60 = runInertiaScenario(1.0f / 60.0f, 30);
+    const EditorCamera cam15 = runInertiaScenario(1.0f / 15.0f, 8);
+    // Exact 0.5s match: 60Hz (30 steps) vs 10Hz (5 steps)
+    const EditorCamera cam10 = runInertiaScenario(0.1f, 5);
+
+    EXPECT_NEAR(cam60.yaw, cam10.yaw, 1e-3f);
+    EXPECT_NEAR(cam60.pitch, cam10.pitch, 1e-3f);
+    EXPECT_NEAR(cam60.GetDistance(), cam10.GetDistance(), 1e-2f);
+    EXPECT_NEAR(glm::length(cam60.GetTarget() - cam10.GetTarget()), 0.0f, 1e-2f);
+
+    EXPECT_NEAR(cam60.yaw, cam15.yaw, 0.05f);
+    EXPECT_NEAR(cam60.GetDistance(), cam15.GetDistance(), 0.1f);
+
+    // Focus interpolation at 4 FPS (dt = 0.25s) should match 60 FPS over 0.5s (not capped at dt <= 0.1s)
+    EditorCamera focus60("Focus60");
+    focus60.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+    focus60.SetTarget(glm::vec3(0.0f));
+    focus60.SetDistance(10.0f);
+    focus60.FocusTarget(glm::vec3(10.0f, 0.0f, 0.0f), 2.0f);
+    for (int i = 0; i < 30; ++i)
+    {
+        focus60.UpdateCameraPosition(1.0f / 60.0f);
+    }
+
+    EditorCamera focus4("Focus4");
+    focus4.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+    focus4.SetTarget(glm::vec3(0.0f));
+    focus4.SetDistance(10.0f);
+    focus4.FocusTarget(glm::vec3(10.0f, 0.0f, 0.0f), 2.0f);
+    for (int i = 0; i < 2; ++i)
+    {
+        focus4.UpdateCameraPosition(0.25f);
+    }
+
+    EXPECT_NEAR(focus60.GetTarget().x, focus4.GetTarget().x, 1e-2f);
+    EXPECT_NEAR(focus60.GetDistance(), focus4.GetDistance(), 1e-2f);
+}
+
 TEST(RendererShadowAndCamera, AsyncFontLoadingOnAssetWorker)
 {
     std::filesystem::path fontPath;

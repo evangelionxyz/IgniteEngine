@@ -20,6 +20,7 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/asset/asset_worker.hpp"
+#include "ignite/serializer/binary_serializer.hpp"
 #include "ext/editor_ui.hpp"
 
 #include <format>
@@ -27,11 +28,23 @@
 #include <ranges>
 #include <cstring>
 #include <cmath>
+#include <cwctype>
 #include <mutex>
 #include <string_view>
 #include <SDL3/SDL_dialog.h>
 
 #include <stb_image.h>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 namespace ignite
 {
@@ -40,6 +53,7 @@ namespace ignite
     std::unordered_map<std::filesystem::path, FileThumbnail> ContentBrowserPanel::s_SharedThumbnails;
     std::queue<std::filesystem::path> ContentBrowserPanel::s_SharedPendingThumbnailLoads;
     std::unordered_set<std::filesystem::path> ContentBrowserPanel::s_SharedThumbnailLoadsInFlight;
+    std::unordered_set<std::filesystem::path> ContentBrowserPanel::s_SharedMissingSceneThumbnails;
     uint64_t ContentBrowserPanel::s_SharedThumbnailLoadGeneration = 0;
     uint64_t ContentBrowserPanel::s_SharedCurrentFrame = 0;
     SignalToken ContentBrowserPanel::s_AssetChangeSignalToken = kInvalidSignalToken;
@@ -47,6 +61,249 @@ namespace ignite
     namespace
     {
         static constexpr const char *kContentBrowserPathPayload = "content_browser_path";
+
+#ifdef _WIN32
+        std::wstring Utf8ToWide(const std::string &str)
+        {
+            if (str.empty())
+                return {};
+            const int len = MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), nullptr, 0);
+            if (len <= 0)
+                return {};
+            std::wstring out(static_cast<size_t>(len), L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), out.data(), len);
+            return out;
+        }
+
+        std::wstring ToLowerWide(std::wstring str)
+        {
+            for (wchar_t &ch : str)
+            {
+                ch = static_cast<wchar_t>(std::towlower(ch));
+            }
+            return str;
+        }
+
+        std::wstring FindVisualStudioDevenvPath()
+        {
+            static std::wstring s_CachedPath;
+            static bool s_Searched = false;
+            if (s_Searched)
+                return s_CachedPath;
+            s_Searched = true;
+
+            wchar_t pf86[MAX_PATH] = {};
+            if (GetEnvironmentVariableW(L"ProgramFiles(x86)", pf86, MAX_PATH) > 0)
+            {
+                std::filesystem::path vswhere = std::filesystem::path(pf86) / L"Microsoft Visual Studio" / L"Installer" / L"vswhere.exe";
+                std::error_code ec;
+                if (std::filesystem::exists(vswhere, ec))
+                {
+                    SECURITY_ATTRIBUTES sa{ sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
+                    HANDLE readPipe = nullptr;
+                    HANDLE writePipe = nullptr;
+                    if (CreatePipe(&readPipe, &writePipe, &sa, 0))
+                    {
+                        SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+                        STARTUPINFOW si{};
+                        si.cb = sizeof(si);
+                        si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+                        si.wShowWindow = SW_HIDE;
+                        si.hStdOutput = writePipe;
+                        si.hStdError = writePipe;
+
+                        PROCESS_INFORMATION pi{};
+                        std::wstring cmd = L"\"" + vswhere.wstring() + L"\" -latest -products * -property productPath";
+                        if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
+                        {
+                            CloseHandle(writePipe);
+                            writePipe = nullptr;
+
+                            std::string output;
+                            char buf[512];
+                            DWORD bytesRead = 0;
+                            while (ReadFile(readPipe, buf, sizeof(buf), &bytesRead, nullptr) && bytesRead > 0)
+                            {
+                                output.append(buf, bytesRead);
+                            }
+
+                            WaitForSingleObject(pi.hProcess, 3000);
+                            CloseHandle(pi.hProcess);
+                            CloseHandle(pi.hThread);
+
+                            while (!output.empty() && (output.back() == '\r' || output.back() == '\n' || output.back() == ' '))
+                            {
+                                output.pop_back();
+                            }
+
+                            if (!output.empty())
+                            {
+                                std::wstring candidate = Utf8ToWide(output);
+                                if (!candidate.empty() && GetFileAttributesW(candidate.c_str()) != INVALID_FILE_ATTRIBUTES)
+                                {
+                                    s_CachedPath = candidate;
+                                }
+                            }
+                        }
+                        if (writePipe)
+                            CloseHandle(writePipe);
+                        CloseHandle(readPipe);
+                    }
+                }
+            }
+
+            if (s_CachedPath.empty())
+            {
+                wchar_t pathBuf[MAX_PATH] = {};
+                if (SearchPathW(nullptr, L"devenv.exe", nullptr, MAX_PATH, pathBuf, nullptr) > 0)
+                {
+                    s_CachedPath = pathBuf;
+                }
+            }
+
+            return s_CachedPath;
+        }
+
+        struct VSEnumContext
+        {
+            std::wstring projectNameLower;
+            bool found = false;
+        };
+
+        BOOL CALLBACK EnumVSWindowsProc(HWND hwnd, LPARAM lParam)
+        {
+            auto *ctx = reinterpret_cast<VSEnumContext *>(lParam);
+            if (!IsWindowVisible(hwnd))
+                return TRUE;
+
+            DWORD pid = 0;
+            GetWindowThreadProcessId(hwnd, &pid);
+            if (pid == 0 || pid == GetCurrentProcessId())
+                return TRUE;
+
+            HANDLE proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (!proc)
+                return TRUE;
+
+            wchar_t exePath[MAX_PATH] = {};
+            DWORD exeLen = MAX_PATH;
+            const BOOL ok = QueryFullProcessImageNameW(proc, 0, exePath, &exeLen);
+            CloseHandle(proc);
+
+            if (!ok || exeLen == 0)
+                return TRUE;
+
+            const std::wstring exeLower = ToLowerWide(std::wstring(exePath, exeLen));
+            if (!exeLower.ends_with(L"\\devenv.exe") && exeLower != L"devenv.exe")
+                return TRUE;
+
+            const int titleLen = GetWindowTextLengthW(hwnd);
+            if (titleLen <= 0)
+                return TRUE;
+
+            std::wstring title(static_cast<size_t>(titleLen) + 1, L'\0');
+            GetWindowTextW(hwnd, title.data(), titleLen + 1);
+            title.resize(static_cast<size_t>(titleLen));
+
+            const std::wstring titleLower = ToLowerWide(title);
+            if (titleLower.find(ctx->projectNameLower) != std::wstring::npos)
+            {
+                ctx->found = true;
+                return FALSE;
+            }
+
+            return TRUE;
+        }
+
+        bool IsVisualStudioOpenForProject(const std::wstring &projectName)
+        {
+            if (projectName.empty())
+                return false;
+
+            VSEnumContext ctx;
+            ctx.projectNameLower = ToLowerWide(projectName);
+            EnumWindows(EnumVSWindowsProc, reinterpret_cast<LPARAM>(&ctx));
+            return ctx.found;
+        }
+
+        void OpenWithNativeOS(const std::filesystem::path &filepath)
+        {
+            std::error_code ec;
+            const std::wstring widePath = std::filesystem::absolute(filepath, ec).lexically_normal().wstring();
+            const INT_PTR res = reinterpret_cast<INT_PTR>(
+                ShellExecuteW(nullptr, L"open", widePath.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+            if (res <= 32)
+            {
+                const std::wstring args = L"shell32.dll,OpenAs_RunDLL " + widePath;
+                ShellExecuteW(nullptr, L"open", L"rundll32.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+            }
+        }
+
+        void OpenScriptFileNatively(const std::filesystem::path &scriptPath, Project *project)
+        {
+            std::error_code ec;
+            const std::filesystem::path absScriptPath = std::filesystem::absolute(scriptPath, ec).lexically_normal();
+            const std::filesystem::path slnxPath = project
+                ? project->GetSolutionFilepath().lexically_normal()
+                : std::filesystem::path{};
+
+            std::wstring projectName;
+            if (project && !project->GetInfo().name.empty())
+            {
+                projectName = Utf8ToWide(project->GetInfo().name);
+            }
+            else if (!slnxPath.empty())
+            {
+                projectName = slnxPath.stem().wstring();
+            }
+
+            // Dispatch OS shell / window-enumeration calls off the ImGui render thread to avoid
+            // cross-thread WM_GETTEXT deadlocks against the main thread's window loop.
+            Application::SubmitToMainThread([absScriptPath, slnxPath, projectName]()
+            {
+                std::error_code mainEc;
+                const std::string extLower = stringutils::ToLower(absScriptPath.extension().string());
+                const std::wstring devenvPath = FindVisualStudioDevenvPath();
+                const bool vsOpenForProject = IsVisualStudioOpenForProject(projectName);
+
+                if (extLower == ".cs")
+                {
+                    if (vsOpenForProject && !devenvPath.empty())
+                    {
+                        const std::wstring args = L"/Edit \"" + absScriptPath.wstring() + L"\"";
+                        ShellExecuteW(nullptr, L"open", devenvPath.c_str(), args.c_str(), nullptr, SW_SHOWNORMAL);
+                    }
+                    else if (!devenvPath.empty() && !slnxPath.empty() && std::filesystem::exists(slnxPath, mainEc))
+                    {
+                        const std::wstring args = L"\"" + slnxPath.wstring() + L"\" \"" + absScriptPath.wstring() + L"\"";
+                        ShellExecuteW(nullptr, L"open", devenvPath.c_str(), args.c_str(), nullptr, SW_SHOWNORMAL);
+                    }
+                    else if (!slnxPath.empty() && std::filesystem::exists(slnxPath, mainEc))
+                    {
+                        OpenWithNativeOS(slnxPath);
+                    }
+                    else
+                    {
+                        OpenWithNativeOS(absScriptPath);
+                    }
+                    return;
+                }
+
+                if (extLower == ".lua")
+                {
+                    if (vsOpenForProject && !devenvPath.empty())
+                    {
+                        const std::wstring args = L"/Edit \"" + absScriptPath.wstring() + L"\"";
+                        ShellExecuteW(nullptr, L"open", devenvPath.c_str(), args.c_str(), nullptr, SW_SHOWNORMAL);
+                    }
+                    else
+                    {
+                        OpenWithNativeOS(absScriptPath);
+                    }
+                }
+            });
+        }
+#endif
 
         struct ContentBrowserPathPayload
         {
@@ -320,6 +577,7 @@ namespace ignite
         }
 
         s_SharedThumbnailLoadsInFlight.clear();
+        s_SharedMissingSceneThumbnails.clear();
         s_SharedThumbnails.clear();
         s_SharedIcons.clear();
         s_SharedCurrentFrame = 0;
@@ -1136,7 +1394,11 @@ namespace ignite
             if (it != s_SharedThumbnails.end() && it->second.thumbnail == nullptr)
             {
                 const AssetType assetType = GetAssetTypeFromExtension(filepath.extension().string());
-                if (ThumbnailGenerator::IsSupportedAssetType(assetType))
+                if (assetType == AssetType::Scene)
+                {
+                    StartCachedSceneThumbnailLoad(filepath);
+                }
+                else if (ThumbnailGenerator::IsSupportedAssetType(assetType))
                 {
                     StartSceneThumbnailLoad(filepath, assetType);
                 }
@@ -2179,11 +2441,11 @@ namespace ignite
                 else if (m_EditorLayer && m_EditorLayer->GetActiveProject())
                 {
                     auto *project = m_EditorLayer->GetActiveProject().get();
-                    if (path.extension() == ".cs")
+                    const std::string extLower = stringutils::ToLower(path.extension().string());
+                    if (extLower == ".cs" || extLower == ".lua")
                     {
-#ifdef PLATFORM_WINDOWS
-                        std::string command = std::format("start \"\" \"{}\"", path.generic_string());
-                        std::system(command.c_str());
+#ifdef _WIN32
+                        OpenScriptFileNatively(path, project);
 #endif
                     }
                     else
@@ -2219,18 +2481,37 @@ namespace ignite
                         m_CurrentDirectory = path;
                     }
                 }
-                else
+                else if (m_EditorLayer && m_EditorLayer->GetActiveProject())
                 {
                     auto *project = m_EditorLayer->GetActiveProject().get();
-                    const std::filesystem::path relativeAssetPath = project->GetProjectFilepath(path);
-
-                    AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
-                    AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
-                    const bool isScript = metadata.type == AssetType::LuaScript || metadata.filepath.extension() == ".cs";
-                    if (isScript || !DispatchOpenAssetEditorEvent(handle, metadata))
+                    const std::string extLower = stringutils::ToLower(path.extension().string());
+                    if (extLower == ".cs" || extLower == ".lua")
                     {
-                        std::string command = std::format("\"{}\"", path.generic_string());
-                        std::system(command.c_str());
+#ifdef _WIN32
+                        OpenScriptFileNatively(path, project);
+#endif
+                    }
+                    else
+                    {
+                        const std::filesystem::path relativeAssetPath = project->GetProjectFilepath(path);
+
+                        AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
+                        AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
+                        if (!DispatchOpenAssetEditorEvent(handle, metadata))
+                        {
+#ifdef _WIN32
+                            Application::SubmitToMainThread([path]()
+                            {
+                                OpenWithNativeOS(path);
+                            });
+#else
+                            Application::SubmitToMainThread([path]()
+                            {
+                                std::string command = std::format("\"{}\"", path.generic_string());
+                                std::system(command.c_str());
+                            });
+#endif
+                        }
                     }
                 }
             }
@@ -3231,9 +3512,15 @@ namespace ignite
 
         const AssetType type = GetAssetTypeFromExtension(filepath.extension().string());
         const bool isSceneThumbnailAsset = ThumbnailGenerator::IsSupportedAssetType(type);
-        const bool isImageAsset = (!isSceneThumbnailAsset && IsImageFile(filepath));
+        const bool isCachedSceneThumbnail = (type == AssetType::Scene);
+        const bool isImageAsset = (!isSceneThumbnailAsset && !isCachedSceneThumbnail && IsImageFile(filepath));
 
-        if (!isSceneThumbnailAsset && !isImageAsset)
+        if (!isSceneThumbnailAsset && !isCachedSceneThumbnail && !isImageAsset)
+        {
+            return GetFallbackIcon(type, filepath);
+        }
+
+        if (isCachedSceneThumbnail && s_SharedMissingSceneThumbnails.contains(filepath))
         {
             return GetFallbackIcon(type, filepath);
         }
@@ -3294,8 +3581,12 @@ namespace ignite
         }
 
         const bool isSceneThumbnailAsset = ThumbnailGenerator::IsSupportedAssetType(meta.type);
-        const bool isImageAsset = (!isSceneThumbnailAsset && meta.type == AssetType::Texture);
-        if (!isSceneThumbnailAsset && !isImageAsset)
+        const bool isCachedSceneThumbnail = (meta.type == AssetType::Scene);
+        const bool isImageAsset = (!isSceneThumbnailAsset && !isCachedSceneThumbnail && meta.type == AssetType::Texture);
+        if (!isSceneThumbnailAsset && !isCachedSceneThumbnail && !isImageAsset)
+            return nullptr;
+
+        if (isCachedSceneThumbnail && s_SharedMissingSceneThumbnails.contains(fullPath))
             return nullptr;
 
         if (it == s_SharedThumbnails.end())
@@ -3314,6 +3605,143 @@ namespace ignite
         }
 
         return nullptr;
+    }
+
+    void ContentBrowserPanel::NotifySceneThumbnailUpdated(const std::filesystem::path &sceneFullPath)
+    {
+        const std::string targetNorm = stringutils::ToLower(sceneFullPath.lexically_normal().generic_string());
+        Application::SubmitToRenderThread([targetNorm]()
+        {
+            for (auto it = s_SharedMissingSceneThumbnails.begin(); it != s_SharedMissingSceneThumbnails.end();)
+            {
+                if (stringutils::ToLower(it->lexically_normal().generic_string()) == targetNorm)
+                {
+                    it = s_SharedMissingSceneThumbnails.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+
+            for (auto it = s_SharedThumbnails.begin(); it != s_SharedThumbnails.end();)
+            {
+                if (stringutils::ToLower(it->first.lexically_normal().generic_string()) == targetNorm)
+                {
+                    s_SharedThumbnailLoadsInFlight.erase(it->first);
+                    it = s_SharedThumbnails.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }, "ContentBrowserPanel::NotifySceneThumbnailUpdated");
+    }
+
+    void ContentBrowserPanel::StartCachedSceneThumbnailLoad(const std::filesystem::path &filepath)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        Ref<Project> project = m_EditorLayer ? m_EditorLayer->GetActiveProject() : nullptr;
+        if (!project || !m_AssetManager)
+        {
+            s_SharedThumbnailLoadsInFlight.erase(filepath);
+            return;
+        }
+
+        const std::filesystem::path relativePath = project->GetProjectRelativeFilepath(filepath);
+        AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
+        if (handle == AssetHandle(0))
+        {
+            handle = m_AssetManager->GetAssetHandle(filepath);
+        }
+
+        const std::filesystem::path cachePath = ThumbnailGenerator::GetCacheFilepath(project.get(), handle, filepath);
+        const std::filesystem::path capturedPath = filepath;
+        const uint64_t requestGeneration = s_SharedThumbnailLoadGeneration;
+
+        AssetWorker::SubmitBackgroundJob([capturedPath, cachePath, requestGeneration]()
+        {
+            if (requestGeneration != s_SharedThumbnailLoadGeneration || cachePath.empty())
+            {
+                Application::SubmitToRenderThread([capturedPath]()
+                {
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                }, "ContentBrowserPanel::StartCachedSceneThumbnailLoad - Stale");
+                return;
+            }
+
+            ThumbnailBinaryData cached{};
+            if (!BinarySerializer::DeserializeThumbnail(cachePath, cached) || cached.pixels.empty())
+            {
+                Application::SubmitToRenderThread([capturedPath, requestGeneration]()
+                {
+                    if (requestGeneration == s_SharedThumbnailLoadGeneration)
+                    {
+                        s_SharedMissingSceneThumbnails.insert(capturedPath);
+                    }
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    s_SharedThumbnails.erase(capturedPath);
+                }, "ContentBrowserPanel::StartCachedSceneThumbnailLoad - Cache miss");
+                return;
+            }
+
+            TextureCreateInfo createInfo;
+            createInfo.format = nri::Format::RGBA8_UNORM;
+            createInfo.keepInitialState = true;
+            createInfo.keepCpuData = false;
+            createInfo.deferGpuCreate = true;
+            createInfo.bindless = false;
+            createInfo.initialLayout = nri::Layout::SHADER_RESOURCE;
+            createInfo.initialAccess = nri::AccessBits::SHADER_RESOURCE;
+            createInfo.width = cached.width;
+            createInfo.height = cached.height;
+            createInfo.samplerAddressU = nri::AddressMode::CLAMP_TO_EDGE;
+            createInfo.samplerAddressV = nri::AddressMode::CLAMP_TO_EDGE;
+            createInfo.samplerAddressW = nri::AddressMode::CLAMP_TO_EDGE;
+            createInfo.samplerLinearFiltering = true;
+
+            Ref<Texture> loadedTexture = Texture::Create(cached.pixels, createInfo, nullptr);
+            if (!loadedTexture)
+            {
+                Application::SubmitToRenderThread([capturedPath]()
+                {
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    s_SharedThumbnails.erase(capturedPath);
+                }, "ContentBrowserPanel::StartCachedSceneThumbnailLoad - Texture create failed");
+                return;
+            }
+
+            loadedTexture->PrepareUploadData(4);
+
+            Texture::SubmitAsyncUpload(loadedTexture, [capturedPath, requestGeneration, loadedTexture]()
+            {
+                if (requestGeneration != s_SharedThumbnailLoadGeneration)
+                {
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    return;
+                }
+
+                auto thumbnailIt = s_SharedThumbnails.find(capturedPath);
+                if (thumbnailIt == s_SharedThumbnails.end())
+                {
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    return;
+                }
+
+                loadedTexture->SetReadyFlag(true);
+
+                FileThumbnail ft;
+                ft.thumbnail = loadedTexture;
+                ft.lastFrameUsed = s_SharedCurrentFrame;
+                ft.timestamp = static_cast<uint64_t>(ThumbnailGenerator::GetFileTimestamp(capturedPath));
+
+                thumbnailIt->second = std::move(ft);
+                s_SharedMissingSceneThumbnails.erase(capturedPath);
+                s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+            });
+        });
     }
 
     void ContentBrowserPanel::StartSceneThumbnailLoad(const std::filesystem::path &filepath, AssetType type)
@@ -3672,6 +4100,7 @@ namespace ignite
         ThumbnailGenerator::Get().ClearPending();
         s_SharedThumbnails.clear();
         s_SharedThumbnailLoadsInFlight.clear();
+        s_SharedMissingSceneThumbnails.clear();
 
         while (!s_SharedPendingThumbnailLoads.empty())
         {
