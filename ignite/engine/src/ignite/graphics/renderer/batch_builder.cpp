@@ -15,7 +15,7 @@ namespace ignite
 
     void BatchBuilder::Submit(const BatchKey &key, nri::Buffer *vertexBuffer, nri::Buffer *indexBuffer,
         const Ref<BindingSet> &meshBindingSet, const Ref<BindingSet> &materialBindingSet, const Ref<GraphicsPipeline> &pipeline,
-        uint32_t indexCount, uint32_t objectIndex, uint32_t vertexStride)
+        uint32_t indexCount, uint32_t objectIndex, uint32_t vertexStride, float distSq)
     {
         auto it = m_Map.find(key);
         if (it == m_Map.end())
@@ -28,16 +28,18 @@ namespace ignite
             batch.pipeline = pipeline;
             batch.vertexStride = vertexStride;
             batch.indexCount = indexCount;
+            batch.sortDistSq = distSq;
             batch.objectIndices.push_back(objectIndex);
             m_Map.emplace(key, std::move(batch));
         }
         else
         {
+            it->second.sortDistSq = std::min(it->second.sortDistSq, distSq);
             it->second.objectIndices.push_back(objectIndex);
         }
     }
 
-    void BatchBuilder::Finalize()
+    void BatchBuilder::Finalize(bool sortFrontToBack)
     {
         m_Batches.clear();
         m_Batches.reserve(m_Map.size());
@@ -45,6 +47,19 @@ namespace ignite
         for (auto &[key, batch] : m_Map)
         {
             m_Batches.push_back(std::move(batch));
+        }
+
+        if (sortFrontToBack)
+        {
+            std::sort(m_Batches.begin(), m_Batches.end(), [](const DrawBatch &a, const DrawBatch &b)
+            {
+                if (a.sortDistSq != b.sortDistSq)
+                    return a.sortDistSq < b.sortDistSq;
+                const nri::Pipeline *pa = a.pipeline ? a.pipeline->GetHandle() : nullptr;
+                const nri::Pipeline *pb = b.pipeline ? b.pipeline->GetHandle() : nullptr;
+                return pa < pb;
+            });
+            return;
         }
 
         // Optional: sort by pipeline to minimize state changes

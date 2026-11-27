@@ -1650,6 +1650,10 @@ namespace ignite
             }
         }
 
+        // Defined further below; the rotation-orientation setters need it so that a
+        // parent's scripted rotation is propagated to its whole descendant tree.
+        static void SyncEntityWorldTransform(Entity entity, TransformComponent &transform);
+
         static void TransformComponent_GetForward(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
@@ -1682,8 +1686,11 @@ namespace ignite
             auto &transform = entity.GetComponent<TransformComponent>();
             const glm::quat rotation = glm::quatLookAtRH(forward, glm::vec3(0.0f, 1.0f, 0.0f));
             transform.local.rotation = rotation;
-            transform.world.rotation = rotation;
-            transform.dirty = true;
+            // Recompute world from the parent chain and push the new world transform
+            // down the whole descendant tree. Without this, children (e.g. a scope
+            // attached to a script-driven weapon) keep last frame's world transform
+            // and visibly lag behind the parent.
+            SyncEntityWorldTransform(entity, transform);
         }
 
         static void TransformComponent_GetRight(uint64_t entityID, glm::vec3 *result)
@@ -1760,8 +1767,39 @@ namespace ignite
 
             const glm::quat rotation = glm::quatLookAtRH(forward, up);
             transform.local.rotation = rotation;
-            transform.world.rotation = rotation;
+            // Propagate to descendants (same reason as SetForward).
+            SyncEntityWorldTransform(entity, transform);
+        }
+
+        static void SyncDescendantWorldTransforms(Scene *scene, Entity entity, const glm::mat4 &parentWorld)
+        {
+            if (!scene || !entity.IsValid() || !entity.HasComponent<TransformComponent>())
+                return;
+
+            auto &transform = entity.GetComponent<TransformComponent>();
+            const glm::mat4 worldMat = parentWorld * transform.local.GetMatrix();
+            if (entity.GetParentUUID() != UUID(0))
+                Transform::Decompose(worldMat, transform.world);
+            else
+            {
+                transform.world.translation = transform.local.translation;
+                transform.world.rotation = transform.local.rotation;
+                transform.world.scale = transform.local.scale;
+            }
             transform.dirty = true;
+            if (entity.HasComponent<CameraComponent>())
+                entity.GetComponent<CameraComponent>().camera.SetTransform(worldMat);
+
+            if (!entity.HasComponent<IDComponent>())
+                return;
+
+            const auto &idc = entity.GetComponent<IDComponent>();
+            for (UUID childUUID : idc.children)
+            {
+                Entity child = SceneManager::GetEntity(scene, childUUID);
+                if (child.IsValid() && child.HasComponent<TransformComponent>())
+                    SyncDescendantWorldTransforms(scene, child, worldMat);
+            }
         }
 
         static void SyncEntityWorldTransform(Entity entity, TransformComponent &transform)
@@ -1791,21 +1829,17 @@ namespace ignite
             }
 
             transform.dirty = true;
+            const glm::mat4 parentWorld = transform.world.GetMatrix();
+            if (entity.HasComponent<CameraComponent>())
+                entity.GetComponent<CameraComponent>().camera.SetTransform(parentWorld);
 
             if (scene && entity.HasComponent<IDComponent>())
             {
                 const auto &idc = entity.GetComponent<IDComponent>();
-                const glm::mat4 parentWorld = transform.world.GetMatrix();
                 for (UUID childUUID : idc.children)
                 {
                     Entity child = SceneManager::GetEntity(scene, childUUID);
-                    if (child.IsValid() && child.HasComponent<TransformComponent>())
-                    {
-                        auto &childTr = child.GetComponent<TransformComponent>();
-                        const glm::mat4 childWorld = parentWorld * childTr.local.GetMatrix();
-                        Transform::Decompose(childWorld, childTr.world);
-                        childTr.dirty = true;
-                    }
+                    SyncDescendantWorldTransforms(scene, child, parentWorld);
                 }
             }
         }
@@ -3794,7 +3828,41 @@ namespace ignite
             {
                 auto &cc = entity.GetComponent<CharacterControllerComponent>();
                 if (auto charCtrl = cc.character.lock())
+                {
                     charCtrl->Move(*displacement, deltaTime);
+
+                    if (entity.HasComponent<TransformComponent>())
+                    {
+                        auto &transform = entity.GetTransform();
+                        const glm::vec3 worldPos = charCtrl->GetPosition();
+                        const glm::quat worldRot = charCtrl->GetRotation();
+                        Scene *scene = GetSceneContext();
+                        if (scene && entity.GetParentUUID() != UUID(0))
+                        {
+                            Entity parent = SceneManager::GetEntity(scene, entity.GetParentUUID());
+                            if (parent.IsValid() && parent.HasComponent<TransformComponent>())
+                            {
+                                const glm::mat4 worldMat = glm::translate(glm::mat4(1.0f), worldPos)
+                                    * glm::toMat4(worldRot) * glm::scale(glm::mat4(1.0f), transform.world.scale);
+                                const glm::mat4 localMat = glm::inverse(parent.GetComponent<TransformComponent>().world.GetMatrix()) * worldMat;
+                                const glm::vec3 savedLocalScale = transform.local.scale;
+                                Transform::Decompose(localMat, transform.local);
+                                transform.local.scale = savedLocalScale;
+                            }
+                            else
+                            {
+                                transform.local.translation = worldPos;
+                                transform.local.rotation = worldRot;
+                            }
+                        }
+                        else
+                        {
+                            transform.local.translation = worldPos;
+                            transform.local.rotation = worldRot;
+                        }
+                        SyncEntityWorldTransform(entity, transform);
+                    }
+                }
             }
         }
 
@@ -3822,9 +3890,30 @@ namespace ignite
                 auto &cc = entity.GetComponent<CharacterControllerComponent>();
                 if (auto charCtrl = cc.character.lock())
                     charCtrl->SetPosition(*position);
-                entity.GetTransform().world.translation = *position;
-                entity.GetTransform().local.translation = *position;
-                entity.GetTransform().dirty = true;
+                auto &transform = entity.GetTransform();
+                Scene *scene = GetSceneContext();
+                if (scene && entity.GetParentUUID() != UUID(0))
+                {
+                    Entity parent = SceneManager::GetEntity(scene, entity.GetParentUUID());
+                    if (parent.IsValid() && parent.HasComponent<TransformComponent>())
+                    {
+                        const glm::mat4 worldMat = glm::translate(glm::mat4(1.0f), *position)
+                            * glm::toMat4(transform.world.rotation) * glm::scale(glm::mat4(1.0f), transform.world.scale);
+                        const glm::mat4 localMat = glm::inverse(parent.GetComponent<TransformComponent>().world.GetMatrix()) * worldMat;
+                        const glm::vec3 savedLocalScale = transform.local.scale;
+                        Transform::Decompose(localMat, transform.local);
+                        transform.local.scale = savedLocalScale;
+                    }
+                    else
+                    {
+                        transform.local.translation = *position;
+                    }
+                }
+                else
+                {
+                    transform.local.translation = *position;
+                }
+                SyncEntityWorldTransform(entity, transform);
             }
         }
 
@@ -3852,9 +3941,12 @@ namespace ignite
                 auto &cc = entity.GetComponent<CharacterControllerComponent>();
                 if (auto charCtrl = cc.character.lock())
                     charCtrl->SetRotation(*rotation);
-                entity.GetTransform().world.rotation = *rotation;
-                entity.GetTransform().local.rotation = *rotation;
-                entity.GetTransform().dirty = true;
+
+                // Update local rotation, then recompute world and push it down the
+                // descendant tree so attached children follow immediately.
+                auto &transform = entity.GetTransform();
+                transform.local.rotation = *rotation;
+                SyncEntityWorldTransform(entity, transform);
             }
         }
 

@@ -139,7 +139,7 @@ namespace ignite
         nri::CallbackInterface callbackInterface{};
 
 #ifdef PLATFORM_WINDOWS
-        DXGI_USAGE swapChainUsage = DXGI_USAGE_SHADER_INPUT | DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        DXGI_USAGE swapChainUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_11_1;
 #endif
 

@@ -148,6 +148,8 @@ namespace ignite
 
         bool m_SceneFocused;
         int m_SceneFocusCooldown;
+        bool m_EditorCameraMouseLocked = false;
+        bool m_EditorCameraLockJustEngaged = false;
 
         bool m_HierarchyDirty = true;
         size_t m_LastEntityCount = 0;

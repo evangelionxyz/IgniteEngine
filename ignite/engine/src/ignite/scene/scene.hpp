@@ -112,6 +112,7 @@ namespace ignite
 
         void UpdateTransforms(float deltaTime);
         void UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform);
+        void SyncPostPhysicsTransforms();
 
         void OnUpdateRuntimeSimulate(float deltaTime);
         void OnFixedUpdateRuntimeSimulate() const;

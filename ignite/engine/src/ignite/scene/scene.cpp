@@ -882,6 +882,56 @@ namespace ignite
         }
     }
 
+    void Scene::SyncPostPhysicsTransforms()
+    {
+        IGN_PROFILE_FUNCTION();
+
+        registry->view<IDComponent, TransformComponent>().each([this](entt::entity e, const auto &id, const auto &)
+        {
+            if (id.parent == 0)
+            {
+                UpdateTransformRecursive(Entity{ e, this }, glm::mat4(1.0f));
+            }
+        });
+
+        auto staticMeshView = registry->view<TransformComponent, RenderingComponent, StaticMeshComponent>();
+        for (entt::entity e : staticMeshView)
+        {
+            const auto &[tr, rc, smc] = staticMeshView.get<TransformComponent, RenderingComponent, StaticMeshComponent>(e);
+            if (!rc.visible || smc.handle == AssetHandle(0))
+                continue;
+
+            if (auto mesh = m_AssetManager->GetAsset<StaticMesh>(smc.handle))
+            {
+                const auto worldMatrix = tr.world.GetMatrix();
+                smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+                smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
+            }
+        }
+
+        auto skeletalMeshView = registry->view<TransformComponent, RenderingComponent, SkeletalMeshComponent>();
+        for (entt::entity e : skeletalMeshView)
+        {
+            const auto &[tr, rc, smc] = skeletalMeshView.get<TransformComponent, RenderingComponent, SkeletalMeshComponent>(e);
+            if (!rc.visible || smc.handle == AssetHandle(0))
+                continue;
+
+            if (auto mesh = m_AssetManager->GetAsset<SkeletalMesh>(smc.handle))
+            {
+                const auto worldMatrix = tr.world.GetMatrix();
+                smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+                smc.worldAABB = mesh->localAABB.Transform(worldMatrix);
+            }
+        }
+
+        auto cameraView = registry->view<TransformComponent, CameraComponent>();
+        for (auto entity : cameraView)
+        {
+            const auto &[tr, cc] = cameraView.get<TransformComponent, CameraComponent>(entity);
+            cc.camera.SetTransform(tr.world.GetMatrix());
+        }
+    }
+
     void Scene::OnUpdateEdit(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
@@ -1469,6 +1519,11 @@ namespace ignite
                 }
             }
 
+            // Propagate physics-updated transforms (CharacterController, Rigidbody, Rigidbody2D)
+            // down the parent-child hierarchy so attached cameras, weapon rigs, and child meshes
+            // stay in lockstep on the exact same frame instead of lagging one frame behind.
+            SyncPostPhysicsTransforms();
+
             // Dispatch Jolt collision events to C# scripts
             {
                 IGN_PROFILE_SCOPE("Scene::CollisionEvents");
@@ -1978,6 +2033,10 @@ namespace ignite
         {
             addHandle(mesh.handle);
             addHandle(mesh.runtimeAnimatorHandle);
+            for (AssetHandle matOverride : mesh.materialOverrides)
+            {
+                addHandle(matOverride);
+            }
             for (auto &attachmentHandle : mesh.socketAttachments | std::views::values)
             {
                 addHandle(attachmentHandle);
@@ -1987,6 +2046,10 @@ namespace ignite
         registry->view<StaticMeshComponent>().each([&](entt::entity, const StaticMeshComponent &mesh)
         {
             addHandle(mesh.handle);
+            for (AssetHandle matOverride : mesh.materialOverrides)
+            {
+                addHandle(matOverride);
+            }
         });
 
         registry->view<AudioSourceComponent>().each([&](entt::entity, const AudioSourceComponent &audio)

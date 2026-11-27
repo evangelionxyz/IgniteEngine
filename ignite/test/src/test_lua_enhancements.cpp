@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <format>
+#include <sstream>
 
 using namespace ignite;
 
@@ -83,6 +84,63 @@ TEST(LuaEnhancements, VecMathHierarchyAndPrimitivesSnippet)
     EXPECT_TRUE(child.HasComponent<StaticMeshComponent>());
     EXPECT_TRUE(child.HasComponent<TransformComponent>());
     EXPECT_TRUE(child.GetComponent<TransformComponent>().dirty);
+}
+
+// A script-driven parent must drag its whole descendant chain along in the same
+// frame: the effect that made an attached weapon scope trail the weapon.
+TEST(LuaEnhancements, GrandchildWorldTransformFollowsScriptedParent)
+{
+    Scene scene;
+    lua::ScriptRuntime runtime(&scene);
+
+    Entity parent = SceneManager::CreateEmptyEntity(&scene, "RigRoot");
+    Entity child = SceneManager::CreateEmptyEntity(&scene, "WeaponRig");
+    Entity grandchild = SceneManager::CreateEmptyEntity(&scene, "WeaponSight");
+    ASSERT_TRUE(static_cast<bool>(parent));
+    ASSERT_TRUE(static_cast<bool>(child));
+    ASSERT_TRUE(static_cast<bool>(grandchild));
+
+    SceneManager::AddChild(&scene, parent, child);
+    SceneManager::AddChild(&scene, child, grandchild);
+
+    grandchild.GetComponent<TransformComponent>().local.translation = glm::vec3(0.0f, 0.0f, 2.0f);
+
+    std::string result;
+    std::string err;
+    const bool ok = runtime.ExecuteSnippet(R"lua(
+        local root = Ignite.FindEntityByName("RigRoot")
+        local rig = Ignite.FindEntityByName("WeaponRig")
+        local sight = Ignite.FindEntityByName("WeaponSight")
+        assert(root and rig and sight, "hierarchy not found")
+
+        local rt = root:get_component("Transform")
+        local wt = rig:get_component("Transform")
+        local st = sight:get_component("Transform")
+
+        -- Move and rotate the parent only; descendants must follow immediately.
+        rt.position = Ignite.Vec3(10, 0, 0)
+        wt.position = Ignite.Vec3(0, 5, 0)
+        rt.rotation = Ignite.Vec3(0, 90, 0)
+
+        local p = st.world_position
+        local ws = st.world_scale
+        return string.format("%.4f %.4f %.4f %.4f %.4f", p.x, p.y, p.z, ws.x, ws.y)
+    )lua", result, err);
+
+    ASSERT_TRUE(ok) << err;
+
+    // The sight sits 2 units down the rig's +Z, and the root is turned 90 degrees
+    // about Y, which maps local +Z onto world +X. So world position must be
+    // (10 + 2, 5, 0) rather than the stale (10, 5, 2) or the pre-move origin.
+    std::istringstream stream(result);
+    float px = 0.0f, py = 0.0f, pz = 0.0f, sx = 0.0f, sy = 0.0f;
+    stream >> px >> py >> pz >> sx >> sy;
+
+    EXPECT_NEAR(px, 12.0f, 0.05f) << "grandchild world X did not follow the rotated parent";
+    EXPECT_NEAR(py, 5.0f, 0.05f) << "grandchild world Y did not follow the parent";
+    EXPECT_NEAR(pz, 0.0f, 0.05f) << "grandchild world Z did not follow the rotated parent";
+    EXPECT_NEAR(sx, 1.0f, 0.01f);
+    EXPECT_NEAR(sy, 1.0f, 0.01f);
 }
 
 TEST(LuaEnhancements, FixedDeltaTimeAndCollisionCallbacks)

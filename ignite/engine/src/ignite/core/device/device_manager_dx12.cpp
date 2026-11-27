@@ -41,10 +41,10 @@ namespace ignite
         switch (Severity)
         {
             case D3D12_MESSAGE_SEVERITY_CORRUPTION:
-                LOG_ASSERT(false, "[D3D12 CORRUPTION] {}", pDescription);
+                LOG_ERROR("[D3D12 CORRUPTION] {}", pDescription);
                 break;
             case D3D12_MESSAGE_SEVERITY_ERROR:
-                LOG_ASSERT(false, "[D3D12 ERROR] {}", pDescription);
+                LOG_ERROR("[D3D12 ERROR] {}", pDescription);
                 break;
             case D3D12_MESSAGE_SEVERITY_WARNING:
                 LOG_WARN("[D3D12 WARNING] {}", pDescription);
@@ -263,10 +263,9 @@ namespace ignite
                 if (m_DeviceParameters.enableWarningAsErrors)
                 {
                     pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
+                    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+                    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
                 }
-
-                pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
-                pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
 #endif
                 D3D12_MESSAGE_ID disableMessageIDs[] =
                 {
@@ -420,8 +419,12 @@ namespace ignite
 
         HRESULT hr = S_OK;
 
-        m_Hwnd = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties((SDL_Window *)m_Window->GetNativeWindow()),
-            SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+        m_Hwnd = m_Window->GetNativeWindow();
+        if (!m_Hwnd)
+        {
+            LOG_ERROR("[D3D12] Native window handle is null");
+            return false;
+        }
 
         if (m_DeviceParameters.supportExplicitDisplayScaling)
         {
@@ -842,10 +845,20 @@ namespace ignite
 
     bool DeviceManager_DX12::Present()
     {
-        if (!m_Window->IsVisible())
+        if (m_DeviceParameters.headlessDevice || !m_SwapChain)
             return true;
 
         const UINT bufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
+        if (!m_Window->IsVisible())
+        {
+            if (bufferIndex < m_FrameFenceEvents.size() && m_FrameFenceEvents[bufferIndex])
+            {
+                m_FrameFence->SetEventOnCompletion(m_FrameCount, m_FrameFenceEvents[bufferIndex]);
+                m_GraphicsQueue->Signal(m_FrameFence.Get(), m_FrameCount);
+                m_FrameCount++;
+            }
+            return true;
+        }
 
         UINT presentFlags = 0;
         if (!m_DeviceParameters.vsyncEnable && m_FullScreenDesc.Windowed && m_TearingSupported)

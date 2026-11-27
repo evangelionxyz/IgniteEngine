@@ -52,7 +52,7 @@ namespace ignite
                 postProcessing = cc.camera.postProcessing;
             }
         }
-        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * sceneRenderSettings.renderScale, 0.25f, 1.0f);
+        postProcessing.renderScale = glm::clamp(sceneRenderSettings.renderScale, 0.25f, 1.0f);
 
         const uint32_t renderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(width) * postProcessing.renderScale)));
         const uint32_t renderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(height) * postProcessing.renderScale)));
@@ -146,7 +146,7 @@ namespace ignite
                 target->debugRT->Resize(renderWidth, renderHeight, false);
             }
 
-            if (sceneRenderSettings.enableDepthPrepass && target->msaaSampleCount == 1)
+            if (sceneRenderSettings.enableDepthPrepass)
                 EnsureDepthPrepassRT(target, renderWidth, renderHeight);
         }
     }
@@ -190,6 +190,50 @@ namespace ignite
         else if (target->gizmoRT->GetWidth() != safeW || target->gizmoRT->GetHeight() != safeH)
         {
             target->gizmoRT->Resize(safeW, safeH);
+        }
+    }
+
+    void SceneRenderer::EnsureSelectionRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
+    {
+        const uint32_t safeW = std::max(renderWidth, 1u);
+        const uint32_t safeH = std::max(renderHeight, 1u);
+        if (!target->selectionRT)
+        {
+            RenderTargetCreateInfo selectionRTCreateInfo = {};
+            selectionRTCreateInfo.width = safeW;
+            selectionRTCreateInfo.height = safeH;
+            selectionRTCreateInfo.sampleCount = 1;
+            selectionRTCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[Selection Mask ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
+                FramebufferAttachments{ "[Selection Mask ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
+            };
+            target->selectionRT = RenderTarget::Create(selectionRTCreateInfo, "[Scene Renderer] Selection Mask RT");
+        }
+        else if (target->selectionRT->GetWidth() != safeW || target->selectionRT->GetHeight() != safeH)
+        {
+            target->selectionRT->Resize(safeW, safeH);
+        }
+    }
+
+    void SceneRenderer::EnsurePostProcessRT(Ref<CameraRenderTarget> target, uint32_t width, uint32_t height)
+    {
+        const uint32_t safeW = std::max(width, 1u);
+        const uint32_t safeH = std::max(height, 1u);
+        if (!target->postProcessRT)
+        {
+            RenderTargetCreateInfo postProcessRTCreateInfo = {};
+            postProcessRTCreateInfo.width = safeW;
+            postProcessRTCreateInfo.height = safeH;
+            postProcessRTCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[Post Process Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT }
+            };
+            target->postProcessRT = RenderTarget::Create(postProcessRTCreateInfo, "[Scene Renderer] Post Process RT");
+        }
+        else if (target->postProcessRT->GetWidth() != safeW || target->postProcessRT->GetHeight() != safeH)
+        {
+            target->postProcessRT->Resize(safeW, safeH);
         }
     }
 
@@ -244,8 +288,15 @@ namespace ignite
 
     void SceneRenderer::EnsureDepthPrepassRT(Ref<CameraRenderTarget> target, uint32_t renderWidth, uint32_t renderHeight)
     {
-        if (!target || !target->sceneRT || target->msaaSampleCount != 1 || !target->sceneRT->GetDepthAttachment())
+        if (!target || !target->sceneRT || !target->sceneRT->GetDepthAttachment())
             return;
+
+        // Share sceneRT's depth image in 1x mode to avoid a copy and preserve early-Z.
+        // In MSAA mode, depthPrepassRT owns its own 1x depth attachment so 1x compute
+        // passes (GTAO, SSR) can sample it cleanly while ColorPass uses MSAA depth.
+        Ref<Texture> sharedDepth = (target->msaaSampleCount == 1)
+            ? target->sceneRT->GetDepthAttachment()
+            : nullptr;
 
         if (!target->depthPrepassRT)
         {
@@ -256,16 +307,15 @@ namespace ignite
             createInfo.attachments =
             {
                 FramebufferAttachments{ "[GI Depth Prepass Normal]", nri::Format::RG16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-                FramebufferAttachments{ "[GI Depth Prepass Shared Depth]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT }
+                FramebufferAttachments{ "[GI Depth Prepass Depth]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT }
             };
-            // The prepass and the forward pass must see exactly the same depth image.
-            // This also avoids a depth copy and preserves early-Z on the AMD driver.
-            createInfo.depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+            createInfo.depthAttachmentOverride = sharedDepth;
             target->depthPrepassRT = RenderTarget::Create(createInfo, "[Scene Renderer] GI Depth Prepass RT");
         }
-        else if (target->depthPrepassRT->GetWidth() != renderWidth || target->depthPrepassRT->GetHeight() != renderHeight)
+        else if (target->depthPrepassRT->GetWidth() != renderWidth || target->depthPrepassRT->GetHeight() != renderHeight
+            || target->depthPrepassRT->GetCreateInfo().depthAttachmentOverride != sharedDepth)
         {
-            target->depthPrepassRT->GetCreateInfo().depthAttachmentOverride = target->sceneRT->GetDepthAttachment();
+            target->depthPrepassRT->GetCreateInfo().depthAttachmentOverride = sharedDepth;
             target->depthPrepassRT->Resize(renderWidth, renderHeight, false);
         }
     }
@@ -295,11 +345,13 @@ namespace ignite
         sceneRTCreateInfo.width = renderWidth;
         sceneRTCreateInfo.height = renderHeight;
         sceneRTCreateInfo.sampleCount = desiredSampleCount;
+        FramebufferAttachments objectIdAtt{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT };
+        objectIdAtt.allowHostReadback = (desiredSampleCount <= 1);
         sceneRTCreateInfo.attachments =
         {
             FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
             FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
+            objectIdAtt
         };
         target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
 
@@ -311,8 +363,7 @@ namespace ignite
             resolvedRTCreateInfo.sampleCount = 1;
             resolvedRTCreateInfo.attachments =
             {
-                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE },
-                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::SHADER_RESOURCE }
+                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE }
             };
             target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
         }
@@ -385,22 +436,15 @@ namespace ignite
 
         RenderTargetCreateInfo sceneRTCreateInfo = {};
         sceneRTCreateInfo.sampleCount = sampleCount;
+        FramebufferAttachments objectIdAtt{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT };
+        objectIdAtt.allowHostReadback = (sampleCount <= 1);
         sceneRTCreateInfo.attachments =
         {
             FramebufferAttachments{ "[Scene DepthAttachment]", nri::Format::D32_SFLOAT_S8_UINT, nri::Layout::DEPTH_STENCIL_ATTACHMENT },
             FramebufferAttachments{ "[Scene ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
+            objectIdAtt
         };
         target->sceneRT = RenderTarget::Create(sceneRTCreateInfo, "[Scene Renderer] Scene RT");
-
-        RenderTargetCreateInfo selectionRTCreateInfo = {};
-        selectionRTCreateInfo.sampleCount = 1;
-        selectionRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Selection Mask ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::COLOR_ATTACHMENT },
-            FramebufferAttachments{ "[Selection Mask ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::COLOR_ATTACHMENT }
-        };
-        target->selectionRT = RenderTarget::Create(selectionRTCreateInfo, "[Scene Renderer] Selection Mask RT");
 
         if (sampleCount > 1)
         {
@@ -408,19 +452,16 @@ namespace ignite
             resolvedRTCreateInfo.sampleCount = 1;
             resolvedRTCreateInfo.attachments =
             {
-                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE },
-                FramebufferAttachments{ "[Scene Resolved ObjectIDAttachment]", nri::Format::R32_UINT, nri::Layout::SHADER_RESOURCE }
+                FramebufferAttachments{ "[Scene Resolved ColorAttachment]", nri::Format::RGBA16_SFLOAT, nri::Layout::SHADER_RESOURCE }
             };
             target->sceneResolvedRT = RenderTarget::Create(resolvedRTCreateInfo, "[Scene Renderer] Scene Resolved RT");
         }
 
+        FramebufferAttachments compositeColorAtt{ "[Composite Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT };
+        compositeColorAtt.allowHostReadback = true;
         RenderTargetCreateInfo compositeRTCreateInfo = {};
-        compositeRTCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Composite Color Attachment]", nri::Format::RGBA8_UNORM, nri::Layout::COLOR_ATTACHMENT }
-        };
+        compositeRTCreateInfo.attachments = { compositeColorAtt };
         target->compositeRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Composite RT");
-        target->postProcessRT = RenderTarget::Create(compositeRTCreateInfo, "[Scene Renderer] Post Process RT");
 
         if (!m_WidgetRenderer)
             m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
@@ -436,15 +477,20 @@ namespace ignite
 
     std::vector<Ref<Bloom>> SceneRenderer::GetOrCreateBlooms(ICamera *camera)
     {
-        constexpr uint32_t resolution = 1080;
         auto it = m_Blooms.find(camera);
         if (it != m_Blooms.end())
             return it->second;
 
-        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-        std::vector<Ref<Bloom>> blooms(maxFrame);
-        for (uint32_t i = 0; i < maxFrame; ++i)
-            blooms[i] = CreateRef<Bloom>(resolution, resolution);
+        uint32_t initW = 512;
+        uint32_t initH = 512;
+        if (auto rtIt = m_RenderTargets.find(camera); rtIt != m_RenderTargets.end() && rtIt->second && rtIt->second->sceneRT)
+        {
+            initW = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(rtIt->second->sceneRT->GetWidth()) * sceneRenderSettings.bloomResolutionScale)));
+            initH = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(rtIt->second->sceneRT->GetHeight()) * sceneRenderSettings.bloomResolutionScale)));
+        }
+
+        std::vector<Ref<Bloom>> blooms(1);
+        blooms[0] = CreateRef<Bloom>(initW, initH);
 
         m_Blooms.emplace(camera, blooms);
         return blooms;
@@ -452,15 +498,20 @@ namespace ignite
 
     std::vector<Ref<SSAO>> SceneRenderer::GetOrCreateSSAOs(nri::CommandBuffer *cmd, ICamera *camera)
     {
-        constexpr uint32_t resolution = 1080;
         auto it = m_SSAOs.find(camera);
         if (it != m_SSAOs.end())
             return it->second;
 
-        const uint32_t maxFrame = DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight;
-        std::vector<Ref<SSAO>> SSAOs(maxFrame);
-        for (uint32_t i = 0; i < maxFrame; ++i)
-            SSAOs[i] = CreateRef<SSAO>(cmd, resolution, resolution);
+        uint32_t initW = 512;
+        uint32_t initH = 512;
+        if (auto rtIt = m_RenderTargets.find(camera); rtIt != m_RenderTargets.end() && rtIt->second && rtIt->second->sceneRT)
+        {
+            initW = std::max(1u, rtIt->second->sceneRT->GetWidth());
+            initH = std::max(1u, rtIt->second->sceneRT->GetHeight());
+        }
+
+        std::vector<Ref<SSAO>> SSAOs(1);
+        SSAOs[0] = CreateRef<SSAO>(cmd, initW, initH);
 
         m_SSAOs.emplace(camera, SSAOs);
         return SSAOs;
@@ -481,12 +532,8 @@ namespace ignite
             return it->second;
         }
 
-        const uint32_t slotCount = std::max<uint32_t>(
-            DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight,
-            static_cast<uint32_t>(m_CommandBufferSlots.size()));
-        std::vector<Ref<GTAO>> gtaos(slotCount);
-        for (uint32_t i = 0; i < slotCount; ++i)
-            gtaos[i] = CreateRef<GTAO>(safeW, safeH, resolutionScale);
+        std::vector<Ref<GTAO>> gtaos(1);
+        gtaos[0] = CreateRef<GTAO>(safeW, safeH, resolutionScale);
 
         m_GTAOs.emplace(camera, gtaos);
         return gtaos;
@@ -507,9 +554,7 @@ namespace ignite
             return it->second;
         }
 
-        const uint32_t slotCount = std::max<uint32_t>(
-            DeviceManager::GetInstance()->GetDeviceParameters().maxFramesInFlight,
-            static_cast<uint32_t>(m_CommandBufferSlots.size()));
+        constexpr uint32_t slotCount = 2u;
         std::vector<Ref<SSR>> ssrs(slotCount);
         for (uint32_t i = 0; i < slotCount; ++i)
             ssrs[i] = CreateRef<SSR>(safeW, safeH, resolutionScale);

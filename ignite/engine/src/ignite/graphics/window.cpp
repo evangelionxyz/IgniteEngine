@@ -108,11 +108,6 @@ namespace ignite
 
         DeviceParameters& deviceParams = m_DeviceManager->GetDeviceParameters();
 
-#ifdef _DEBUG
-        deviceParams.enableDebugRuntime = true;
-        deviceParams.enableNvrhiValidationLayer = true;
-#endif
-
         // Create device instance
         bool result = m_DeviceManager->CreateInstance(params);
         LOG_ASSERT(result, "Failed to create Instance");

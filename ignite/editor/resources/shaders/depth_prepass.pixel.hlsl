@@ -9,8 +9,12 @@ cbuffer      CameraBuffer   : register(b1, space0) { Camera camera; }
 cbuffer      MaterialBuffer : register(b0, space1) { Material material; }
 SamplerState sampler0       : register(s0, space1);
 
+#ifdef IGN_DEPTH_PREPASS_OPAQUE
+[earlydepthstencil]
+#endif
 float2 main(PixelVertexInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET0
 {
+#ifndef IGN_DEPTH_PREPASS_OPAQUE
     float2 tiledUV = input.uv * material.tilingFactor;
 
     // Masked materials run alpha-test discard in the depth prepass only;
@@ -26,6 +30,7 @@ float2 main(PixelVertexInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARG
             discard;
         }
     }
+#endif
 
     // Output clean geometric vertex normals (without tangent normal-map bumps) so GTAO
     // evaluates against the same smooth macro geometry represented by the depth buffer.

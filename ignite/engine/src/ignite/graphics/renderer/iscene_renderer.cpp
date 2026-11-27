@@ -446,7 +446,7 @@ namespace ignite
         scalability.overall = level;
         scalability.shadows = level;
         scalability.globalIllumination = level;
-        scalability.ambientOcclusion = level;
+        // Ambient occlusion uses explicit type (NONE, SSAO, GTAO) without a scalability level.
         scalability.reflections = level;
         scalability.resolutionScale = level;
         scalability.postProcessing = level;
@@ -473,32 +473,45 @@ namespace ignite
 
         switch (scalability.ambientOcclusion)
         {
-        case ScalabilityLevel::Low:
-            aoModeOverride = 0; // Off
+        case AOMode::Off:
+            aoModeOverride = 0; // NONE
             break;
-        case ScalabilityLevel::Medium:
-            aoModeOverride = 2; // GTAO (scaled, fast)
-            gtaoResolutionScale = 0.35f;
-            gtaoSliceCount = 2;
-            gtaoStepsPerSlice = 2;
-            gtaoDenoiseRadius = 2;
-            gtaoUpsampleMode = 0;
+        case AOMode::SSAO:
+            aoModeOverride = 1; // SSAO
             break;
-        case ScalabilityLevel::High:
-            aoModeOverride = 2; // GTAO (half-res, fast 2x2 bilateral upsample)
-            gtaoResolutionScale = 0.5f;
-            gtaoSliceCount = 3;
-            gtaoStepsPerSlice = 3;
-            gtaoDenoiseRadius = 3;
-            gtaoUpsampleMode = 1;
-            break;
-        case ScalabilityLevel::Ultra:
-            aoModeOverride = 2; // GTAO (full quality)
-            gtaoResolutionScale = 0.5f;
-            gtaoSliceCount = 4;
-            gtaoStepsPerSlice = 4;
-            gtaoDenoiseRadius = 4;
-            gtaoUpsampleMode = 2;
+        case AOMode::GTAO:
+            aoModeOverride = 2; // GTAO
+            switch (scalability.postProcessing)
+            {
+            case ScalabilityLevel::Low:
+                gtaoResolutionScale = 0.35f;
+                gtaoSliceCount = 2;
+                gtaoStepsPerSlice = 2;
+                gtaoDenoiseRadius = 2;
+                gtaoUpsampleMode = 0;
+                break;
+            case ScalabilityLevel::Medium:
+                gtaoResolutionScale = 0.5f;
+                gtaoSliceCount = 2;
+                gtaoStepsPerSlice = 2;
+                gtaoDenoiseRadius = 2;
+                gtaoUpsampleMode = 1;
+                break;
+            case ScalabilityLevel::High:
+                gtaoResolutionScale = 0.5f;
+                gtaoSliceCount = 3;
+                gtaoStepsPerSlice = 3;
+                gtaoDenoiseRadius = 3;
+                gtaoUpsampleMode = 1;
+                break;
+            case ScalabilityLevel::Ultra:
+                gtaoResolutionScale = 0.5f;
+                gtaoSliceCount = 4;
+                gtaoStepsPerSlice = 4;
+                gtaoDenoiseRadius = 4;
+                gtaoUpsampleMode = 2;
+                break;
+            }
             break;
         }
 
@@ -545,25 +558,127 @@ namespace ignite
         {
         case ScalabilityLevel::Low:
             enableSpecularAA = false;
+            enableBloom = false;
             bloomResolutionScale = 0.5f;
             bloomMaxIterations = 3;
             break;
         case ScalabilityLevel::Medium:
             enableSpecularAA = true;
+            enableBloom = true;
             bloomResolutionScale = 0.5f;
             bloomMaxIterations = 4;
             break;
         case ScalabilityLevel::High:
             enableSpecularAA = true;
+            enableBloom = true;
             bloomResolutionScale = 0.75f;
             bloomMaxIterations = 5;
             break;
         case ScalabilityLevel::Ultra:
             enableSpecularAA = true;
-            bloomResolutionScale = 1.0f;
-            bloomMaxIterations = 6;
+            enableBloom = true;
+            bloomResolutionScale = 0.75f;
+            bloomMaxIterations = 5;
             break;
         }
+    }
+
+    void SceneRenderSettings::SyncToScene(Scene *scene, ICamera *editCamera) const
+    {
+        auto applyPP = [&](PostProcessing &pp)
+        {
+            switch (sampleMethod)
+            {
+            case SampleMethod::NONE:
+                pp.taaProperties.enable = false;
+                pp.msaaProperties.enable = false;
+                pp.enableFXAA = false;
+                break;
+            case SampleMethod::TAA:
+                pp.taaProperties.enable = true;
+                pp.taaProperties.blendFactor = taaProperties.blendFactor;
+                pp.msaaProperties.enable = false;
+                pp.enableFXAA = false;
+                break;
+            case SampleMethod::MSAA:
+                pp.taaProperties.enable = false;
+                pp.msaaProperties.enable = true;
+                pp.msaaProperties.sampleCount = msaaProperties.sampleCount;
+                pp.enableFXAA = false;
+                break;
+            case SampleMethod::FXAA:
+                pp.taaProperties.enable = false;
+                pp.msaaProperties.enable = false;
+                pp.enableFXAA = true;
+                break;
+            }
+
+            const AOMode effectiveAO = (aoModeOverride >= 0)
+                ? static_cast<AOMode>(std::clamp(aoModeOverride, 0, 2))
+                : scalability.ambientOcclusion;
+            pp.enableSSAO = (effectiveAO != AOMode::Off);
+            pp.aoMode = effectiveAO;
+            pp.enableBloom = enableBloom;
+            pp.renderScale = renderScale;
+        };
+
+        if (editCamera)
+        {
+            applyPP(editCamera->postProcessing);
+        }
+
+        if (!scene || !scene->registry)
+            return;
+
+        for (entt::entity e : scene->registry->view<CameraComponent>())
+        {
+            auto &cc = scene->registry->get<CameraComponent>(e);
+            applyPP(cc.camera.postProcessing);
+            cc.dirty = true;
+        }
+
+        for (entt::entity e : scene->registry->view<DirectionalLightComponent>())
+        {
+            auto &light = scene->registry->get<DirectionalLightComponent>(e);
+            light.shadowResolution = static_cast<uint32_t>(shadowQuality);
+        }
+    }
+
+    void SceneRenderSettings::SyncFromPostProcessing(const PostProcessing &pp)
+    {
+        if (pp.taaProperties.enable)
+        {
+            SetSampleMethod(SampleMethod::TAA);
+            taaProperties.blendFactor = std::clamp(pp.taaProperties.blendFactor, 0.01f, 1.0f);
+        }
+        else if (pp.msaaProperties.enable)
+        {
+            SetSampleMethod(SampleMethod::MSAA);
+            const int scVal = pp.msaaProperties.sampleCount;
+            msaaProperties.sampleCount = (scVal <= 1) ? 1 : (scVal <= 2 ? 2 : (scVal <= 4 ? 4 : 8));
+        }
+        else if (pp.enableFXAA)
+        {
+            SetSampleMethod(SampleMethod::FXAA);
+        }
+        else
+        {
+            SetSampleMethod(SampleMethod::NONE);
+        }
+
+        const AOMode effectiveAO = pp.enableSSAO ? pp.aoMode : AOMode::Off;
+        scalability.ambientOcclusion = effectiveAO;
+        aoModeOverride = static_cast<int>(effectiveAO);
+
+        enableBloom = pp.enableBloom;
+        renderScale = glm::clamp(pp.renderScale, 0.25f, 1.0f);
+    }
+
+    void SceneRenderSettings::SyncFromDirectionalLight(uint32_t shadowResolution)
+    {
+        const uint32_t clamped = std::min(shadowResolution, static_cast<uint32_t>(ShadowMapQuality::ULTIMATE));
+        shadowQuality = static_cast<ShadowMapQuality>(clamped);
+        scalability.shadows = static_cast<ScalabilityLevel>(std::min<uint32_t>(clamped, static_cast<uint32_t>(ScalabilityLevel::Ultra)));
     }
 
     bool SceneRenderSettings::SerializeToFile(const std::filesystem::path &filepath) const
@@ -579,7 +694,7 @@ namespace ignite
             sr.AddKeyValue("Overall", static_cast<int>(scalability.overall));
             sr.AddKeyValue("Shadows", static_cast<int>(scalability.shadows));
             sr.AddKeyValue("GlobalIllumination", static_cast<int>(scalability.globalIllumination));
-            sr.AddKeyValue("AmbientOcclusion", static_cast<int>(scalability.ambientOcclusion));
+            sr.AddKeyValue("AmbientOcclusion", AOModeToString(scalability.ambientOcclusion));
             sr.AddKeyValue("Reflections", static_cast<int>(scalability.reflections));
             sr.AddKeyValue("ResolutionScale", static_cast<int>(scalability.resolutionScale));
             sr.AddKeyValue("PostProcessing", static_cast<int>(scalability.postProcessing));
@@ -602,6 +717,7 @@ namespace ignite
             sr.AddKeyValue("EnableDepthPrepass", enableDepthPrepass);
             sr.AddKeyValue("EnableSpecularAA", enableSpecularAA);
             sr.AddKeyValue("EnableSSR", enableSSR);
+            sr.AddKeyValue("EnableBloom", enableBloom);
             sr.AddKeyValue("SSRIntensity", ssrIntensity);
             sr.AddKeyValue("SSRMaxRoughness", ssrMaxRoughness);
             sr.EndMap();
@@ -633,7 +749,19 @@ namespace ignite
             readLevel(sc, "Overall", scalability.overall);
             readLevel(sc, "Shadows", scalability.shadows);
             readLevel(sc, "GlobalIllumination", scalability.globalIllumination);
-            readLevel(sc, "AmbientOcclusion", scalability.ambientOcclusion);
+            if (JsonNode aoNode = sc["AmbientOcclusion"])
+            {
+                const std::string aoStr = aoNode.as<std::string>("");
+                if (!aoStr.empty())
+                {
+                    scalability.ambientOcclusion = AOModeFromString(aoStr);
+                }
+                else
+                {
+                    const int aoInt = aoNode.as<int>(2);
+                    scalability.ambientOcclusion = (aoInt <= 0) ? AOMode::Off : (aoInt == 1 ? AOMode::SSAO : AOMode::GTAO);
+                }
+            }
             readLevel(sc, "Reflections", scalability.reflections);
             readLevel(sc, "ResolutionScale", scalability.resolutionScale);
             readLevel(sc, "PostProcessing", scalability.postProcessing);
@@ -650,12 +778,18 @@ namespace ignite
             }
             if (sr["SampleMethod"]) SetSampleMethod(static_cast<SampleMethod>(std::clamp(sr["SampleMethod"].as<int>(), 0, 3)));
             if (sr["RenderScale"]) renderScale = std::clamp(sr["RenderScale"].as<float>(), 0.25f, 1.0f);
-            if (sr["ShadowQuality"]) shadowQuality = static_cast<ShadowMapQuality>(std::clamp(sr["ShadowQuality"].as<int>(), 0, 3));
+            if (sr["ShadowQuality"]) shadowQuality = static_cast<ShadowMapQuality>(std::clamp(sr["ShadowQuality"].as<int>(), 0, 4));
             if (sr["GIModeOverride"]) giModeOverride = std::clamp(sr["GIModeOverride"].as<int>(), -1, 2);
-            if (sr["AOModeOverride"]) aoModeOverride = std::clamp(sr["AOModeOverride"].as<int>(), -1, 2);
+            if (sr["AOModeOverride"])
+            {
+                aoModeOverride = std::clamp(sr["AOModeOverride"].as<int>(), -1, 2);
+                if (aoModeOverride >= 0)
+                    scalability.ambientOcclusion = static_cast<AOMode>(aoModeOverride);
+            }
             if (sr["EnableDepthPrepass"]) enableDepthPrepass = sr["EnableDepthPrepass"].as<bool>();
             if (sr["EnableSpecularAA"]) enableSpecularAA = sr["EnableSpecularAA"].as<bool>();
             if (sr["EnableSSR"]) enableSSR = sr["EnableSSR"].as<bool>();
+            if (sr["EnableBloom"]) enableBloom = sr["EnableBloom"].as<bool>();
             if (sr["SSRIntensity"]) ssrIntensity = std::clamp(sr["SSRIntensity"].as<float>(), 0.0f, 2.0f);
             if (sr["SSRMaxRoughness"]) ssrMaxRoughness = std::clamp(sr["SSRMaxRoughness"].as<float>(), 0.05f, 1.0f);
         }

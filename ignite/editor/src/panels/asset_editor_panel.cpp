@@ -2322,6 +2322,10 @@ namespace ignite
                         UI::DrawTexturePreviewDropTarget("Texture Preview", material2D->textureHandle, [&]()
                         {
                             material2D->SetDirtyFlag(true);
+                        }, [this](AssetHandle handle)
+                        {
+                            if (m_EditorLayer)
+                                m_EditorLayer->RevealAssetInContentBrowser(handle);
                         });
                     }
                     else
@@ -3293,20 +3297,27 @@ namespace ignite
 
 								if (ImGui::TreeNodeEx("Textures", ImGuiTreeNodeFlags_DefaultOpen))
 								{
+									auto onTextureChanged = [&]() { material->SetDirtyFlag(true); };
+									auto onRevealTexture = [this](AssetHandle handle)
+									{
+										if (m_EditorLayer)
+											m_EditorLayer->RevealAssetInContentBrowser(handle);
+									};
+
 									// Base texture
-									UI::DrawTexturePreviewDropTarget("Base Color Texture", material->baseColorTextureHandle, [&]() { material->SetDirtyFlag(true); });
+									UI::DrawTexturePreviewDropTarget("Base Color Texture", material->baseColorTextureHandle, onTextureChanged, onRevealTexture);
 
 									// Normal texture
-									UI::DrawTexturePreviewDropTarget("Normal Texture", material->normalTextureHandle, [&]() { material->SetDirtyFlag(true); });
+									UI::DrawTexturePreviewDropTarget("Normal Texture", material->normalTextureHandle, onTextureChanged, onRevealTexture);
 
 									// Emissive texture
-									UI::DrawTexturePreviewDropTarget("Emissive Texture", material->emissiveTextureHandle, [&]() { material->SetDirtyFlag(true); });
+									UI::DrawTexturePreviewDropTarget("Emissive Texture", material->emissiveTextureHandle, onTextureChanged, onRevealTexture);
 
 									// Occlussion texture
-									UI::DrawTexturePreviewDropTarget("Occlusion Texture", material->occlusionTextureHandle, [&]() { material->SetDirtyFlag(true); });
+									UI::DrawTexturePreviewDropTarget("Occlusion Texture", material->occlusionTextureHandle, onTextureChanged, onRevealTexture);
 
 									// Metallic Texture
-									UI::DrawTexturePreviewDropTarget("Metallic Texture", material->metallicTextureHandle, [&]() { material->SetDirtyFlag(true); });
+									UI::DrawTexturePreviewDropTarget("Metallic Texture", material->metallicTextureHandle, onTextureChanged, onRevealTexture);
 
 									// Metallic texture channel
 									ImGui::SameLine();
@@ -3332,7 +3343,7 @@ namespace ignite
 									}
 
 									// Roughness texture
-									UI::DrawTexturePreviewDropTarget("Roughness Texture", material->roughnessTextureHandle, [&]() { material->SetDirtyFlag(true); });
+									UI::DrawTexturePreviewDropTarget("Roughness Texture", material->roughnessTextureHandle, onTextureChanged, onRevealTexture);
 
 									// Roughness texture channel
 									ImGui::SameLine();

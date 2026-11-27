@@ -413,6 +413,13 @@ namespace ignite
 
     ScenePanel::~ScenePanel()
     {
+        if (m_EditorCameraMouseLocked)
+        {
+            m_EditorCameraMouseLocked = false;
+            m_EditorCameraLockJustEngaged = false;
+            InputSystem::ResetCursorState();
+        }
+
         if (m_EditorLayer)
         {
             m_EditorLayer->m_ScenePanel = nullptr;
@@ -423,6 +430,13 @@ namespace ignite
     {
         if (m_Scene == scene)
             return;
+
+        if (m_EditorCameraMouseLocked)
+        {
+            m_EditorCameraMouseLocked = false;
+            m_EditorCameraLockJustEngaged = false;
+            InputSystem::ResetCursorState();
+        }
 
         m_Scene = scene;
         m_SelectedEntities.clear();
@@ -1401,6 +1415,48 @@ namespace ignite
                                 }
                             }
                         }
+                        else if (metadata.type == AssetType::Material)
+                        {
+                            bool applied = false;
+                            if (entity.HasComponent<StaticMeshComponent>())
+                            {
+                                auto &smc = entity.GetComponent<StaticMeshComponent>();
+                                size_t slotCount = 1;
+                                if (smc.handle != AssetHandle(0))
+                                {
+                                    if (Ref<StaticMesh> sm = am->GetAsset<StaticMesh>(smc.handle))
+                                    {
+                                        slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                    }
+                                }
+                                for (size_t i = 0; i < slotCount; ++i)
+                                {
+                                    smc.SetMaterialOverride(i, handle);
+                                }
+                                applied = true;
+                            }
+                            if (entity.HasComponent<SkeletalMeshComponent>())
+                            {
+                                auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+                                size_t slotCount = 1;
+                                if (smc.handle != AssetHandle(0))
+                                {
+                                    if (Ref<SkeletalMesh> sm = am->GetAsset<SkeletalMesh>(smc.handle))
+                                    {
+                                        slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                    }
+                                }
+                                for (size_t i = 0; i < slotCount; ++i)
+                                {
+                                    smc.SetMaterialOverride(i, handle);
+                                }
+                                applied = true;
+                            }
+                            if (applied)
+                            {
+                                SetSelectedEntity(entity);
+                            }
+                        }
                     }
                 }
 
@@ -1547,6 +1603,17 @@ namespace ignite
                 {
                     ImGui::OpenPopup("##add_component_context");
                 }
+
+                auto drawRevealAssetButton = [&](AssetHandle handle, const char *uniqueId)
+                {
+                    if (handle == AssetHandle(0) || !m_EditorLayer)
+                        return;
+                    ImGui::SameLine(0.0f, 4.0f);
+                    if (UI::IconButton(uniqueId, ICON_LC_FOLDER_SEARCH, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Show in Content Browser"))
+                    {
+                        m_EditorLayer->RevealAssetInContentBrowser(handle);
+                    }
+                };
 
             // transform component
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
@@ -1699,6 +1766,7 @@ namespace ignite
 
                     if (c.prefabHandle != AssetHandle(0))
                     {
+                        drawRevealAssetButton(c.prefabHandle, "##RevealPrefab");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearPrefab", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Prefab"))
                         {
@@ -1780,6 +1848,7 @@ namespace ignite
 
                     if (isWidgetLoaded)
                     {
+                        drawRevealAssetButton(c.widgetHandle, "##RevealWidget");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearWidget", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Widget"))
                         {
@@ -1820,7 +1889,7 @@ namespace ignite
                 {
                     const bool hasHDR = c.hdrHandle != AssetHandle(0);
                     std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
-                    UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [ &c, assetManager, this, &hasHDR ]()
+                    UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [ &c, assetManager, this, &hasHDR, &drawRevealAssetButton ]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -1841,6 +1910,7 @@ namespace ignite
 
                         if (hasHDR)
                         {
+                            drawRevealAssetButton(c.hdrHandle, "##RevealHDR");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearHDR", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear HDR"))
                             {
@@ -1926,17 +1996,17 @@ namespace ignite
                         "Ultimate - 8192px"
                     };
 
-                    UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &c.shadowResolution);
-
-                    // if (auto sceneRenderer = m_Scene->GetSceneRenderer())
-                    // {
-                    //     auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
-                    //     if (shadowMap)
-                    //     {
-                    //         ImTextureID texId = UI::GetTextureID(shadowMap);
-                    //         ImGui::Image(texId, { 256, 256 });
-                    //     }
-                    // }
+                    if (UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &c.shadowResolution))
+                    {
+                        if (auto sr = m_EditorLayer ? m_EditorLayer->GetSceneRenderer() : nullptr)
+                        {
+                            sr->sceneRenderSettings.SyncFromDirectionalLight(c.shadowResolution);
+                            if (auto proj = m_EditorLayer->GetActiveProject())
+                            {
+                                sr->sceneRenderSettings.SerializeToFile(proj->GetDirectory() / "GameSettings.ign");
+                            }
+                        }
+                    }
                 }
                 ImGui::EndDisabled();
             });
@@ -2086,7 +2156,7 @@ namespace ignite
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
                 std::string mat2dLabel = isMat2dLoaded ? assetManager->GetAssetDisplayName(c.materialHandle) : "Drag Here";
-                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [ &c, &selectedEntity, &isMat2dLoaded, assetManager, this ]()
+                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [ &c, &selectedEntity, &isMat2dLoaded, assetManager, this, &drawRevealAssetButton ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -2107,6 +2177,7 @@ namespace ignite
 
                     if (isMat2dLoaded)
                     {
+                        drawRevealAssetButton(c.materialHandle, "##RevealMat2D");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearMat2D", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material 2D"))
                         {
@@ -2129,7 +2200,7 @@ namespace ignite
                     // Texture on sprite 2d
                     const bool isTextureLoaded = c.handle != AssetHandle(0);
                     const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [ &c, &isTextureLoaded, this, assetManager, &selectedEntity ]()
+                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [ &c, &isTextureLoaded, this, assetManager, &selectedEntity, &drawRevealAssetButton ]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -2164,6 +2235,7 @@ namespace ignite
 
                         if (isTextureLoaded)
                         {
+                            drawRevealAssetButton(c.handle, "##RevealTexture");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearTexture", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Texture"))
                             {
@@ -2355,7 +2427,7 @@ namespace ignite
                     ImGui::SameLine(0.0f, 8.0f);
                     ImGui::BeginGroup();
                     const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
-                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 60.0f : 4.0f)), thumbSize));
                     if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
                         AssetMetaData meta = assetManager->GetMetaData(handle);
@@ -2378,6 +2450,7 @@ namespace ignite
                     }
                     if (handle != AssetHandle(0))
                     {
+                        drawRevealAssetButton(handle, "##RevealSlot");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
                         {
@@ -2399,6 +2472,7 @@ namespace ignite
                             assetManager->AssignMetaData(handle, metadata);
                             assetManager->UnloadAsset(handle);
                             c.handle = handle;
+                            c.materialOverrides.clear();
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2411,6 +2485,7 @@ namespace ignite
                     [&]()
                     {
                         c.handle = AssetHandle(0);
+                        c.materialOverrides.clear();
                         if (selectedEntity.HasComponent<MeshColliderComponent>())
                         {
                             auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2438,23 +2513,21 @@ namespace ignite
                                 else
                                     submeshName = std::format("{} ({})", submeshName, i);
 
-                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const AssetHandle matHandle = c.ResolveMaterialHandle(i, instance->GetMaterialAssetHandle());
                                 const std::string slotId = std::format("StaticMat_{}", i);
                                 drawAssetSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
                                     ICON_LC_PALETTE, UI::Accent::Material,
-                                    [&](AssetHandle handle)
+                                    [&, i](AssetHandle handle)
                                     {
                                         AssetMetaData metadata = assetManager->GetMetaData(handle);
                                         if (metadata.type == AssetType::Material)
                                         {
-                                            instance->SetMaterial(handle);
-                                            sm->SetDirtyFlag(true);
+                                            c.SetMaterialOverride(i, handle);
                                         }
                                     },
-                                    [&]()
+                                    [&, i]()
                                     {
-                                        instance->SetMaterial(AssetHandle(0));
-                                        sm->SetDirtyFlag(true);
+                                        c.ClearMaterialOverride(i);
                                     },
                                     "Reset to Default Material", slotId.c_str());
                             }
@@ -2533,7 +2606,7 @@ namespace ignite
                     ImGui::SameLine(0.0f, 8.0f);
                     ImGui::BeginGroup();
                     const std::string displayName = (handle != AssetHandle(0)) ? assetManager->GetAssetDisplayName(handle) : emptyLabel;
-                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 30.0f : 4.0f)), thumbSize));
+                    ImGui::Button(displayName.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - (handle != AssetHandle(0) ? 60.0f : 4.0f)), thumbSize));
                     if (ImGui::IsItemHovered() && handle != AssetHandle(0) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
                         AssetMetaData meta = assetManager->GetMetaData(handle);
@@ -2556,6 +2629,7 @@ namespace ignite
                     }
                     if (handle != AssetHandle(0))
                     {
+                        drawRevealAssetButton(handle, "##RevealSlot");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearSlot", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, clearTooltip))
                         {
@@ -2577,6 +2651,7 @@ namespace ignite
                             assetManager->AssignMetaData(handle, metadata);
                             assetManager->UnloadAsset(handle);
                             c.handle = handle;
+                            c.materialOverrides.clear();
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2589,6 +2664,7 @@ namespace ignite
                     [&]()
                     {
                         c.handle = AssetHandle(0);
+                        c.materialOverrides.clear();
                         if (selectedEntity.HasComponent<MeshColliderComponent>())
                         {
                             auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2616,23 +2692,21 @@ namespace ignite
                                 else
                                     submeshName = std::format("{} ({})", submeshName, i);
 
-                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const AssetHandle matHandle = c.ResolveMaterialHandle(i, instance->GetMaterialAssetHandle());
                                 const std::string slotId = std::format("SkelMat_{}", i);
                                 drawSkelSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
                                     ICON_LC_PALETTE, UI::Accent::Material,
-                                    [&](AssetHandle handle)
+                                    [&, i](AssetHandle handle)
                                     {
                                         AssetMetaData metadata = assetManager->GetMetaData(handle);
                                         if (metadata.type == AssetType::Material)
                                         {
-                                            instance->SetMaterial(handle);
-                                            sm->SetDirtyFlag(true);
+                                            c.SetMaterialOverride(i, handle);
                                         }
                                     },
-                                    [&]()
+                                    [&, i]()
                                     {
-                                        instance->SetMaterial(AssetHandle(0));
-                                        sm->SetDirtyFlag(true);
+                                        c.ClearMaterialOverride(i);
                                     },
                                     "Reset to Default Material", slotId.c_str());
                             }
@@ -2641,7 +2715,7 @@ namespace ignite
                         // Animator
                         bool isAnimatorLoaded = c.runtimeAnimatorHandle != AssetHandle(0);
                         std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.runtimeAnimatorHandle) : "Drag Here";
-                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [ &c, this, &sm, &isAnimatorLoaded, assetManager ]()
+                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [ &c, this, &sm, &isAnimatorLoaded, assetManager, &drawRevealAssetButton ]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -2670,6 +2744,7 @@ namespace ignite
 
                             if (isAnimatorLoaded)
                             {
+                                drawRevealAssetButton(c.runtimeAnimatorHandle, "##RevealAnimator");
                                 ImGui::SameLine(0.0f, 4.0f);
                                 if (UI::IconButton("##ClearAnimator", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Animator"))
                                 {
@@ -2717,7 +2792,7 @@ namespace ignite
                                         bool isAttached = attachedMeshHandle != AssetHandle(0);
                                         const std::string socketMeshLabel = assetManager->GetAssetDisplayName(attachedMeshHandle);
 
-                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [ this, &c, socketName = socket.name, assetManager, isAttached, &selectedEntity ]()
+                                        UI::DrawButtonWithColumn(socket.name.c_str(), socketMeshLabel.c_str(), nullptr, [ this, &c, socketName = socket.name, assetManager, isAttached, attachedMeshHandle, &selectedEntity, &drawRevealAssetButton ]()
                                         {
                                             if (ImGui::BeginDragDropTarget())
                                             {
@@ -2739,6 +2814,8 @@ namespace ignite
 
                                             if (isAttached)
                                             {
+                                                const std::string revealSockId = std::format("##RevealSocket_{}", socketName);
+                                                drawRevealAssetButton(attachedMeshHandle, revealSockId.c_str());
                                                 ImGui::SameLine(0.0f, 4.0f);
                                                 const std::string clearSockId = std::format("##ClearSocket_{}", socketName);
                                                 if (UI::IconButton(clearSockId.c_str(), ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Socket Mesh"))
@@ -2834,19 +2911,61 @@ namespace ignite
                 {
                     auto &pp = c.camera.postProcessing;
 
+                    bool camGraphicsSynced = false;
                     if (ImGui::TreeNodeEx("Anti aliasing"))
                     {
                         if (ImGui::TreeNodeEx("TAA", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            c.dirty |= UI::DrawSwitch("Enable", &pp.taaProperties.enable);
-                            c.dirty |= UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f);
+                            if (UI::DrawSwitch("Enable", &pp.taaProperties.enable))
+                            {
+                                if (pp.taaProperties.enable)
+                                {
+                                    pp.msaaProperties.enable = false;
+                                    pp.enableFXAA = false;
+                                }
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
+                            if (UI::DrawFloatControl("Blend Factor", &pp.taaProperties.blendFactor, 0.025f, 0.01f, 1.0f, 1.0f))
+                            {
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
                             ImGui::TreePop();
                         }
 
                         if (ImGui::TreeNodeEx("MSAA", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            c.dirty |= UI::DrawSwitch("Enable", &pp.msaaProperties.enable);
-                            c.dirty |= UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16);
+                            if (UI::DrawSwitch("Enable", &pp.msaaProperties.enable))
+                            {
+                                if (pp.msaaProperties.enable)
+                                {
+                                    pp.taaProperties.enable = false;
+                                    pp.enableFXAA = false;
+                                }
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
+                            if (UI::DrawIntControl("Samples", &pp.msaaProperties.sampleCount, 1, 1, 16))
+                            {
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
+                            ImGui::TreePop();
+                        }
+
+                        if (ImGui::TreeNodeEx("FXAA", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            if (UI::DrawSwitch("Enable", &pp.enableFXAA))
+                            {
+                                if (pp.enableFXAA)
+                                {
+                                    pp.taaProperties.enable = false;
+                                    pp.msaaProperties.enable = false;
+                                }
+                                c.dirty = true;
+                                camGraphicsSynced = true;
+                            }
                             ImGui::TreePop();
                         }
 
@@ -2855,11 +2974,16 @@ namespace ignite
 
                     if (ImGui::TreeNodeEx("Render scale"))
                     {
-                        c.dirty |= UI::DrawFloatControl("Factor", &pp.renderScale, 0.025f, 0.25f, 1.0f, 1.0f);
+                        if (UI::DrawFloatControl("Factor", &pp.renderScale, 0.025f, 0.25f, 1.0f, 1.0f))
+                        {
+                            c.dirty = true;
+                            camGraphicsSynced = true;
+                        }
                         if (UI::DrawButtonWithColumn("", "Apply"))
                         {
                             m_EditorLayer->m_State.gameplayRequestToResize = true;
                             m_EditorLayer->m_State.editorRequestToResize = true;
+                            camGraphicsSynced = true;
                         }
                         ImGui::TreePop();
                     }
@@ -2896,7 +3020,11 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         // Bloom
-                        c.dirty |= UI::DrawSwitch("Enable Bloom", &pp.enableBloom).isItemEdited;
+                        if (UI::DrawSwitch("Enable Bloom", &pp.enableBloom).isItemEdited)
+                        {
+                            c.dirty = true;
+                            camGraphicsSynced = true;
+                        }
                         ImGui::BeginDisabled(!pp.enableBloom);
                         {
                             c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
@@ -2927,16 +3055,25 @@ namespace ignite
                         }
                         ImGui::EndDisabled();
 
-                        // Ambient Occlusion (GTAO / Legacy SSAO)
-                        c.dirty |= UI::DrawSwitch("Enable Ambient Occlusion", &pp.enableSSAO).isItemEdited;
+                        // Ambient Occlusion (NONE / SSAO / GTAO)
+                        if (UI::DrawSwitch("Enable Ambient Occlusion", &pp.enableSSAO).isItemEdited)
+                        {
+                            if (pp.enableSSAO && pp.aoMode == AOMode::Off)
+                                pp.aoMode = AOMode::GTAO;
+                            c.dirty = true;
+                            camGraphicsSynced = true;
+                        }
                         ImGui::BeginDisabled(!pp.enableSSAO);
                         {
-                            static const char *kAOModes[] = { "Off", "Legacy SSAO", "GTAO" };
-                            int aoModeIdx = static_cast<int>(pp.aoMode);
+                            static const char *kAOModes[] = { "None", "SSAO", "GTAO" };
+                            auto aoModeIdx = static_cast<int>(pp.aoMode);
                             if (UI::DrawComboBox("AO Mode", kAOModes, IM_ARRAYSIZE(kAOModes), &aoModeIdx))
                             {
                                 pp.aoMode = static_cast<AOMode>(std::clamp(aoModeIdx, 0, 2));
+                                if (pp.aoMode == AOMode::Off)
+                                    pp.enableSSAO = false;
                                 c.dirty = true;
+                                camGraphicsSynced = true;
                             }
                             c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.01f, 0.05f, 2.5f).isItemEdited;
                             c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.05f, 0.0f, 3.0f).isItemEdited;
@@ -2945,6 +3082,21 @@ namespace ignite
                         ImGui::EndDisabled();
 
                         ImGui::TreePop();
+                    }
+
+                    if (camGraphicsSynced)
+                    {
+                        if (auto sr = m_EditorLayer ? m_EditorLayer->GetSceneRenderer() : nullptr)
+                        {
+                            sr->sceneRenderSettings.SyncFromPostProcessing(c.camera.postProcessing);
+                            sr->sceneRenderSettings.SyncToScene(m_Scene, &GetViewportCamera());
+                            m_EditorLayer->m_State.editorRequestToResize = true;
+                            m_EditorLayer->m_State.gameplayRequestToResize = true;
+                            if (auto proj = m_EditorLayer->GetActiveProject())
+                            {
+                                sr->sceneRenderSettings.SerializeToFile(proj->GetDirectory() / "GameSettings.ign");
+                            }
+                        }
                     }
 
                     ImGui::TreePop();
@@ -3466,6 +3618,7 @@ namespace ignite
 
                     if (isFontLoaded)
                     {
+                        drawRevealAssetButton(c.fontHandle, "##RevealTextFont");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearTextFont", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Font"))
                         {
@@ -3476,7 +3629,7 @@ namespace ignite
 
                 const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
                 std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
-                UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [ &c, this, assetManager, &isMaterialLoaded ]()
+                UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [ &c, this, assetManager, &isMaterialLoaded, &drawRevealAssetButton ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -3494,6 +3647,7 @@ namespace ignite
 
                     if (isMaterialLoaded)
                     {
+                        drawRevealAssetButton(c.material2dHandle, "##RevealTextMaterial");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearTextMaterial", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material"))
                         {
@@ -3520,7 +3674,7 @@ namespace ignite
                 const bool isLoaded = c.handle != AssetHandle(0);
                 std::string label = isLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 
-                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [ &c, this, &isLoaded, assetManager ]()
+                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [ &c, this, &isLoaded, assetManager, &drawRevealAssetButton ]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -3545,6 +3699,7 @@ namespace ignite
 
                     if (isLoaded)
                     {
+                        drawRevealAssetButton(c.handle, "##RevealAudio");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearAudio", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Audio"))
                         {
@@ -4387,6 +4542,7 @@ namespace ignite
 
                     if (isLoaded)
                     {
+                        drawRevealAssetButton(component.scriptHandle, "##RevealLuaScript");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearLuaScript", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Script"))
                         {
@@ -4752,6 +4908,7 @@ namespace ignite
 
                         if (hasExternalHeightmap)
                         {
+                            drawRevealAssetButton(c.heightmapHandle, "##RevealHeightmap");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearHeightmap", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Heightmap"))
                             {
@@ -4876,6 +5033,7 @@ namespace ignite
 
                         if (isMaterialLoaded)
                         {
+                            drawRevealAssetButton(c.materialHandle, "##RevealTerrainMat");
                             ImGui::SameLine(0.0f, 4.0f);
                             if (UI::IconButton("##ClearMaterial", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Material"))
                             {
@@ -4989,7 +5147,7 @@ namespace ignite
                 ImGui::SeparatorText("Texture (Optional)");
                 const bool isTextureLoaded = c.settings.textureHandle != AssetHandle(0);
                 const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.settings.textureHandle) : "Drag Texture Here";
-                UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, assetManager]()
+                UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, assetManager, &drawRevealAssetButton]()
                 {
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -5008,6 +5166,7 @@ namespace ignite
 
                     if (isTextureLoaded)
                     {
+                        drawRevealAssetButton(c.settings.textureHandle, "##RevealParticleTex");
                         ImGui::SameLine(0.0f, 4.0f);
                         if (UI::IconButton("##ClearParticleTex", ICON_LC_X, UI::ButtonVariant::Outline, UI::ButtonSize::IconSm, "Clear Texture"))
                         {
@@ -5225,13 +5384,23 @@ namespace ignite
                 {
                     m_SceneFocused = false;
                     m_SceneFocusCooldown = 0;
-                    if (activeCursorMode != CursorMode::Normal || requestedCursorMode != CursorMode::Normal || InputSystem::IsCursorForceUnlocked())
+                    if (!m_EditorCameraMouseLocked && (activeCursorMode != CursorMode::Normal || requestedCursorMode != CursorMode::Normal || InputSystem::IsCursorForceUnlocked()))
                     {
                         InputSystem::ResetCursorState();
+                    }
+                    else if (m_EditorCameraMouseLocked)
+                    {
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_None);
                     }
                 }
                 else
                 {
+                    if (m_EditorCameraMouseLocked)
+                    {
+                        m_EditorCameraMouseLocked = false;
+                        m_EditorCameraLockJustEngaged = false;
+                        InputSystem::ResetCursorState();
+                    }
                     if (m_SceneFocusCooldown > 0)
                     {
                         m_SceneFocusCooldown--;
@@ -5572,6 +5741,72 @@ namespace ignite
                                                     CommandManager::AddCommand(CreateScope<EntityCreateCommand>(m_Scene, instantiated, "Instantiate Prefab"));
                                                 }
                                                 SetSelectedEntity(instantiated);
+                                            }
+                                        }
+                                    }
+                                    else if (metadata.type == AssetType::Material && target && target->sceneRT)
+                                    {
+                                        Ref<Texture> objectIdTexture = (target->msaaSampleCount > 1)
+                                            ? (target->objectIdResolveRT ? target->objectIdResolveRT->GetColorAttachment(0) : nullptr)
+                                            : target->sceneRT->GetColorAttachment(1);
+                                        if (objectIdTexture && objectIdTexture->GetHandle() && objectIdTexture->GetCreateInfo().sampleCount <= 1)
+                                        {
+                                            const int texWidth = objectIdTexture->GetWidth();
+                                            const int texHeight = objectIdTexture->GetHeight();
+                                            if (canvasSize.x > 0.0f && canvasSize.y > 0.0f && texWidth > 0 && texHeight > 0)
+                                            {
+                                                const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
+                                                const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
+                                                const uint32_t pickedObjectId = objectIdTexture->ReadPixel(pixelX, pixelY);
+                                                if (pickedObjectId != 0xFFFFFFFFu)
+                                                {
+                                                    Entity pickedEntity = {};
+                                                    m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
+                                                    {
+                                                        if (pickedEntity.IsValid())
+                                                            return;
+                                                        if (static_cast<uint32_t>(static_cast<uint64_t>(id.uuid)) == pickedObjectId)
+                                                        {
+                                                            pickedEntity = Entity{ e, m_Scene };
+                                                        }
+                                                    });
+
+                                                    if (pickedEntity.IsValid())
+                                                    {
+                                                        auto *am = AssetManager::GetInstance();
+                                                        bool applied = false;
+                                                        if (pickedEntity.HasComponent<StaticMeshComponent>())
+                                                        {
+                                                            auto &smc = pickedEntity.GetComponent<StaticMeshComponent>();
+                                                            size_t slotCount = 1;
+                                                            if (am && smc.handle != AssetHandle(0))
+                                                            {
+                                                                if (Ref<StaticMesh> sm = am->GetAsset<StaticMesh>(smc.handle))
+                                                                    slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                                            }
+                                                            for (size_t i = 0; i < slotCount; ++i)
+                                                                smc.SetMaterialOverride(i, *handle);
+                                                            applied = true;
+                                                        }
+                                                        if (pickedEntity.HasComponent<SkeletalMeshComponent>())
+                                                        {
+                                                            auto &smc = pickedEntity.GetComponent<SkeletalMeshComponent>();
+                                                            size_t slotCount = 1;
+                                                            if (am && smc.handle != AssetHandle(0))
+                                                            {
+                                                                if (Ref<SkeletalMesh> sm = am->GetAsset<SkeletalMesh>(smc.handle))
+                                                                    slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                                            }
+                                                            for (size_t i = 0; i < slotCount; ++i)
+                                                                smc.SetMaterialOverride(i, *handle);
+                                                            applied = true;
+                                                        }
+                                                        if (applied)
+                                                        {
+                                                            SetSelectedEntity(pickedEntity);
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -6148,6 +6383,122 @@ namespace ignite
         }
 
         ImGui::SameLine();
+        if (UI::IconButton("##editor_camera_settings", ICON_LC_SLIDERS_HORIZONTAL, UI::ButtonVariant::Ghost, UI::ButtonSize::IconMd, "Editor Camera Settings"))
+        {
+            ImGui::OpenPopup("##EditorCameraSettingsPopup");
+        }
+
+        if (ImGui::BeginPopup("##EditorCameraSettingsPopup"))
+        {
+            ImGui::TextUnformatted("Editor Camera Settings");
+            ImGui::Separator();
+
+            bool changed = false;
+            bool projectionChanged = false;
+
+            ImGui::PushItemWidth(140.0f);
+
+            float flySpeed = m_EditorCamera.GetFlySpeed();
+            if (ImGui::DragFloat("Fly Speed", &flySpeed, 0.25f, 0.1f, 500.0f, "%.2f"))
+            {
+                m_EditorCamera.SetFlySpeed(flySpeed);
+                changed = true;
+            }
+
+            if (ImGui::DragFloat("Mouse Sensitivity", &m_EditorCamera.controls.mouseSensitivity, 0.0001f, 0.0002f, 0.05f, "%.4f"))
+                changed = true;
+
+            if (ImGui::DragFloat("Pan Sensitivity", &m_EditorCamera.controls.panSensitivity, 0.0001f, 0.0001f, 0.05f, "%.4f"))
+                changed = true;
+
+            if (ImGui::DragFloat("Zoom Sensitivity", &m_EditorCamera.controls.zoomSensitivity, 0.05f, 0.1f, 20.0f, "%.2f"))
+                changed = true;
+
+            ImGui::Separator();
+
+            if (ImGui::Checkbox("Enable Inertia", &m_EditorCamera.controls.enableInertia))
+                changed = true;
+
+            if (ImGui::SliderFloat("Inertia Damping", &m_EditorCamera.controls.inertiaDamping, 0.0f, 0.99f, "%.2f"))
+                changed = true;
+
+            if (ImGui::SliderFloat("Zoom Damping", &m_EditorCamera.controls.zoomDamping, 0.0f, 0.99f, "%.2f"))
+                changed = true;
+
+            float focusSpeed = m_EditorCamera.GetFocusSpeed();
+            if (ImGui::DragFloat("Focus Speed", &focusSpeed, 0.25f, 1.0f, 50.0f, "%.1f"))
+            {
+                m_EditorCamera.SetFocusSpeed(focusSpeed);
+                changed = true;
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::SliderFloat("FOV", &m_EditorCamera.fov, 15.0f, 120.0f, "%.1f"))
+            {
+                changed = true;
+                projectionChanged = true;
+            }
+
+            if (ImGui::DragFloat("Near Plane", &m_EditorCamera.nearPlane, 0.01f, 0.005f, 10.0f, "%.3f"))
+            {
+                m_EditorCamera.nearPlane = std::max(0.001f, m_EditorCamera.nearPlane);
+                changed = true;
+                projectionChanged = true;
+            }
+
+            if (ImGui::DragFloat("Far Plane", &m_EditorCamera.farPlane, 5.0f, 10.0f, 10000.0f, "%.1f"))
+            {
+                m_EditorCamera.farPlane = std::max(m_EditorCamera.nearPlane + 1.0f, m_EditorCamera.farPlane);
+                changed = true;
+                projectionChanged = true;
+            }
+
+            ImGui::PopItemWidth();
+            ImGui::Separator();
+
+            if (UI::Button("Reset Defaults", UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+            {
+                m_EditorCamera.ResetControlSettings();
+                changed = true;
+                projectionChanged = true;
+            }
+
+            if (projectionChanged)
+            {
+                const glm::uvec2 vp = m_EditorCamera.GetViewportSize();
+                if (vp.x > 0 && vp.y > 0)
+                {
+                    m_EditorCamera.UpdateProjection(vp.x, vp.y);
+                }
+            }
+
+            if (changed)
+            {
+                auto syncSettings = [this](std::optional<EditorCamera> &cachedCam)
+                {
+                    if (!cachedCam.has_value())
+                        return;
+                    cachedCam->controls = m_EditorCamera.controls;
+                    cachedCam->SetFlySpeed(m_EditorCamera.GetFlySpeed());
+                    cachedCam->SetFocusSpeed(m_EditorCamera.GetFocusSpeed());
+                    cachedCam->fov = m_EditorCamera.fov;
+                    cachedCam->nearPlane = m_EditorCamera.nearPlane;
+                    cachedCam->farPlane = m_EditorCamera.farPlane;
+                    const glm::uvec2 vp = cachedCam->GetViewportSize();
+                    if (vp.x > 0 && vp.y > 0)
+                    {
+                        cachedCam->UpdateProjection(vp.x, vp.y);
+                    }
+                };
+                syncSettings(m_EditorCamera2D);
+                syncSettings(m_EditorCamera3D);
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
@@ -6341,7 +6692,30 @@ namespace ignite
                 ImGui::Separator();
                 drawLevelRow("Shadows", sc.shadows, false);
                 drawLevelRow("Global Illumination", sc.globalIllumination, false);
-                drawLevelRow("Ambient Occlusion", sc.ambientOcclusion, false);
+                {
+                    ImGui::PushID("Ambient Occlusion");
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted("Ambient Occlusion");
+                    ImGui::SameLine(155.0f);
+                    struct AOOption { const char *label; AOMode mode; };
+                    static constexpr AOOption kAOOptions[] = {
+                        { "NONE", AOMode::Off  },
+                        { "SSAO", AOMode::SSAO },
+                        { "GTAO", AOMode::GTAO },
+                    };
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+                        const bool active = (sc.ambientOcclusion == kAOOptions[i].mode);
+                        if (UI::Button(kAOOptions[i].label, active ? UI::ButtonVariant::Primary : UI::ButtonVariant::Outline, UI::ButtonSize::Small))
+                        {
+                            sc.ambientOcclusion = kAOOptions[i].mode;
+                            rs.ApplyIndividualScalability();
+                            changed = true;
+                        }
+                    }
+                    ImGui::PopID();
+                }
                 drawLevelRow("Reflections", sc.reflections, false);
                 drawLevelRow("Resolution Scale", sc.resolutionScale, false);
                 drawLevelRow("Post Processing", sc.postProcessing, false);
@@ -6409,6 +6783,7 @@ namespace ignite
 
                 if (changed)
                 {
+                    rs.SyncToScene(m_Scene, &GetViewportCamera());
                     m_EditorLayer->m_State.editorRequestToResize = true;
                     m_EditorLayer->m_State.gameplayRequestToResize = true;
                     if (auto proj = m_EditorLayer->GetActiveProject())
@@ -6737,8 +7112,38 @@ namespace ignite
             // LOG_INFO(j->ToString());
         }
 
+        const bool isPlayOrSimulate = m_Scene && m_Scene->IsRunning();
+        const bool rmbMmbDown = InputSystem::IsMouseButtonPressed(Mouse::ButtonRight) || InputSystem::IsMouseButtonPressed(Mouse::ButtonMiddle);
+        if (!isPlayOrSimulate && m_Data.sceneViewportEditorVisible && !m_Gizmo.IsManipulating())
+        {
+            if (!m_EditorCameraMouseLocked && m_IsHovered && rmbMmbDown)
+            {
+                m_EditorCameraMouseLocked = true;
+                m_EditorCameraLockJustEngaged = true;
+                InputSystem::SetCursorMode(CursorMode::Disabled);
+            }
+            else if (m_EditorCameraMouseLocked && !rmbMmbDown)
+            {
+                m_EditorCameraMouseLocked = false;
+                m_EditorCameraLockJustEngaged = false;
+                InputSystem::ResetCursorState();
+            }
+        }
+        else if (m_EditorCameraMouseLocked)
+        {
+            m_EditorCameraMouseLocked = false;
+            m_EditorCameraLockJustEngaged = false;
+            InputSystem::ResetCursorState();
+        }
+
         m_EditorCamera.UpdateMouseState();
-        if (m_IsHovered && !m_Gizmo.IsManipulating())
+        if (m_EditorCameraLockJustEngaged)
+        {
+            m_EditorCamera.mouse.delta = glm::vec2(0.0f);
+            m_EditorCameraLockJustEngaged = false;
+        }
+
+        if ((m_IsHovered || m_EditorCameraMouseLocked) && !m_Gizmo.IsManipulating())
         {
             switch (m_EditorCamera.GetNavigationMode())
             {

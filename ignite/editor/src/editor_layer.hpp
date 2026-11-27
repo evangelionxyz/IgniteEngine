@@ -157,6 +157,7 @@ namespace ignite
         void AddContentBrowserPanel();
         void ReloadContentBrowserPanels() const;
         uint32_t GetOpenContentBrowserCount() const;
+        void RevealAssetInContentBrowser(AssetHandle handle);
 
         void UIProjectCreation();
         void UISettings();
@@ -207,6 +208,8 @@ namespace ignite
         Scene *m_LastAssetProgressScene = nullptr;
         uint32_t m_AssetProgressCheckCounter = 0;
         float m_FixedAccumulator = 0.0f;
+        bool m_PendingSceneThumbnailCapture = false;
+        int m_SceneThumbnailWaitFrames = 0;
 
         static EditorLayer *s_Instance;
 

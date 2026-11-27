@@ -127,9 +127,9 @@ namespace ignite
         m_DenoiseVCB = ConstantBuffer::Create(sizeof(DenoiseCB), true, 1, "GTAO Denoise V CB");
         m_DenoiseUpsampleCB = ConstantBuffer::Create(sizeof(DenoiseCB), true, 1, "GTAO Upsample CB");
 
-        m_PrefilterShader = Shader::Create("resources/shaders/gtao_prefilter_depth.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
-        m_MainShader = Shader::Create("resources/shaders/gtao_main.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
-        m_DenoiseShader = Shader::Create("resources/shaders/gtao_denoise.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, true);
+        m_PrefilterShader = Shader::Create("resources/shaders/gtao_prefilter_depth.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
+        m_MainShader = Shader::Create("resources/shaders/gtao_main.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
+        m_DenoiseShader = Shader::Create("resources/shaders/gtao_denoise.compute.hlsl", UMBRA_SHADER_TYPE_COMPUTE, false);
 
         CreateTextures(fullWidth, fullHeight, resolutionScale);
     }

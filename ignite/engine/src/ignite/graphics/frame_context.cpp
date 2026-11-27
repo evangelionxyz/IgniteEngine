@@ -290,9 +290,9 @@ namespace ignite
             ConstantBuffer(sizeof(CSM_GPUData), true, 16, "CSM Cascade 3 Buffer")
         }
     {
-        // 16384 objects, 4096 bone slots * MAX_BONES, 65536 instance indices (for batched draws)
-        objectBuffer.Initialize(16384, device);
-        boneBuffer.Initialize(4096 * MAX_BONES, device);
+        // 8192 objects (~1.1 MB), 512 skeletons * MAX_BONES (~3.2 MB), 65536 instance indices (~0.25 MB)
+        objectBuffer.Initialize(8192, device);
+        boneBuffer.Initialize(512 * MAX_BONES, device);
         instanceIndexBuffer.Initialize(65536, device);
         reflectionProbeBuffer.Initialize(MAX_REFLECTION_PROBES, device);
 

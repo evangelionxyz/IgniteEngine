@@ -5,6 +5,14 @@
 #define GTAO_PI 3.14159265359f
 #define GTAO_HALF_PI 1.57079632679f
 
+float FastAcos(float x)
+{
+    float ax = abs(x);
+    float res = -0.156583f * ax + GTAO_HALF_PI;
+    res *= sqrt(max(1.0f - ax, 0.0f));
+    return (x >= 0.0f) ? res : (GTAO_PI - res);
+}
+
 cbuffer GTAOMainParams : register(b0)
 {
     float2 ndcToViewMul;
@@ -93,33 +101,15 @@ float3 ReconstructHalfDepthNormal(int2 cpx, float3 centerPosVS, float centerZ)
 
 float3 LoadViewNormal(int2 centerPx, float3 centerPosVS, float centerZ)
 {
-    float3 geomN = ReconstructHalfDepthNormal(centerPx, centerPosVS, centerZ);
-    if ((flags & 1u) == 0u)
+    if ((flags & 1u) != 0u)
     {
-        return geomN;
+        int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
+        float2 uv = (float2(centerPx) + 0.5f) * invHalfRes;
+        int2 fpx = clamp(int2(uv * fullRes), int2(0, 0), maxFull);
+        return OctDecode(t_Normal.Load(int3(fpx, 0)).rg);
     }
 
-    int2 maxFull = int2(max(int(fullRes.x) - 1, 0), max(int(fullRes.y) - 1, 0));
-    float2 scale = fullRes * invHalfRes;
-    int2 basePx = int2(floor(float2(centerPx) * scale));
-    int2 stepPx = max(int2(round(scale * 0.5f)), int2(1, 1));
-    float3 accumN = float3(0.0f, 0.0f, 0.0f);
-
-    [unroll]
-    for (int dy = 0; dy < 2; ++dy)
-    {
-        [unroll]
-        for (int dx = 0; dx < 2; ++dx)
-        {
-            int2 fpx = clamp(basePx + int2(dx, dy) * stepPx, int2(0, 0), maxFull);
-            float3 n = OctDecode(t_Normal.Load(int3(fpx, 0)).rg);
-            float w = max(dot(n, geomN), 0.05f);
-            accumN += n * w;
-        }
-    }
-
-    float lenSq = dot(accumN, accumN);
-    return (lenSq > 1e-8f) ? (accumN * rsqrt(lenSq)) : geomN;
+    return ReconstructHalfDepthNormal(centerPx, centerPosVS, centerZ);
 }
 
 [numthreads(8, 8, 1)]
@@ -150,10 +140,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
         viewNormal = -viewNormal;
     }
 
-    // Small view/normal bias prevents depth quantization & facet self-occlusion on flat surfaces
+    float NdotV = saturate(dot(viewNormal, viewVec));
+    float grazing = 1.0f - NdotV;
+
+    // Small view/normal bias prevents depth quantization & facet self-occlusion on flat and grazing curved surfaces
     float3 biasedViewPos = viewPos
         + viewVec * max(0.003f * centerZ, 0.004f)
-        + viewNormal * max(0.0015f * centerZ, 0.002f);
+        + viewNormal * max((0.0015f + 0.006f * grazing) * centerZ, 0.002f + 0.006f * grazing);
 
     float worldRadius = max(effectRadius * radiusMultiplier, 0.05f);
     float screenspaceRadius = ((flags & 2u) != 0u)
@@ -178,7 +171,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     int sliceCnt = clamp(int(sliceCount), 1, 4);
     int stepCnt = clamp(int(stepsPerSlice), 1, 6);
-    const float kHorizonBias = 0.03f;
+    float kHorizonBias = 0.03f + 0.10f * grazing * grazing;
 
     float visibility = 0.0f;
 
@@ -202,7 +195,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float projectedNormalLen = length(projectedNormalVec);
         float signNorm = (dot(orthoDirectionVec, projectedNormalVec) >= 0.0f) ? 1.0f : -1.0f;
         float cosNorm = saturate(dot(projectedNormalVec, viewVec) / max(projectedNormalLen, 1e-5f));
-        float n = clamp(signNorm * acos(cosNorm), -GTAO_HALF_PI + 1e-4f, GTAO_HALF_PI - 1e-4f);
+        float n = clamp(signNorm * FastAcos(cosNorm), -GTAO_HALF_PI + 1e-4f, GTAO_HALF_PI - 1e-4f);
 
         float lowHorizonCos0 = cos(n - GTAO_HALF_PI);
         float lowHorizonCos1 = cos(n + GTAO_HALF_PI);
@@ -215,7 +208,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         for (int step = 0; step < stepCnt; ++step)
         {
             float t = (float(step) + stepNoise) / float(stepCnt);
-            t = pow(max(t, 1e-4f), sampleDistributionPower);
+            t = (abs(sampleDistributionPower - 2.0f) < 1e-3f) ? (t * t) : pow(max(t, 1e-4f), sampleDistributionPower);
             float sampleDistPx = max(t * screenspaceRadius, 1.0f);
             float2 sampleOffsetUV = omega * (sampleDistPx * invHalfRes);
 
@@ -274,8 +267,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
             }
         }
 
-        float h0 = n + max(-acos(clamp(horizonCos0, -1.0f, 1.0f)) - n, -GTAO_HALF_PI);
-        float h1 = n + min(+acos(clamp(horizonCos1, -1.0f, 1.0f)) - n, +GTAO_HALF_PI);
+        float h0 = n + max(-FastAcos(clamp(horizonCos0, -1.0f, 1.0f)) - n, -GTAO_HALF_PI);
+        float h1 = n + min(+FastAcos(clamp(horizonCos1, -1.0f, 1.0f)) - n, +GTAO_HALF_PI);
         float sinN = sin(n);
         float iarc0 = (cosNorm + 2.0f * h0 * sinN - cos(2.0f * h0 - n)) * 0.25f;
         float iarc1 = (cosNorm + 2.0f * h1 * sinN - cos(2.0f * h1 - n)) * 0.25f;

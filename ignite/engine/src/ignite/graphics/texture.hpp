@@ -40,6 +40,7 @@ namespace ignite
         bool deferGpuCreate = false;
         bool bindless = true;
         bool forceBindless = false;
+        bool allowHostReadback = false;
 
         bool keepInitialState = false;
         bool isNativeObject = false;
@@ -197,6 +198,8 @@ namespace ignite
         static void ProcessAsyncUploads(uint32_t maxUploadsPerFrame = 4, uint64_t maxBytesPerFrame = 16 * 1024 * 1024);
         static bool HasPendingUploads();
         static void ClearPendingUploads();
+        static void RetireStagingBuffer(nri::Buffer *buffer);
+        static void ClearRetiredStagingBuffers(uint64_t currentFrame, bool forceAll = false);
 
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nri::Texture *GetHandle() const { return m_Handle; }

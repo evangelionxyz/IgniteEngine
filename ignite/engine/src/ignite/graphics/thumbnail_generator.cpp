@@ -186,7 +186,7 @@ namespace ignite
         }
 
         // Fast path: check disk cache off the main/render thread so cached thumbnails never stall or re-render.
-        AssetWorker::SubmitJob([this, req = std::move(request), dedupeKey]() mutable
+        AssetWorker::SubmitBackgroundJob([this, req = std::move(request), dedupeKey]() mutable
         {
             if (m_Shutdown || req.generation != m_Generation.load(std::memory_order_acquire))
             {
@@ -1029,7 +1029,7 @@ namespace ignite
             cacheData.assetHandle = static_cast<uint64_t>(req.handle);
             cacheData.pixels = std::move(pixels);
 
-            AssetWorker::SubmitJob([cacheData = std::move(cacheData), cachePath = req.cachePath]()
+            AssetWorker::SubmitBackgroundJob([cacheData = std::move(cacheData), cachePath = req.cachePath]()
             {
                 BinarySerializer::SerializeThumbnail(cacheData, cachePath);
             });

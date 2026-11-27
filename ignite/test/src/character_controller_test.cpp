@@ -289,3 +289,59 @@ TEST(CharacterController, FollowsTranslatingKinematicGround)
 
     scene->OnStop();
 }
+
+TEST(CharacterController, ChildAndGrandchildTransformsStayInSyncDuringMovement)
+{
+    Ref<Project> project = CreateTestProject("CCParentChildSyncProject");
+    ASSERT_NE(project, nullptr);
+
+    Ref<Scene> scene = CreateRef<Scene>(project.get());
+    Entity player = SceneManager::CreateEntity(scene.get(), "Player", EntityType_Node);
+    auto &cc = player.AddComponent<CharacterControllerComponent>();
+    cc.gravityFactor = 0.0f;
+    auto &playerTr = player.GetTransform();
+    playerTr.local.translation = glm::vec3(0.0f, 2.0f, 0.0f);
+    playerTr.world.translation = playerTr.local.translation;
+
+    Entity cam = SceneManager::CreateEntity(scene.get(), "PlayerCamera", EntityType_Node);
+    auto &camComp = cam.AddComponent<CameraComponent>();
+    auto &camTr = cam.GetTransform();
+    camTr.local.translation = glm::vec3(0.0f, 1.5f, 0.0f);
+    SceneManager::AddChild(scene.get(), player, cam);
+
+    Entity weapon = SceneManager::CreateEntity(scene.get(), "WeaponRig", EntityType_Node);
+    auto &weaponTr = weapon.GetTransform();
+    weaponTr.local.translation = glm::vec3(0.25f, -0.2f, -0.5f);
+    SceneManager::AddChild(scene.get(), cam, weapon);
+
+    scene->OnStart(ESceneState::Play);
+    auto character = cc.character.lock();
+    ASSERT_NE(character, nullptr);
+
+    constexpr float deltaTime = 1.0f / 60.0f;
+    cc.desiredVelocity = glm::vec3(12.0f, 0.0f, -6.0f);
+
+    for (int i = 0; i < 15; ++i)
+    {
+        scene->OnUpdateRuntimeSimulate(deltaTime);
+
+        const glm::vec3 pWorld = player.GetTransform().world.translation;
+        const glm::vec3 expectedCam = pWorld + glm::vec3(0.0f, 1.5f, 0.0f);
+        const glm::vec3 expectedWeapon = expectedCam + glm::vec3(0.25f, -0.2f, -0.5f);
+
+        EXPECT_NEAR(cam.GetTransform().world.translation.x, expectedCam.x, 1e-3f);
+        EXPECT_NEAR(cam.GetTransform().world.translation.y, expectedCam.y, 1e-3f);
+        EXPECT_NEAR(cam.GetTransform().world.translation.z, expectedCam.z, 1e-3f);
+
+        EXPECT_NEAR(camComp.camera.position.x, expectedCam.x, 1e-3f);
+        EXPECT_NEAR(camComp.camera.position.y, expectedCam.y, 1e-3f);
+        EXPECT_NEAR(camComp.camera.position.z, expectedCam.z, 1e-3f);
+
+        EXPECT_NEAR(weapon.GetTransform().world.translation.x, expectedWeapon.x, 1e-3f);
+        EXPECT_NEAR(weapon.GetTransform().world.translation.y, expectedWeapon.y, 1e-3f);
+        EXPECT_NEAR(weapon.GetTransform().world.translation.z, expectedWeapon.z, 1e-3f);
+    }
+
+    EXPECT_GT(player.GetTransform().world.translation.x, 2.0f);
+    scene->OnStop();
+}

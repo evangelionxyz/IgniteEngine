@@ -985,7 +985,7 @@ namespace ignite
                         continue;
                     }
 
-                    Ref<Material> material = resolveMaterial(inst->GetMaterialAssetHandle());
+                    Ref<Material> material = resolveMaterial(smc.ResolveMaterialHandle(idx, inst->GetMaterialAssetHandle()));
                     if (!material)
                     {
                         continue;

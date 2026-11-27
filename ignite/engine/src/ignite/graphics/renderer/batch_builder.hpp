@@ -67,6 +67,7 @@ namespace ignite
 
         uint32_t vertexStride = sizeof(VertexMeshStatic);
         uint32_t indexCount = 0;
+        float sortDistSq = 0.0f;
 
         // Per-instance object indices (indices into the global Mesh_GPUData StructuredBuffer)
         std::vector<uint32_t> objectIndices;
@@ -86,10 +87,10 @@ namespace ignite
         /// Submit one instance to a batch identified by key.
         void Submit(const BatchKey &key, nri::Buffer *vertexBuffer, nri::Buffer *indexBuffer,
             const Ref<BindingSet> &meshBindingSet, const Ref<BindingSet> &materialBindingSet, const Ref<GraphicsPipeline> &pipeline,
-            uint32_t indexCount, uint32_t objectIndex, uint32_t vertexStride = sizeof(VertexMeshStatic));
+            uint32_t indexCount, uint32_t objectIndex, uint32_t vertexStride = sizeof(VertexMeshStatic), float distSq = 0.0f);
 
         /// Sorts and flattens the internal map into the final batch vector.
-        void Finalize();
+        void Finalize(bool sortFrontToBack = false);
 
         const std::vector<DrawBatch> &GetBatches() const { return m_Batches; }
 

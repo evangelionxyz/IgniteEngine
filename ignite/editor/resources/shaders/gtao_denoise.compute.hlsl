@@ -33,6 +33,13 @@ float3 LoadViewNormalAtHalf(int2 hpx, int2 maxFull)
     return OctDecode(t_Normal.Load(int3(fpx, 0)).rg);
 }
 
+float Pow12Fast(float x)
+{
+    float x2 = x * x;
+    float x4 = x2 * x2;
+    return x4 * x4 * x4;
+}
+
 float DeviceDepthToViewZ(float d)
 {
     float maxZ = min(farPlane, 65000.0f);
@@ -40,8 +47,9 @@ float DeviceDepthToViewZ(float d)
     {
         return maxZ;
     }
-    float4 view = mul(projectionInv, float4(0.0f, 0.0f, d, 1.0f));
-    float viewZ = abs(view.z / max(abs(view.w), 1e-6f));
+    float vz = projectionInv[2][2] * d + projectionInv[2][3];
+    float vw = projectionInv[3][2] * d + projectionInv[3][3];
+    float viewZ = abs(vz / max(abs(vw), 1e-6f));
     return clamp(viewZ, max(nearPlane, 1e-3f), maxZ);
 }
 
@@ -96,7 +104,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                     if (hasNormals != 0u)
                     {
                         float3 sampleN = LoadViewNormalAtHalf(shPx, maxFull);
-                        w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+                        w *= Pow12Fast(saturate(dot(centerN, sampleN)));
                     }
 
                     if (w > 1e-5f)
@@ -129,7 +137,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                     if (hasNormals != 0u)
                     {
                         float3 sampleN = LoadViewNormalAtHalf(shPx, maxFull);
-                        w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+                        w *= Pow12Fast(saturate(dot(centerN, sampleN)));
                     }
 
                     if (w > 1e-5f)
@@ -147,8 +155,26 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
         else
         {
-            int2 fallbackPx = clamp(int2(round(halfPos)), int2(0, 0), maxHalf);
-            u_DstAO[DTid.xy] = t_SrcAO.Load(int3(fallbackPx, 0)).r;
+            int2 baseHalf = int2(floor(halfPos));
+            float bestDiff = 1e9f;
+            float bestAO = 1.0f;
+            [unroll]
+            for (int dy = 0; dy <= 1; ++dy)
+            {
+                [unroll]
+                for (int dx = 0; dx <= 1; ++dx)
+                {
+                    int2 shPx = clamp(baseHalf + int2(dx, dy), int2(0, 0), maxHalf);
+                    float sz = t_Depth.Load(int3(shPx, 0)).r;
+                    float diff = abs(sz - centerZ);
+                    if (sz < maxValidZ && sz > 1e-4f && diff < bestDiff)
+                    {
+                        bestDiff = diff;
+                        bestAO = t_SrcAO.Load(int3(shPx, 0)).r;
+                    }
+                }
+            }
+            u_DstAO[DTid.xy] = (bestDiff < max(centerZ * 0.15f, 0.05f)) ? bestAO : 1.0f;
         }
         return;
     }
@@ -206,7 +232,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         if (hasNormals != 0u)
         {
             float3 sampleN = LoadViewNormalAtHalf(samplePx, maxFull);
-            w *= pow(saturate(dot(centerN, sampleN)), 12.0f);
+            w *= Pow12Fast(saturate(dot(centerN, sampleN)));
         }
 
         if (w > 1e-5f)

@@ -10,13 +10,15 @@
 #include "ignite/imgui/ui/ui.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <initializer_list>
 #include <string>
+#include <type_traits>
 
 namespace ignite::UI
 {
-    template<typename TOnChanged>
-    inline void DrawTexturePreviewDropTarget(const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged)
+    template<typename TOnChanged, typename TOnReveal = std::nullptr_t>
+    inline void DrawTexturePreviewDropTarget(const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged, TOnReveal &&onReveal = nullptr)
     {
         auto assetManager = AssetManager::GetInstance();
         const ThemeColors &t = GetTheme();
@@ -100,6 +102,15 @@ namespace ignite::UI
                 {
                     textureHandle = AssetHandle(0);
                     onChanged();
+                }
+
+                if constexpr (!std::is_same_v<std::decay_t<TOnReveal>, std::nullptr_t>)
+                {
+                    ImGui::SameLine();
+                    if (IconButton("##reveal_texture", ICON_LC_FOLDER_SEARCH, ButtonVariant::Outline, ButtonSize::IconSm, "Show in Content Browser"))
+                    {
+                        onReveal(textureHandle);
+                    }
                 }
             }
 

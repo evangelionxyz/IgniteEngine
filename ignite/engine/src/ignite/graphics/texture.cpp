@@ -91,6 +91,19 @@ namespace ignite
         }
     }
 
+    namespace
+    {
+        struct RetiredStagingBuffer
+        {
+            uint64_t retiredFrame = 0;
+            nri::Buffer *buffer = nullptr;
+        };
+
+        std::vector<RetiredStagingBuffer> s_RetiredStagingBuffers;
+        std::mutex s_RetiredStagingMutex;
+        std::atomic<uint64_t> s_StagingCurrentFrame{ 0 };
+    }
+
     TextureCreateInfo Texture::GetDefaultCreateInfo(const AssetMetaData &metadata)
     {
         TextureCreateInfo createInfo;
@@ -626,6 +639,9 @@ namespace ignite
                 nri.CmdBarrier(*cmd, barrierDesc);
 
                 SetCurrentState(nri::Layout::SHADER_RESOURCE, nri::AccessBits::SHADER_RESOURCE, nri::StageBits::ALL);
+
+                RetireStagingBuffer(m_StagingBuffer);
+                m_StagingBuffer = nullptr;
             }
         }
         else
@@ -668,6 +684,71 @@ namespace ignite
         const uint32_t rowPitch = m_CreateInfo.width * channelCount;
         const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
         SetData(cmd, rowPitch, depthPitch);
+    }
+
+    void Texture::RetireStagingBuffer(nri::Buffer *buffer)
+    {
+        if (!buffer)
+            return;
+
+        std::lock_guard<std::mutex> lock(s_RetiredStagingMutex);
+        s_RetiredStagingBuffers.push_back({ s_StagingCurrentFrame.load(std::memory_order_relaxed), buffer });
+    }
+
+    void Texture::ClearRetiredStagingBuffers(uint64_t currentFrame, bool forceAll)
+    {
+        std::vector<nri::Buffer *> toDestroy;
+        {
+            std::lock_guard<std::mutex> lock(s_RetiredStagingMutex);
+            if (currentFrame > 0)
+            {
+                s_StagingCurrentFrame.store(currentFrame, std::memory_order_relaxed);
+            }
+            else
+            {
+                currentFrame = s_StagingCurrentFrame.load(std::memory_order_relaxed);
+            }
+
+            if (forceAll)
+            {
+                for (const auto &entry : s_RetiredStagingBuffers)
+                {
+                    if (entry.buffer)
+                        toDestroy.push_back(entry.buffer);
+                }
+                s_RetiredStagingBuffers.clear();
+            }
+            else
+            {
+                constexpr uint64_t kRetireDelayFrames = 4;
+                s_RetiredStagingBuffers.erase(
+                    std::remove_if(s_RetiredStagingBuffers.begin(), s_RetiredStagingBuffers.end(),
+                        [currentFrame, &toDestroy](const RetiredStagingBuffer &entry)
+                        {
+                            if (currentFrame >= entry.retiredFrame + kRetireDelayFrames)
+                            {
+                                if (entry.buffer)
+                                    toDestroy.push_back(entry.buffer);
+                                return true;
+                            }
+                            return false;
+                        }),
+                    s_RetiredStagingBuffers.end());
+            }
+        }
+
+        if (toDestroy.empty())
+            return;
+
+        auto *dm = DeviceManager::GetInstance();
+        if (!dm || !dm->GetDevice())
+            return;
+
+        const auto &nri = dm->GetCoreInterface();
+        for (nri::Buffer *buf : toDestroy)
+        {
+            nri.DestroyBuffer(buf);
+        }
     }
 
     uint32_t Texture::CalculateMaxMipLevels(uint32_t width, uint32_t height, uint32_t depth)
@@ -719,7 +800,7 @@ namespace ignite
             usage |= nri::TextureUsageBits::SHADING_RATE_ATTACHMENT;
         }
 
-        if (m_CreateInfo.sampleCount <= 1 && !isDepth)
+        if (m_CreateInfo.allowHostReadback && m_CreateInfo.sampleCount <= 1 && !isDepth)
         {
             if (device && (nri.GetFormatSupport(*device, m_CreateInfo.format) & nri::FormatSupportBits::HOST_COPY) != 0)
             {

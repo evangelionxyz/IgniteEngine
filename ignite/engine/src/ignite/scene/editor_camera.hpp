@@ -57,6 +57,14 @@ namespace ignite
         void SetPanSnapValue(const float snap) { m_PanSnapValue = snap; }
         float GetPanSnapValue() const { return m_PanSnapValue; }
 
+        void SetFlySpeed(float speed) { m_FlySpeed = glm::clamp(speed, 0.1f, 500.0f); }
+        float GetFlySpeed() const { return m_FlySpeed; }
+
+        void SetFocusSpeed(float speed) { m_FocusSpeed = glm::clamp(speed, 1.0f, 50.0f); }
+        float GetFocusSpeed() const { return m_FocusSpeed; }
+
+        void ResetControlSettings();
+
         virtual void UpdateView() override;
 
         void SetDistance(float distance) { m_Distance = distance; }

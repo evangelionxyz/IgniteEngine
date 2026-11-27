@@ -28,8 +28,9 @@ SamplerState s_LinearClamp : register(s0);
 
 float DeviceDepthToLinearZ(float deviceDepth)
 {
-    float4 view = mul(projectionInv, float4(0.0f, 0.0f, deviceDepth, 1.0f));
-    return abs(view.z / max(abs(view.w), 1e-5f));
+    float vz = projectionInv[2][2] * deviceDepth + projectionInv[2][3];
+    float vw = projectionInv[3][2] * deviceDepth + projectionInv[3][3];
+    return abs(vz / max(abs(vw), 1e-5f));
 }
 
 float3 ReconstructViewPos(float2 uv, float deviceDepth)
@@ -97,7 +98,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float3 sn = OctDecode(t_Normal.Load(int3(clamp(int2((float2(spx) + 0.5f) * invHalfRes * fullRes), int2(0, 0), maxFull), 0)).rg);
 
             float wDepth = exp(-abs(linSD - centerLinearZ) / linearSigma);
-            float wNormal = pow(saturate(dot(sn, centerN)), 8.0f);
+            float nd = saturate(dot(sn, centerN));
+            float nd2 = nd * nd;
+            float nd4 = nd2 * nd2;
+            float wNormal = nd4 * nd4;
             float w = wSpatial * wDepth * wNormal;
 
             // Karis luma weight suppresses single-pixel HDR specular spikes without darkening valid hits.

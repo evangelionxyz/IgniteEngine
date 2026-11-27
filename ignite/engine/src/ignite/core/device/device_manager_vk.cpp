@@ -8,7 +8,6 @@
 
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
-// #include "ignite/graphics/bindless_system.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <SDL3/SDL_vulkan.h>
@@ -521,17 +520,23 @@ namespace ignite
 
         if (res == vk::Result::eSuccess || res == vk::Result::eSuboptimalKHR)
         {
-            // Submit acquire semaphore wait on graphics queue so all GPU work submitted this frame waits for image acquisition.
-            // The very first thing the frame does is transition the acquired image out of its present/undefined
-            // layout. That transition is recorded in a separate command buffer, and it is not guaranteed to be
-            // ordered after an acquire wait narrowed to color-attachment-output or transfer stages, so wait at all stages.
-            vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eAllCommands;
-            vk::SubmitInfo submitInfo{};
-            submitInfo.waitSemaphoreCount = 1;
-            submitInfo.pWaitSemaphores = &acquireSemaphore;
-            submitInfo.pWaitDstStageMask = &waitStage;
-
+            // Defer the acquire binary semaphore wait directly onto the first graphics QueueSubmit
+            // of this frame, eliminating an empty WDDM vkQueueSubmit + eAllCommands stall.
+            if (m_NriGraphicsQueue && m_WrapperVK.ExchangeQueueWaitSemaphoreVK)
             {
+                m_WrapperVK.ExchangeQueueWaitSemaphoreVK(
+                    *m_NriGraphicsQueue,
+                    reinterpret_cast<VKNonDispatchableHandle>(static_cast<VkSemaphore>(acquireSemaphore)),
+                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+            }
+            else
+            {
+                vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+                vk::SubmitInfo submitInfo{};
+                submitInfo.waitSemaphoreCount = 1;
+                submitInfo.pWaitSemaphores = &acquireSemaphore;
+                submitInfo.pWaitDstStageMask = &waitStage;
+
                 IGN_PROFILE_SCOPE("DeviceManager_VK::BeginFrame::SubmitAcquireWait");
                 std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
                 vk::Result submitRes = m_GraphicsQueue.submit(1, &submitInfo, vk::Fence()); (void)submitRes;
@@ -557,8 +562,21 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         const auto &presentSemaphore = m_PresentSemaphores[m_CurrentFrame];
 
+        vk::Semaphore pendingAcquireWait = vk::Semaphore();
+        if (m_NriGraphicsQueue && m_WrapperVK.ExchangeQueueWaitSemaphoreVK)
+        {
+            pendingAcquireWait = (VkSemaphore)m_WrapperVK.ExchangeQueueWaitSemaphoreVK(*m_NriGraphicsQueue, 0, 0);
+        }
+
         // Submit sync on graphics queue to signal present semaphore and in-flight fence after rendering
+        vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
         vk::SubmitInfo submitInfo{};
+        if (pendingAcquireWait)
+        {
+            submitInfo.waitSemaphoreCount = 1;
+            submitInfo.pWaitSemaphores = &pendingAcquireWait;
+            submitInfo.pWaitDstStageMask = &waitStage;
+        }
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &presentSemaphore;
 
@@ -888,8 +906,7 @@ namespace ignite
 
         vk::ValidationFeaturesEXT validationFeatures{};
         std::vector<vk::ValidationFeatureEnableEXT> enabledValidationFeatures;
-        const bool useValidationFeatures = IsVulkanSyncValidationRequested()
-            && enabledExtensions.instance.contains(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+        const bool useValidationFeatures = IsVulkanSyncValidationRequested() && enabledExtensions.instance.contains(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
         if (useValidationFeatures)
         {
             enabledValidationFeatures.push_back(vk::ValidationFeatureEnableEXT::eSynchronizationValidation);
@@ -1236,6 +1253,7 @@ namespace ignite
         bool barycentricSupported = false;
         bool storage16BitSupported = false;
         bool synchronization2Supported = false;
+        bool dynamicRenderingSupported = false;
         bool maintenance4Supported = false;
         bool aftermathSupported = false;
         bool mutableDescriptorSupported = false;
@@ -1263,6 +1281,8 @@ namespace ignite
                 storage16BitSupported = true;
             else if (ext == VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)
                 synchronization2Supported = true;
+            else if (ext == VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)
+                dynamicRenderingSupported = true;
             else if (ext == VK_KHR_MAINTENANCE_4_EXTENSION_NAME)
                 maintenance4Supported = true;
             else if (ext == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME)
@@ -1277,21 +1297,22 @@ namespace ignite
         void *pNext = nullptr;
 
         vk::PhysicalDeviceFeatures2 physicalDeviceFeatures2;
-        // determine support for buffer device address, the Vulkan 1.2 way
-        auto bufferDeviceAddressFeatures = vk::PhysicalDeviceBufferDeviceAddressFeatures();
-        // determine support for maintenance4
+        // determine support for maintenance4, synchronization2, and dynamicRendering (required explicitly on Vulkan < 1.3 / RenderDoc clamp)
         auto maintenance4Features = vk::PhysicalDeviceMaintenance4Features();
+        auto synchronization2Features = vk::PhysicalDeviceSynchronization2Features();
+        auto dynamicRenderingFeatures = vk::PhysicalDeviceDynamicRenderingFeatures();
         // determine support for aftermath
         auto aftermathPhysicalFeatures  = vk::PhysicalDeviceDiagnosticsConfigFeaturesNV();
-        // determine support for Vulkan 1.2 features (update after bind, descriptor indexing, etc.)
+        // determine support for Vulkan 1.2 features (update after bind, descriptor indexing, BDA, etc.)
         auto vulkan12PhysicalFeatures = vk::PhysicalDeviceVulkan12Features();
         // determine support for Vulkan 1.1 features (16-bit storage)
         auto vulkan11PhysicalFeatures = vk::PhysicalDeviceVulkan11Features();
 
         // put the user provided extension structure at the end of the chain
         pNext = m_DeviceParameters.physicalDeviceFeatures2Extensions;
-        APPEND_EXTENSION(true, bufferDeviceAddressFeatures);
         APPEND_EXTENSION(maintenance4Supported, maintenance4Features);
+        APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 && synchronization2Supported, synchronization2Features);
+        APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 && dynamicRenderingSupported, dynamicRenderingFeatures);
         APPEND_EXTENSION(aftermathSupported, aftermathPhysicalFeatures);
         APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_2, vulkan12PhysicalFeatures);
         APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_1, vulkan11PhysicalFeatures);
@@ -1367,7 +1388,9 @@ namespace ignite
         APPEND_EXTENSION(barycentricSupported, barycentricFeatures)
         APPEND_EXTENSION(storage16BitSupported, storage16BitFeatures)
         APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3, vulkan13features)
-        APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 &&maintenance4Supported, maintenance4Features);
+        APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 && synchronization2Supported && synchronization2Features.synchronization2, synchronization2Features);
+        APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 && dynamicRenderingSupported && dynamicRenderingFeatures.dynamicRendering, dynamicRenderingFeatures);
+        APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 && maintenance4Supported && maintenance4Features.maintenance4, maintenance4Features);
         APPEND_EXTENSION(aftermathSupported, aftermathFeatures);
         APPEND_EXTENSION(mutableDescriptorSupported, mutableDescriptorFeatures);
 
@@ -1424,7 +1447,7 @@ namespace ignite
             .setVulkanMemoryModel(vulkan12PhysicalFeatures.vulkanMemoryModel)
             .setVulkanMemoryModelDeviceScope(vulkan12PhysicalFeatures.vulkanMemoryModelDeviceScope)
             .setStorageBuffer8BitAccess(vulkan12PhysicalFeatures.storageBuffer8BitAccess)
-            .setBufferDeviceAddress(bufferDeviceAddressFeatures.bufferDeviceAddress)
+            .setBufferDeviceAddress(accelStructSupported ? vulkan12PhysicalFeatures.bufferDeviceAddress : VK_FALSE)
             .setPNext(&vulkan11features);
 
         auto layerVec = StringSetToVector(enabledExtensions.layers);
@@ -1530,9 +1553,9 @@ namespace ignite
             .setImageColorSpace(m_SwapChainFormat.colorSpace)
             .setImageExtent(extent)
             .setImageArrayLayers(1)
-            .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled)
+            .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst)
             .setImageSharingMode(enableSwapChainSharing ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive)
-            .setFlags(m_SwapChainMutableFormatSupported ? vk::SwapchainCreateFlagBitsKHR::eMutableFormat : vk::SwapchainCreateFlagBitsKHR(0))
+            .setFlags(vk::SwapchainCreateFlagBitsKHR(0))
             .setQueueFamilyIndexCount(enableSwapChainSharing ? uint32_t(queues.size()) : 0)
             .setPQueueFamilyIndices(enableSwapChainSharing ? queues.data() : nullptr)
             .setPreTransform(capabilities.currentTransform)
@@ -1540,31 +1563,6 @@ namespace ignite
             .setPresentMode(optimalPresentMode)
             .setClipped(VK_TRUE)
             .setOldSwapchain(VK_NULL_HANDLE);
-
-        std::vector<vk::Format> imageFormats = { m_SwapChainFormat.format };
-        switch (m_SwapChainFormat.format)
-        {
-            case vk::Format::eR8G8B8A8Unorm:
-                imageFormats.push_back(vk::Format::eR8G8B8A8Srgb);
-                break;
-            case vk::Format::eR8G8B8A8Srgb:
-                imageFormats.push_back(vk::Format::eR8G8B8A8Unorm);
-                break;
-            case vk::Format::eB8G8R8A8Unorm:
-                imageFormats.push_back(vk::Format::eB8G8R8A8Srgb);
-                break;
-            case vk::Format::eB8G8R8A8Srgb:
-                imageFormats.push_back(vk::Format::eB8G8R8A8Unorm);
-                break;
-            default:
-                break;
-        }
-
-        auto imageFormatListCreateInfo = vk::ImageFormatListCreateInfo()
-            .setViewFormats(imageFormats);
-
-        if (m_SwapChainMutableFormatSupported)
-            desc.pNext = &imageFormatListCreateInfo;
 
         const vk::Result res = m_VulkanDevice.createSwapchainKHR(&desc, nullptr, &m_SwapChain);
 
@@ -1592,7 +1590,7 @@ namespace ignite
             texVKDesc.vkImage = (uint64_t)(VkImage)image;
             texVKDesc.vkFormat = (int32_t)m_SwapChainFormat.format;
             texVKDesc.vkImageType = (int32_t)VK_IMAGE_TYPE_2D;
-            texVKDesc.vkImageUsageFlags = (uint32_t)(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+            texVKDesc.vkImageUsageFlags = (uint32_t)(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
             texVKDesc.width = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferWidth);
             texVKDesc.height = static_cast<nri::Dim_t>(m_DeviceParameters.backBufferHeight);
             texVKDesc.depth = 1;

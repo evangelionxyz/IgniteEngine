@@ -23,7 +23,9 @@ struct OpenPBRSurface
 
 static float3 SchlickFresnelCos(float cosTheta, float3 f0)
 {
-    return f0 + (1.0f - f0) * pow(1.0f - saturate(cosTheta), 5.0f);
+    float x = 1.0f - saturate(cosTheta);
+    float x2 = x * x;
+    return f0 + (1.0f - f0) * (x2 * x2 * x);
 }
 
 static float3 SchlickFresnel(float3 lightDirection, float3 normal, float3 specularColor)
@@ -92,6 +94,15 @@ static float3 OpenPBRDielectricFresnel(float cosTheta, OpenPBRSurface surface)
 
 static float3 OpenPBRBaseFresnel(float cosTheta, OpenPBRSurface surface)
 {
+    if (surface.metalness <= 1e-4f)
+    {
+        return OpenPBRDielectricFresnel(cosTheta, surface);
+    }
+    if (surface.metalness >= 0.9999f)
+    {
+        return OpenPBRMetalFresnel(cosTheta, saturate(surface.baseColor * surface.baseWeight),
+            surface.specularColor, surface.specularWeight);
+    }
     float3 dielectric = OpenPBRDielectricFresnel(cosTheta, surface);
     float3 metal = OpenPBRMetalFresnel(cosTheta, saturate(surface.baseColor * surface.baseWeight),
         surface.specularColor, surface.specularWeight);
@@ -153,6 +164,10 @@ static float ComputeToksvigSpecularAA(float roughness, float normalLen)
 
 static float OpenPBRCoatRoughenedRoughness(float baseRoughness, float coatRoughness, float coatWeight)
 {
+    if (coatWeight <= 1e-4f)
+    {
+        return clamp(baseRoughness, 0.05f, 1.0f);
+    }
     float rb = saturate(baseRoughness);
     float rc = saturate(coatRoughness);
     float r4 = lerp(rb * rb * rb * rb, max(rb, rc) * max(rb, rc) * max(rb, rc) * max(rb, rc), saturate(coatWeight));
@@ -161,6 +176,10 @@ static float OpenPBRCoatRoughenedRoughness(float baseRoughness, float coatRoughn
 
 static float3 OpenPBRThroughCoat(float cosTheta, float3 coatF, OpenPBRSurface surface)
 {
+    if (surface.coatWeight <= 1e-4f || surface.coatDarkening <= 1e-4f)
+    {
+        return float3(1.0f, 1.0f, 1.0f);
+    }
     float invCos = 1.0f / max(saturate(cosTheta), 0.25f);
     float3 coatTint = pow(max(saturate(surface.coatColor), float3(1e-4f, 1e-4f, 1e-4f)), invCos);
     return lerp(float3(1.0f, 1.0f, 1.0f), coatTint * (1.0f - coatF),
@@ -324,8 +343,6 @@ static float3 OpenPBRDirect(OpenPBRSurface surface, float3 N, float3 L, float3 V
     float NdotV = saturate(dot(N, V));
     if (NdotL <= 0.0f || NdotV <= 0.0f) return 0.0f;
 
-    float3 rotT, rotB;
-    OpenPBRRotateTangentFrame(N, T, B, surface.specularRotation, rotT, rotB);
     float effectiveRough = OpenPBRCoatRoughenedRoughness(surface.specularRoughness, surface.coatRoughness, surface.coatWeight);
 
     float3 H = normalize(L + V);
@@ -333,8 +350,10 @@ static float3 OpenPBRDirect(OpenPBRSurface surface, float3 N, float3 L, float3 V
     float3 baseF = OpenPBRBaseFresnel(LdotH, surface);
 
     float3 baseSpecular = 0.0f;
-    if (surface.specularAnisotropy > 0.0f)
+    if (surface.specularAnisotropy > 1e-4f)
     {
+        float3 rotT, rotB;
+        OpenPBRRotateTangentFrame(N, T, B, surface.specularRotation, rotT, rotB);
         float alphaT, alphaB;
         ComputeAnisotropicAlpha(effectiveRough, surface.specularAnisotropy, alphaT, alphaB);
         baseSpecular = GGXBRDFAniso(N, L, V, rotT, rotB, alphaT, alphaB, baseF);
@@ -344,28 +363,41 @@ static float3 OpenPBRDirect(OpenPBRSurface surface, float3 N, float3 L, float3 V
         baseSpecular = GGXBRDF(N, L, V, effectiveRough, baseF);
     }
 
-    float3 comp = MultiScatterCompensation(NdotV, NdotL, effectiveRough, baseF, surface.useMultiScatter);
-    baseSpecular *= comp;
+    if (surface.useMultiScatter > 1e-4f)
+    {
+        baseSpecular *= MultiScatterCompensation(NdotV, NdotL, effectiveRough, baseF, surface.useMultiScatter);
+    }
 
-    float3 diffuseTerm = OrenNayarDiffuse(N, L, V, effectiveRough, float3(1.0f, 1.0f, 1.0f)) * NdotL;
-    float3 ssTerm = SubsurfaceWrapDiffuse(N, L, surface.subsurfaceColor, surface.subsurfaceRadius, surface.subsurfaceScale);
-    float3 diffSS = lerp(diffuseTerm, ssTerm, surface.subsurfaceWeight);
+    float3 diffTerm = OrenNayarDiffuse(N, L, V, effectiveRough, float3(1.0f, 1.0f, 1.0f)) * NdotL;
+    if (surface.subsurfaceWeight > 1e-4f)
+    {
+        float3 ssTerm = SubsurfaceWrapDiffuse(N, L, surface.subsurfaceColor, surface.subsurfaceRadius, surface.subsurfaceScale);
+        diffTerm = lerp(diffTerm, ssTerm, surface.subsurfaceWeight);
+    }
+    if (surface.transmissionWeight > 1e-4f)
+    {
+        float3 transTerm = TransmissionBeerLaw(surface.transmissionColor, surface.transmissionDepth, NdotV) * M_RCPPI * NdotL;
+        diffTerm = lerp(diffTerm, transTerm, surface.transmissionWeight);
+    }
 
-    float3 transTerm = TransmissionBeerLaw(surface.transmissionColor, surface.transmissionDepth, NdotV) * M_RCPPI * NdotL;
-    float3 diffSSTrans = lerp(diffSS, transTerm, surface.transmissionWeight);
+    float3 baseDiffuse = (1.0f - surface.metalness) * surface.baseWeight * surface.baseColor * (1.0f - baseF) * diffTerm;
+    float3 result = baseDiffuse + baseSpecular * NdotL;
 
-    float3 baseDiffuse = (1.0f - surface.metalness) * surface.baseWeight * surface.baseColor * (1.0f - baseF) * diffSSTrans;
+    if (surface.coatWeight > 1e-4f)
+    {
+        float3 coatF = SchlickFresnelCos(LdotH, DielectricF0(max(surface.coatIOR, 1.0f)));
+        float3 coat = surface.coatWeight * GGXBRDF(N, L, V, surface.coatRoughness, coatF) * NdotL;
+        float3 throughCoat = OpenPBRThroughCoat(0.5f * (NdotV + NdotL), coatF, surface);
+        result = coat + result * throughCoat;
+    }
 
-    float3 base = baseDiffuse + baseSpecular * NdotL;
+    if (surface.fuzzWeight > 1e-4f)
+    {
+        float3 fuzz = surface.fuzzWeight * FuzzBRDF(N, L, V, surface.fuzzRoughness, surface.fuzzColor) * NdotL;
+        result = fuzz + (1.0f - surface.fuzzWeight) * result;
+    }
 
-    float3 coatF = SchlickFresnelCos(LdotH, DielectricF0(max(surface.coatIOR, 1.0f)));
-    float3 coat = surface.coatWeight * GGXBRDF(N, L, V, surface.coatRoughness, coatF) * NdotL;
-
-    float3 throughCoat = OpenPBRThroughCoat(0.5f * (NdotV + NdotL), coatF, surface);
-
-    float3 fuzz = surface.fuzzWeight * FuzzBRDF(N, L, V, surface.fuzzRoughness, surface.fuzzColor) * NdotL;
-
-    return (fuzz + (1.0f - surface.fuzzWeight) * (coat + base * throughCoat)) * irradiance;
+    return result * irradiance;
 }
 
 // Directional albedo of the base specular lobe (what fraction of the environment is reflected).

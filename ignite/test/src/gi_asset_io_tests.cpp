@@ -13,6 +13,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/serializer/entity_serializer.hpp"
 #include "ignite/asset/asset_manager.hpp"
 
 #include <glm/gtc/packing.hpp>
@@ -347,4 +348,58 @@ TEST(GIAssetIOTests, CornellBoxBakeColorBleedingAndReload)
     assetManager->Reset();
     Project::CloseActive();
     std::filesystem::remove_all(tempDir, ec);
+}
+
+TEST(GIAssetIOTests, ComputeSceneBakeHashIsStableAcrossDeserialization)
+{
+    Ref<Scene> sceneA = CreateRef<Scene>(nullptr);
+
+    Entity dirEnt = SceneManager::CreateEntity(sceneA.get(), "Sun", EntityType_Node);
+    auto &dirLight = dirEnt.AddComponent<DirectionalLightComponent>();
+    dirLight.color = glm::vec4(1.0f, 0.95f, 0.9f, 1.0f);
+    dirLight.intensity = 12.0f;
+    dirLight.bakeIndirect = true;
+
+    Entity ptEnt = SceneManager::CreateEntity(sceneA.get(), "Pt", EntityType_Node);
+    auto &ptLight = ptEnt.AddComponent<PointLightComponent>();
+    ptLight.intensity = 8.0f;
+    ptLight.range = 14.0f;
+    ptLight.bakeIndirect = true;
+
+    Entity spEnt = SceneManager::CreateEntity(sceneA.get(), "Spot", EntityType_Node);
+    auto &spLight = spEnt.AddComponent<SpotLightComponent>();
+    spLight.intensity = 15.0f;
+    spLight.outerConeAngle = 35.0f;
+    spLight.bakeIndirect = true;
+
+    Entity envEnt = SceneManager::CreateEntity(sceneA.get(), "Env", EntityType_WorldEnvironment);
+    auto &env = envEnt.AddComponent<WorldEnvironment>();
+    env.skyType = SkyType::ProceduralSky;
+    env.atmosphereParams.cameraPositionAndAltitude = glm::vec4(1.0f, 2.0f, 3.0f, 0.5f);
+
+    Entity meshEnt = SceneManager::CreateEntity(sceneA.get(), "Cube", EntityType_Mesh);
+    auto &smc = meshEnt.AddComponent<StaticMeshComponent>();
+    smc.handle = Renderer::GetDefaultMeshHandle(EMeshType::CUBE);
+
+    const uint64_t hashA = ComputeSceneBakeHash(sceneA.get());
+    EXPECT_NE(hashA, 0u);
+
+    // Runtime-only cameraPositionAndAltitude must not invalidate GI bake hash
+    env.atmosphereParams.cameraPositionAndAltitude = glm::vec4(250.0f, 40.0f, -120.0f, 1.2f);
+    EXPECT_EQ(ComputeSceneBakeHash(sceneA.get()), hashA);
+
+    // Round-trip every entity through EntitySerializer into a fresh Scene
+    Ref<Scene> sceneB = CreateRef<Scene>(nullptr);
+    for (entt::entity e : sceneA->registry->view<IDComponent>())
+    {
+        Serializer sr(std::filesystem::path{});
+        sr.BeginMap();
+        EntitySerializer::SerializeEntity(sr, Entity(e, sceneA.get()));
+        sr.EndMap();
+        JsonNode root(sr.GetRoot());
+        Entity loaded = EntitySerializer::DeserializeEntity(root, sceneB.get(), nullptr);
+        ASSERT_TRUE(loaded.IsValid());
+    }
+
+    EXPECT_EQ(ComputeSceneBakeHash(sceneB.get()), hashA);
 }

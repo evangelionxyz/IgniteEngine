@@ -10,6 +10,27 @@
 
 namespace ignite
 {
+	namespace
+	{
+		// Converts a per-60Hz-frame damping factor d in (0, 1) into an exact exponential
+		// decay over deltaTime, plus the analytical integral int_0^dt exp(-k*t) dt so velocity
+		// integration and decay match identically regardless of framerate.
+		void ComputeExponentialDecay(float dampingPer60HzFrame, float deltaTime, float &outDecay, float &outIntegratedDt)
+		{
+			const float dt = glm::clamp(deltaTime, 0.0001f, 0.5f);
+			if (dampingPer60HzFrame <= 0.0001f)
+			{
+				outDecay = 0.0f;
+				outIntegratedDt = 0.0f;
+				return;
+			}
+			const float d = glm::clamp(dampingPer60HzFrame, 0.0001f, 0.9999f);
+			const float k = -60.0f * std::log(d);
+			outDecay = std::exp(-k * dt);
+			outIntegratedDt = (k > 1e-4f) ? ((1.0f - outDecay) / k) : dt;
+		}
+	}
+
 	EditorCamera::EditorCamera(const std::string &name)
 		: m_Name(name)
 	{
@@ -236,6 +257,16 @@ namespace ignite
 		}
 	}
 
+	void EditorCamera::ResetControlSettings()
+	{
+		controls = Controls{};
+		m_FlySpeed = 6.0f;
+		m_FocusSpeed = 8.0f;
+		fov = 45.0f;
+		nearPlane = 0.1f;
+		farPlane = 500.0f;
+	}
+
 	void EditorCamera::UpdateMouseState()
 	{
 		// store last position before updating
@@ -243,6 +274,17 @@ namespace ignite
 
 		// update current position
 		mouse.position = InputSystem::GetMousePosition();
+
+		// When relative mouse mode (infinite movement) is active, use raw relative delta from SDL
+		// because OS cursor coordinates stay clamped/frozen.
+		if (InputSystem::GetCursorMode() == CursorMode::Disabled)
+		{
+			mouse.delta = InputSystem::GetMouseDelta();
+		}
+		else
+		{
+			mouse.delta = mouse.position - mouse.lastPosition;
+		}
 
 		// update button states
 		mouse.leftButtonDown = InputSystem::IsMouseButtonPressed(Mouse::ButtonLeft);
@@ -272,6 +314,7 @@ namespace ignite
 
 	void EditorCamera::HandleOrbit(float deltaTime)
 	{
+		(void)deltaTime;
 		if (m_NavigationMode != NavigationMode::Orbit)
 		{
 			return;
@@ -279,41 +322,25 @@ namespace ignite
 
 		if (mouse.rightButtonDown)
 		{
-			glm::vec2 delta = mouse.position - mouse.lastPosition;
+			glm::vec2 delta = mouse.delta;
 
 			// handle zoom
 			if (InputSystem::IsModifierPressed(KeyMod::LeftControl))
 			{
-				delta.y *= -1.0f * 0.5f; // inverting mouse y
+				delta.y *= -0.5f; // inverting mouse y
 
 				if (delta.y != 0.0f)
 				{
-					// apply zoom velocity for smooth zooming
+					// apply zoom velocity for smooth zooming (scaled to match ApplyInertia's 10x distance rate)
 					if (controls.enableInertia)
 					{
-						m_ZoomVelocity += delta.y;
+						m_ZoomVelocity += delta.y * 0.1f;
 					}
 					else
 					{
 						// direct zoom for immediate response
 						m_Distance -= delta.y;
 						m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
-					}
-				}
-
-				// apply zoom velocity
-				if (controls.enableInertia && abs(m_ZoomVelocity) > 0.001f)
-				{
-					m_Distance -= m_ZoomVelocity * deltaTime;
-					m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
-
-					// dampen zoom velocity
-					m_ZoomVelocity *= controls.zoomDamping;
-
-					// stop very small velocities
-					if (abs(m_ZoomVelocity) < 0.001f)
-					{
-						m_ZoomVelocity = 0.0f;
 					}
 				}
 			}
@@ -351,7 +378,7 @@ namespace ignite
 		{
             m_FocusActive = false;
 
-			const glm::vec2 delta = mouse.position - mouse.lastPosition;
+			const glm::vec2 delta = mouse.delta;
 			yaw += delta.x * controls.mouseSensitivity;
 			pitch += delta.y * controls.mouseSensitivity;
 			pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
@@ -398,7 +425,7 @@ namespace ignite
 			return;
 		}
 
-		const glm::vec2 delta = mouse.position - mouse.lastPosition;
+		const glm::vec2 delta = mouse.delta;
 		if (delta.x == 0.0f && delta.y == 0.0f)
 		{
 			return;
@@ -457,6 +484,7 @@ namespace ignite
 
 	void EditorCamera::HandleZoom(float deltaTime)
 	{
+		(void)deltaTime;
 		float wheelDelta = 0.0f;
 
 		// check for scroll wheel input
@@ -474,10 +502,10 @@ namespace ignite
 		{
             if (m_NavigationMode == NavigationMode::Fly)
             {
-				// Right mouse down == Moving
+				// Right mouse down == Adjusting fly speed
                 if (mouse.rightButtonDown)
                 {
-					m_FlySpeed = glm::max(0.01f, m_FlySpeed += wheelDelta * 0.5f);
+					m_FlySpeed = glm::max(0.1f, m_FlySpeed + wheelDelta * 0.5f);
                 }
 				else
 				{
@@ -505,56 +533,16 @@ namespace ignite
 				return;
 			}
 
-			// Apply zoom velocity for smooth zooming
+			// Apply zoom velocity for smooth zooming (integrated & damped in ApplyInertia)
 			if (controls.enableInertia)
 			{
 				m_ZoomVelocity += wheelDelta * controls.zoomSensitivity;
 			}
 			else
 			{
-				if (projectionType == ProjectionType::Perspective)
-				{
-					// Direct zoom for immediate response
-					m_Distance -= wheelDelta * controls.zoomSensitivity;
-					m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
-				}
-                else if (projectionType == ProjectionType::Orthographic)
-				{
-					const float minOrthoSize = 0.1f;
-					const float zoomStep = glm::max(orthoSize * 0.12f, 0.01f);
-					orthoSize -= wheelDelta * controls.zoomSensitivity * zoomStep;
-					orthoSize = glm::clamp(orthoSize, minOrthoSize, controls.maxOrthoSize);
-					m_Distance = glm::clamp(orthoSize, controls.minDistance, controls.maxDistance);
-
-					if (m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f)
-					{
-						UpdateView();
-						UpdateProjection(m_ViewportSize.x, m_ViewportSize.y);
-					}
-				}
-			}
-		}
-
-		// Apply zoom velocity
-		if (controls.enableInertia && abs(m_ZoomVelocity) > 0.001f)
-		{
-			if (projectionType == ProjectionType::Perspective)
-			{
-				m_Distance -= m_ZoomVelocity * deltaTime * 10.0f;
+				// Direct zoom for immediate response
+				m_Distance -= wheelDelta * controls.zoomSensitivity;
 				m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
-			}
-            else if (projectionType == ProjectionType::Orthographic)
-			{
-				m_ZoomVelocity = 0.0f;
-			}
-
-			// Dampen zoom velocity
-			m_ZoomVelocity *= controls.zoomDamping;
-
-			// Stop very small velocities
-			if (abs(m_ZoomVelocity) < 0.001f)
-			{
-				m_ZoomVelocity = 0.0f;
 			}
 		}
 	}
@@ -569,20 +557,40 @@ namespace ignite
 			return;
 		}
 
+		if (controls.enableInertia && std::abs(m_ZoomVelocity) > 0.001f)
+		{
+			float zoomDecay = 0.0f;
+			float zoomIntegratedDt = 0.0f;
+			ComputeExponentialDecay(controls.zoomDamping, deltaTime, zoomDecay, zoomIntegratedDt);
+
+			m_Distance -= m_ZoomVelocity * zoomIntegratedDt * 10.0f;
+			m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
+
+			m_ZoomVelocity *= zoomDecay;
+			if (std::abs(m_ZoomVelocity) < 0.001f)
+			{
+				m_ZoomVelocity = 0.0f;
+			}
+		}
+
 		if (m_NavigationMode != NavigationMode::Orbit)
 		{
 			return;
 		}
 
+		float inertiaDecay = 0.0f;
+		float inertiaIntegratedDt = 0.0f;
+		ComputeExponentialDecay(controls.inertiaDamping, deltaTime, inertiaDecay, inertiaIntegratedDt);
+
 		// apply angular inertia
 		if (glm::length(m_AngularVelocity) > 0.001f)
 		{
-			yaw += m_AngularVelocity.x * deltaTime;
-			pitch += m_AngularVelocity.y * deltaTime;
+			yaw += m_AngularVelocity.x * inertiaIntegratedDt;
+			pitch += m_AngularVelocity.y * inertiaIntegratedDt;
 			pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
 
 			// dampen angular velocity
-			m_AngularVelocity *= controls.inertiaDamping;
+			m_AngularVelocity *= inertiaDecay;
 
 			// stop very small velocities
 			if (glm::length(m_AngularVelocity) < 0.001f)
@@ -600,10 +608,10 @@ namespace ignite
 			const float panSpeed = m_Distance;
 			const glm::vec3 panVector = right * (-m_PanVelocity.x * panSpeed) + worldUp * (m_PanVelocity.y * panSpeed);
 
-			m_Target += panVector * deltaTime;
+			m_Target += panVector * inertiaIntegratedDt;
 
 			// dampen pan velocity
-			m_PanVelocity *= controls.inertiaDamping;
+			m_PanVelocity *= inertiaDecay;
 
 			// stop very small velocities
 			if (glm::length(m_PanVelocity) < 0.001f)
@@ -617,7 +625,7 @@ namespace ignite
 	{
 		if (m_FocusActive)
 		{
-			const float dt = glm::clamp(deltaTime, 0.001f, 0.1f);
+			const float dt = glm::clamp(deltaTime, 0.0001f, 0.5f);
 			const float blend = 1.0f - std::exp(-m_FocusSpeed * dt);
 
 			if (m_NavigationMode != NavigationMode::Fly)

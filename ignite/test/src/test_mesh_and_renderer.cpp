@@ -20,6 +20,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_camera.hpp"
 #include "ignite/scene/scene_manager.hpp"
+#include "ignite/serializer/entity_serializer.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -326,6 +327,83 @@ TEST(RendererShadowAndCamera, EditorCameraSetTargetAndDistancePreserved)
     EXPECT_NEAR(editorCam.position.z, 18.0f, 1e-3f);
 }
 
+TEST(RendererShadowAndCamera, EditorCameraInterpolationIsFrameRateIndependent)
+{
+    auto runInertiaScenario = [](float dt, int steps)
+    {
+        EditorCamera cam("InertiaTestCam");
+        cam.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+        cam.SetDistance(15.0f);
+        cam.SetTarget(glm::vec3(0.0f));
+        cam.yaw = 0.5f;
+        cam.pitch = 0.2f;
+        cam.controls.enableInertia = true;
+        cam.controls.inertiaDamping = 0.9f;
+        cam.controls.zoomDamping = 0.65f;
+
+        // Kick orbit, pan, and scroll velocities once
+        cam.mouse.rightButtonDown = true;
+        cam.mouse.middleButtonDown = false;
+        cam.mouse.delta = glm::vec2(20.0f, -10.0f);
+        cam.HandleOrbit(dt);
+
+        cam.mouse.rightButtonDown = false;
+        cam.mouse.middleButtonDown = true;
+        cam.mouse.delta = glm::vec2(12.0f, 8.0f);
+        cam.HandlePan(dt);
+
+        cam.mouse.middleButtonDown = false;
+        cam.mouse.delta = glm::vec2(0.0f);
+        cam.mouse.scroll = glm::ivec2(0, 3);
+        cam.HandleZoom(dt);
+
+        for (int i = 0; i < steps; ++i)
+        {
+            cam.ApplyInertia(dt);
+            cam.UpdateCameraPosition(dt);
+        }
+        return cam;
+    };
+
+    // Total simulated time = 0.5s at 60 FPS (30 steps) vs 15 FPS (8 steps -> ~0.533s; use exact 60 steps @ 1/120 vs 15 steps @ 1/30 vs 5 steps @ 1/10 = 0.5s!)
+    const EditorCamera cam60 = runInertiaScenario(1.0f / 60.0f, 30);
+    const EditorCamera cam15 = runInertiaScenario(1.0f / 15.0f, 8);
+    // Exact 0.5s match: 60Hz (30 steps) vs 10Hz (5 steps)
+    const EditorCamera cam10 = runInertiaScenario(0.1f, 5);
+
+    EXPECT_NEAR(cam60.yaw, cam10.yaw, 1e-3f);
+    EXPECT_NEAR(cam60.pitch, cam10.pitch, 1e-3f);
+    EXPECT_NEAR(cam60.GetDistance(), cam10.GetDistance(), 1e-2f);
+    EXPECT_NEAR(glm::length(cam60.GetTarget() - cam10.GetTarget()), 0.0f, 1e-2f);
+
+    EXPECT_NEAR(cam60.yaw, cam15.yaw, 0.05f);
+    EXPECT_NEAR(cam60.GetDistance(), cam15.GetDistance(), 0.1f);
+
+    // Focus interpolation at 4 FPS (dt = 0.25s) should match 60 FPS over 0.5s (not capped at dt <= 0.1s)
+    EditorCamera focus60("Focus60");
+    focus60.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+    focus60.SetTarget(glm::vec3(0.0f));
+    focus60.SetDistance(10.0f);
+    focus60.FocusTarget(glm::vec3(10.0f, 0.0f, 0.0f), 2.0f);
+    for (int i = 0; i < 30; ++i)
+    {
+        focus60.UpdateCameraPosition(1.0f / 60.0f);
+    }
+
+    EditorCamera focus4("Focus4");
+    focus4.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+    focus4.SetTarget(glm::vec3(0.0f));
+    focus4.SetDistance(10.0f);
+    focus4.FocusTarget(glm::vec3(10.0f, 0.0f, 0.0f), 2.0f);
+    for (int i = 0; i < 2; ++i)
+    {
+        focus4.UpdateCameraPosition(0.25f);
+    }
+
+    EXPECT_NEAR(focus60.GetTarget().x, focus4.GetTarget().x, 1e-2f);
+    EXPECT_NEAR(focus60.GetDistance(), focus4.GetDistance(), 1e-2f);
+}
+
 TEST(RendererShadowAndCamera, AsyncFontLoadingOnAssetWorker)
 {
     std::filesystem::path fontPath;
@@ -475,4 +553,47 @@ TEST(RendererShadowAndCamera, SceneReadinessBlocksPlayUntilRelatedAssetsReady)
     assetManager->Reset();
     Project::CloseActive();
     std::filesystem::remove_all(tempDir, ec);
+}
+
+TEST(MeshBuilderAndRenderer, PerEntityMaterialOverridesAreIndependentAndSerialized)
+{
+    Ref<Scene> scene = CreateRef<Scene>(nullptr);
+    const AssetHandle sharedMeshHandle(1001ULL);
+    const AssetHandle defaultMatHandle(2001ULL);
+    const AssetHandle overrideMatA(3001ULL);
+    const AssetHandle overrideMatB(3002ULL);
+
+    Entity entityA = SceneManager::CreateEntity(scene.get(), "CubeA", EntityType_Mesh);
+    auto &smcA = entityA.AddComponent<StaticMeshComponent>();
+    smcA.handle = sharedMeshHandle;
+    smcA.SetMaterialOverride(0, overrideMatA);
+
+    Entity entityB = SceneManager::CreateEntity(scene.get(), "CubeB", EntityType_Mesh);
+    auto &smcB = entityB.AddComponent<StaticMeshComponent>();
+    smcB.handle = sharedMeshHandle;
+
+    EXPECT_EQ(smcA.ResolveMaterialHandle(0, defaultMatHandle), overrideMatA);
+    EXPECT_EQ(smcB.ResolveMaterialHandle(0, defaultMatHandle), defaultMatHandle);
+
+    smcB.SetMaterialOverride(1, overrideMatB);
+    EXPECT_EQ(smcA.ResolveMaterialHandle(1, defaultMatHandle), defaultMatHandle);
+    EXPECT_EQ(smcB.ResolveMaterialHandle(1, defaultMatHandle), overrideMatB);
+
+    smcA.ClearMaterialOverride(0);
+    EXPECT_EQ(smcA.ResolveMaterialHandle(0, defaultMatHandle), defaultMatHandle);
+    smcA.SetMaterialOverride(0, overrideMatA);
+
+    Serializer sr(std::filesystem::path{});
+    sr.BeginMap();
+    EntitySerializer::SerializeEntity(sr, entityA);
+    sr.EndMap();
+
+    JsonNode root(sr.GetRoot());
+    Ref<Scene> loadedScene = CreateRef<Scene>(nullptr);
+    Entity deserialized = EntitySerializer::DeserializeEntity(root, loadedScene.get(), nullptr);
+    ASSERT_TRUE(deserialized.IsValid());
+    ASSERT_TRUE(deserialized.HasComponent<StaticMeshComponent>());
+    const auto &loadedSmc = deserialized.GetComponent<StaticMeshComponent>();
+    EXPECT_EQ(loadedSmc.handle, sharedMeshHandle);
+    EXPECT_EQ(loadedSmc.ResolveMaterialHandle(0, defaultMatHandle), overrideMatA);
 }
