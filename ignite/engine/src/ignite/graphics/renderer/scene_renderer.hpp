@@ -217,7 +217,8 @@ namespace ignite
         void DrawMesh(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *framebuffer, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
             const glm::mat4 &normalMatrix, uint32_t objectID, const std::vector<glm::mat4> &boneTransforms,
             const std::vector<Mesh_GPUData> &cachedInstanceTransforms, ICamera *camera, Ref<GraphicsPipeline> opaquePSO, std::vector<TransparentDrawCall> &transparentDrawCalls,
-            std::unordered_set<Material *> &uploadedMaterialsThisPass, entt::entity entity = entt::null, const std::string &socketName = "");
+            std::unordered_set<Material *> &uploadedMaterialsThisPass, entt::entity entity = entt::null, const std::string &socketName = "",
+            const std::vector<AssetHandle> *materialOverrides = nullptr);
 
         template<typename MeshT>
         void DrawMeshShadow(nri::CommandBuffer *cmd, FrameContext *frameContext, RenderTarget *csmFramebuffer, const Ref<MeshT> &mesh, const glm::mat4 &parentTransform,
@@ -393,7 +394,7 @@ namespace ignite
         static constexpr uint32_t kMaxLocalShadowPointLights = 8;
         static constexpr uint32_t kMaxLocalShadowSpotLights = 4;
         static constexpr uint32_t kMaxLocalShadowLights = kMaxLocalShadowPointLights + kMaxLocalShadowSpotLights;
-        static constexpr uint32_t kLocalShadowResolution = 256;
+        static constexpr uint32_t kLocalShadowResolution = 1024;
 
         Ref<Texture> m_StaticLocalShadowCubeArray;
         Ref<Texture> m_StaticLocalShadowDepthTex;

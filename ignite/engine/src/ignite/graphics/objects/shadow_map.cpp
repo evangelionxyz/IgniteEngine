@@ -292,7 +292,7 @@ namespace ignite
 
             // Rotation-invariant Z bounds from the sub-frustum bounding sphere + upstream/downstream padding
             // so farPlaneLS - nearPlaneLS never fluctuates as the camera rotates.
-            const float zPadding = glm::max(60.0f, m_ShadowDistance * 0.35f);
+            const float zPadding = glm::max(120.0f, m_ShadowDistance * 0.6f);
             const float minZ_LS = centerLS.z - safeExtent - zPadding;
             const float maxZ_LS = centerLS.z + safeExtent + zPadding;
 

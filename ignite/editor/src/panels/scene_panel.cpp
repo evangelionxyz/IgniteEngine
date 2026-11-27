@@ -1401,6 +1401,48 @@ namespace ignite
                                 }
                             }
                         }
+                        else if (metadata.type == AssetType::Material)
+                        {
+                            bool applied = false;
+                            if (entity.HasComponent<StaticMeshComponent>())
+                            {
+                                auto &smc = entity.GetComponent<StaticMeshComponent>();
+                                size_t slotCount = 1;
+                                if (smc.handle != AssetHandle(0))
+                                {
+                                    if (Ref<StaticMesh> sm = am->GetAsset<StaticMesh>(smc.handle))
+                                    {
+                                        slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                    }
+                                }
+                                for (size_t i = 0; i < slotCount; ++i)
+                                {
+                                    smc.SetMaterialOverride(i, handle);
+                                }
+                                applied = true;
+                            }
+                            if (entity.HasComponent<SkeletalMeshComponent>())
+                            {
+                                auto &smc = entity.GetComponent<SkeletalMeshComponent>();
+                                size_t slotCount = 1;
+                                if (smc.handle != AssetHandle(0))
+                                {
+                                    if (Ref<SkeletalMesh> sm = am->GetAsset<SkeletalMesh>(smc.handle))
+                                    {
+                                        slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                    }
+                                }
+                                for (size_t i = 0; i < slotCount; ++i)
+                                {
+                                    smc.SetMaterialOverride(i, handle);
+                                }
+                                applied = true;
+                            }
+                            if (applied)
+                            {
+                                SetSelectedEntity(entity);
+                            }
+                        }
                     }
                 }
 
@@ -2399,6 +2441,7 @@ namespace ignite
                             assetManager->AssignMetaData(handle, metadata);
                             assetManager->UnloadAsset(handle);
                             c.handle = handle;
+                            c.materialOverrides.clear();
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2411,6 +2454,7 @@ namespace ignite
                     [&]()
                     {
                         c.handle = AssetHandle(0);
+                        c.materialOverrides.clear();
                         if (selectedEntity.HasComponent<MeshColliderComponent>())
                         {
                             auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2438,23 +2482,21 @@ namespace ignite
                                 else
                                     submeshName = std::format("{} ({})", submeshName, i);
 
-                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const AssetHandle matHandle = c.ResolveMaterialHandle(i, instance->GetMaterialAssetHandle());
                                 const std::string slotId = std::format("StaticMat_{}", i);
                                 drawAssetSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
                                     ICON_LC_PALETTE, UI::Accent::Material,
-                                    [&](AssetHandle handle)
+                                    [&, i](AssetHandle handle)
                                     {
                                         AssetMetaData metadata = assetManager->GetMetaData(handle);
                                         if (metadata.type == AssetType::Material)
                                         {
-                                            instance->SetMaterial(handle);
-                                            sm->SetDirtyFlag(true);
+                                            c.SetMaterialOverride(i, handle);
                                         }
                                     },
-                                    [&]()
+                                    [&, i]()
                                     {
-                                        instance->SetMaterial(AssetHandle(0));
-                                        sm->SetDirtyFlag(true);
+                                        c.ClearMaterialOverride(i);
                                     },
                                     "Reset to Default Material", slotId.c_str());
                             }
@@ -2577,6 +2619,7 @@ namespace ignite
                             assetManager->AssignMetaData(handle, metadata);
                             assetManager->UnloadAsset(handle);
                             c.handle = handle;
+                            c.materialOverrides.clear();
                             if (selectedEntity.HasComponent<MeshColliderComponent>())
                             {
                                 auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2589,6 +2632,7 @@ namespace ignite
                     [&]()
                     {
                         c.handle = AssetHandle(0);
+                        c.materialOverrides.clear();
                         if (selectedEntity.HasComponent<MeshColliderComponent>())
                         {
                             auto &mc = selectedEntity.GetComponent<MeshColliderComponent>();
@@ -2616,23 +2660,21 @@ namespace ignite
                                 else
                                     submeshName = std::format("{} ({})", submeshName, i);
 
-                                const AssetHandle matHandle = instance->GetMaterialAssetHandle();
+                                const AssetHandle matHandle = c.ResolveMaterialHandle(i, instance->GetMaterialAssetHandle());
                                 const std::string slotId = std::format("SkelMat_{}", i);
                                 drawSkelSlotWithThumbnail(submeshName.c_str(), matHandle, "Default Material",
                                     ICON_LC_PALETTE, UI::Accent::Material,
-                                    [&](AssetHandle handle)
+                                    [&, i](AssetHandle handle)
                                     {
                                         AssetMetaData metadata = assetManager->GetMetaData(handle);
                                         if (metadata.type == AssetType::Material)
                                         {
-                                            instance->SetMaterial(handle);
-                                            sm->SetDirtyFlag(true);
+                                            c.SetMaterialOverride(i, handle);
                                         }
                                     },
-                                    [&]()
+                                    [&, i]()
                                     {
-                                        instance->SetMaterial(AssetHandle(0));
-                                        sm->SetDirtyFlag(true);
+                                        c.ClearMaterialOverride(i);
                                     },
                                     "Reset to Default Material", slotId.c_str());
                             }
@@ -5647,6 +5689,72 @@ namespace ignite
                                                     CommandManager::AddCommand(CreateScope<EntityCreateCommand>(m_Scene, instantiated, "Instantiate Prefab"));
                                                 }
                                                 SetSelectedEntity(instantiated);
+                                            }
+                                        }
+                                    }
+                                    else if (metadata.type == AssetType::Material && target && target->sceneRT)
+                                    {
+                                        Ref<Texture> objectIdTexture = (target->msaaSampleCount > 1)
+                                            ? (target->objectIdResolveRT ? target->objectIdResolveRT->GetColorAttachment(0) : nullptr)
+                                            : target->sceneRT->GetColorAttachment(1);
+                                        if (objectIdTexture && objectIdTexture->GetHandle() && objectIdTexture->GetCreateInfo().sampleCount <= 1)
+                                        {
+                                            const int texWidth = objectIdTexture->GetWidth();
+                                            const int texHeight = objectIdTexture->GetHeight();
+                                            if (canvasSize.x > 0.0f && canvasSize.y > 0.0f && texWidth > 0 && texHeight > 0)
+                                            {
+                                                const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
+                                                const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
+                                                const uint32_t pickedObjectId = objectIdTexture->ReadPixel(pixelX, pixelY);
+                                                if (pickedObjectId != 0xFFFFFFFFu)
+                                                {
+                                                    Entity pickedEntity = {};
+                                                    m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
+                                                    {
+                                                        if (pickedEntity.IsValid())
+                                                            return;
+                                                        if (static_cast<uint32_t>(static_cast<uint64_t>(id.uuid)) == pickedObjectId)
+                                                        {
+                                                            pickedEntity = Entity{ e, m_Scene };
+                                                        }
+                                                    });
+
+                                                    if (pickedEntity.IsValid())
+                                                    {
+                                                        auto *am = AssetManager::GetInstance();
+                                                        bool applied = false;
+                                                        if (pickedEntity.HasComponent<StaticMeshComponent>())
+                                                        {
+                                                            auto &smc = pickedEntity.GetComponent<StaticMeshComponent>();
+                                                            size_t slotCount = 1;
+                                                            if (am && smc.handle != AssetHandle(0))
+                                                            {
+                                                                if (Ref<StaticMesh> sm = am->GetAsset<StaticMesh>(smc.handle))
+                                                                    slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                                            }
+                                                            for (size_t i = 0; i < slotCount; ++i)
+                                                                smc.SetMaterialOverride(i, *handle);
+                                                            applied = true;
+                                                        }
+                                                        if (pickedEntity.HasComponent<SkeletalMeshComponent>())
+                                                        {
+                                                            auto &smc = pickedEntity.GetComponent<SkeletalMeshComponent>();
+                                                            size_t slotCount = 1;
+                                                            if (am && smc.handle != AssetHandle(0))
+                                                            {
+                                                                if (Ref<SkeletalMesh> sm = am->GetAsset<SkeletalMesh>(smc.handle))
+                                                                    slotCount = std::max<size_t>(1, sm->GetMeshInstances().size());
+                                                            }
+                                                            for (size_t i = 0; i < slotCount; ++i)
+                                                                smc.SetMaterialOverride(i, *handle);
+                                                            applied = true;
+                                                        }
+                                                        if (applied)
+                                                        {
+                                                            SetSelectedEntity(pickedEntity);
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }

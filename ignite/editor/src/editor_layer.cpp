@@ -3514,18 +3514,110 @@ namespace ignite
 
             ImGui::SeparatorText("GPU Pass Timings (ms)");
             const auto &timings = m_SceneRenderer->GetLastGPUTimingsMs();
-            if (timings.empty())
+            const auto &rs = m_SceneRenderer->sceneRenderSettings;
+            const bool gtaoEnabled = (rs.aoModeOverride == static_cast<int>(AOMode::GTAO))
+                || (rs.aoModeOverride < 0 && rs.scalability.ambientOcclusion == AOMode::GTAO);
+            const bool prepassEnabled = rs.enableDepthPrepass && (rs.enableSSR || gtaoEnabled);
+
+            auto isPinnedZone = [&](const std::string &name) -> bool
+            {
+                if (name == "ShadowPass" || name == "ColorPass" || name == "SkyPass" || name == "CompositePass")
+                    return true;
+                if (rs.enableSSR && (name == "SSR" || name == "SSRCopyPrevColor"))
+                    return true;
+                if (rs.enableBloom && name == "Bloom")
+                    return true;
+                if (gtaoEnabled && name == "GTAO")
+                    return true;
+                if (prepassEnabled && name == "DepthNormalPrepass")
+                    return true;
+                return false;
+            };
+
+            struct HeldZoneTiming
+            {
+                double lastMs = 0.0;
+                int framesSinceSeen = 0;
+            };
+            static std::unordered_map<std::string, HeldZoneTiming> s_HeldTimings;
+            for (auto &[_, entry] : s_HeldTimings)
+            {
+                entry.framesSinceSeen++;
+            }
+            for (const auto &[zoneName, ms] : timings)
+            {
+                s_HeldTimings[zoneName] = { ms, 0 };
+            }
+
+            static const std::array<const char *, 15> kCanonicalOrder = {
+                "ShadowPass",
+                "ProceduralSkyLUT",
+                "SkyIBL",
+                "DepthNormalPrepass",
+                "GTAO",
+                "SSR",
+                "ColorPass",
+                "SkyPass",
+                "DebugPass",
+                "MSAAResolve",
+                "SSRCopyPrevColor",
+                "Bloom",
+                "UIPass",
+                "CompositePass",
+                "FXAA"
+            };
+
+            for (const char *zoneName : kCanonicalOrder)
+            {
+                if (isPinnedZone(zoneName) && !s_HeldTimings.contains(zoneName))
+                {
+                    s_HeldTimings.emplace(zoneName, HeldZoneTiming{ 0.0, 1 });
+                }
+            }
+
+            for (auto it = s_HeldTimings.begin(); it != s_HeldTimings.end();)
+            {
+                if (!isPinnedZone(it->first) && it->second.framesSinceSeen > 120)
+                    it = s_HeldTimings.erase(it);
+                else
+                    ++it;
+            }
+
+            if (s_HeldTimings.empty())
             {
                 ImGui::Text("No GPU timestamps available");
             }
             else
             {
                 double totalMs = 0.0;
-                for (const auto &[zoneName, ms] : timings)
+                std::unordered_set<std::string> printedZones;
+                for (const char *zoneName : kCanonicalOrder)
                 {
+                    auto it = s_HeldTimings.find(zoneName);
+                    if (it != s_HeldTimings.end())
+                    {
+                        const double ms = (it->second.framesSinceSeen == 0) ? it->second.lastMs : 0.0;
+                        totalMs += ms;
+                        ImGui::Text("%s: %.3f ms", zoneName, ms);
+                        printedZones.insert(zoneName);
+                    }
+                }
+
+                std::vector<std::string> extraZones;
+                for (const auto &[zoneName, _] : s_HeldTimings)
+                {
+                    if (!printedZones.contains(zoneName))
+                        extraZones.push_back(zoneName);
+                }
+                std::sort(extraZones.begin(), extraZones.end());
+                for (const std::string &zoneName : extraZones)
+                {
+                    const auto &entry = s_HeldTimings.at(zoneName);
+                    const double ms = (entry.framesSinceSeen == 0) ? entry.lastMs : 0.0;
                     totalMs += ms;
                     ImGui::Text("%s: %.3f ms", zoneName.c_str(), ms);
                 }
+
                 ImGui::Separator();
                 ImGui::Text("Total Timed: %.3f ms", totalMs);
             }
@@ -3648,11 +3740,11 @@ namespace ignite
                 }
             }
         }
-        float globalScale = m_SceneRenderer ? m_SceneRenderer->sceneRenderSettings.renderScale : 1.0f;
-        postProcessing.renderScale = glm::clamp(postProcessing.renderScale * globalScale, 0.25f, 1.0f);
+        const float globalScale = m_SceneRenderer ? m_SceneRenderer->sceneRenderSettings.renderScale : 1.0f;
+        const float effectiveRenderScale = glm::clamp(globalScale, 0.25f, 1.0f);
 
-        const uint32_t expectedRenderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.x) * postProcessing.renderScale)));
-        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.y) * postProcessing.renderScale)));
+        const uint32_t expectedRenderWidth = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.x) * effectiveRenderScale)));
+        const uint32_t expectedRenderHeight = std::max(1u, static_cast<uint32_t>(std::round(static_cast<float>(desiredSize.y) * effectiveRenderScale)));
 
         const glm::uvec2 sceneRTSize = target ? target->sceneRT->GetSize() : glm::uvec2(0);
 

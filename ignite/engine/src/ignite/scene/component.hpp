@@ -550,11 +550,40 @@ namespace ignite
     {
     public:
         AssetHandle handle = AssetHandle(0);                    // class Mesh in mesh.hpp
+        std::vector<AssetHandle> materialOverrides;           // per-entity per-submesh material overrides (AssetHandle(0) = use mesh default)
         glm::mat4 normalMatrix = glm::mat4(1.0f);
         AABB worldAABB;
 
         // ==== RUNTIME DATA ====
         std::vector<Mesh_GPUData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
+
+        AssetHandle GetMaterialOverride(size_t submeshIndex) const
+        {
+            return (submeshIndex < materialOverrides.size()) ? materialOverrides[submeshIndex] : AssetHandle(0);
+        }
+
+        void SetMaterialOverride(size_t submeshIndex, AssetHandle matHandle)
+        {
+            if (submeshIndex >= materialOverrides.size())
+            {
+                materialOverrides.resize(submeshIndex + 1, AssetHandle(0));
+            }
+            materialOverrides[submeshIndex] = matHandle;
+        }
+
+        void ClearMaterialOverride(size_t submeshIndex)
+        {
+            if (submeshIndex < materialOverrides.size())
+            {
+                materialOverrides[submeshIndex] = AssetHandle(0);
+            }
+        }
+
+        AssetHandle ResolveMaterialHandle(size_t submeshIndex, AssetHandle fallbackHandle) const
+        {
+            const AssetHandle overrideHandle = GetMaterialOverride(submeshIndex);
+            return (overrideHandle != AssetHandle(0)) ? overrideHandle : fallbackHandle;
+        }
 
         StaticMeshComponent() = default;
         COMPONENT_CLASS_TYPE(CompType_StaticMesh)
@@ -564,6 +593,7 @@ namespace ignite
     {
     public:
         AssetHandle handle = AssetHandle(0);                    // class SkeletalMesh in mesh.hpp
+        std::vector<AssetHandle> materialOverrides;           // per-entity per-submesh material overrides (AssetHandle(0) = use mesh default)
 
         glm::mat4 normalMatrix = glm::mat4(1.0f);
         AABB worldAABB;
@@ -593,6 +623,34 @@ namespace ignite
 
         // Enable unique for each entity
         bool uniqueAnimator = true;
+
+        AssetHandle GetMaterialOverride(size_t submeshIndex) const
+        {
+            return (submeshIndex < materialOverrides.size()) ? materialOverrides[submeshIndex] : AssetHandle(0);
+        }
+
+        void SetMaterialOverride(size_t submeshIndex, AssetHandle matHandle)
+        {
+            if (submeshIndex >= materialOverrides.size())
+            {
+                materialOverrides.resize(submeshIndex + 1, AssetHandle(0));
+            }
+            materialOverrides[submeshIndex] = matHandle;
+        }
+
+        void ClearMaterialOverride(size_t submeshIndex)
+        {
+            if (submeshIndex < materialOverrides.size())
+            {
+                materialOverrides[submeshIndex] = AssetHandle(0);
+            }
+        }
+
+        AssetHandle ResolveMaterialHandle(size_t submeshIndex, AssetHandle fallbackHandle) const
+        {
+            const AssetHandle overrideHandle = GetMaterialOverride(submeshIndex);
+            return (overrideHandle != AssetHandle(0)) ? overrideHandle : fallbackHandle;
+        }
 
         void ResetAnimatorRuntime()
         {

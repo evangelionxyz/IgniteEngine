@@ -114,7 +114,7 @@ namespace ignite
                                 if (instances[i])
                                 {
                                     AppendBytes(record.bytes, static_cast<int>(i));
-                                    AppendBytes(record.bytes, static_cast<uint64_t>(instances[i]->GetMaterialAssetHandle()));
+                                    AppendBytes(record.bytes, static_cast<uint64_t>(mesh->ResolveMaterialHandle(i, instances[i]->GetMaterialAssetHandle())));
                                 }
                             }
                         }

@@ -20,6 +20,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_camera.hpp"
 #include "ignite/scene/scene_manager.hpp"
+#include "ignite/serializer/entity_serializer.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -475,4 +476,47 @@ TEST(RendererShadowAndCamera, SceneReadinessBlocksPlayUntilRelatedAssetsReady)
     assetManager->Reset();
     Project::CloseActive();
     std::filesystem::remove_all(tempDir, ec);
+}
+
+TEST(MeshBuilderAndRenderer, PerEntityMaterialOverridesAreIndependentAndSerialized)
+{
+    Ref<Scene> scene = CreateRef<Scene>(nullptr);
+    const AssetHandle sharedMeshHandle(1001ULL);
+    const AssetHandle defaultMatHandle(2001ULL);
+    const AssetHandle overrideMatA(3001ULL);
+    const AssetHandle overrideMatB(3002ULL);
+
+    Entity entityA = SceneManager::CreateEntity(scene.get(), "CubeA", EntityType_Mesh);
+    auto &smcA = entityA.AddComponent<StaticMeshComponent>();
+    smcA.handle = sharedMeshHandle;
+    smcA.SetMaterialOverride(0, overrideMatA);
+
+    Entity entityB = SceneManager::CreateEntity(scene.get(), "CubeB", EntityType_Mesh);
+    auto &smcB = entityB.AddComponent<StaticMeshComponent>();
+    smcB.handle = sharedMeshHandle;
+
+    EXPECT_EQ(smcA.ResolveMaterialHandle(0, defaultMatHandle), overrideMatA);
+    EXPECT_EQ(smcB.ResolveMaterialHandle(0, defaultMatHandle), defaultMatHandle);
+
+    smcB.SetMaterialOverride(1, overrideMatB);
+    EXPECT_EQ(smcA.ResolveMaterialHandle(1, defaultMatHandle), defaultMatHandle);
+    EXPECT_EQ(smcB.ResolveMaterialHandle(1, defaultMatHandle), overrideMatB);
+
+    smcA.ClearMaterialOverride(0);
+    EXPECT_EQ(smcA.ResolveMaterialHandle(0, defaultMatHandle), defaultMatHandle);
+    smcA.SetMaterialOverride(0, overrideMatA);
+
+    Serializer sr(std::filesystem::path{});
+    sr.BeginMap();
+    EntitySerializer::SerializeEntity(sr, entityA);
+    sr.EndMap();
+
+    JsonNode root(sr.GetRoot());
+    Ref<Scene> loadedScene = CreateRef<Scene>(nullptr);
+    Entity deserialized = EntitySerializer::DeserializeEntity(root, loadedScene.get(), nullptr);
+    ASSERT_TRUE(deserialized.IsValid());
+    ASSERT_TRUE(deserialized.HasComponent<StaticMeshComponent>());
+    const auto &loadedSmc = deserialized.GetComponent<StaticMeshComponent>();
+    EXPECT_EQ(loadedSmc.handle, sharedMeshHandle);
+    EXPECT_EQ(loadedSmc.ResolveMaterialHandle(0, defaultMatHandle), overrideMatA);
 }

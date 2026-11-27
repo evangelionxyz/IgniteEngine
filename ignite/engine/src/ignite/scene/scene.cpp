@@ -2033,6 +2033,10 @@ namespace ignite
         {
             addHandle(mesh.handle);
             addHandle(mesh.runtimeAnimatorHandle);
+            for (AssetHandle matOverride : mesh.materialOverrides)
+            {
+                addHandle(matOverride);
+            }
             for (auto &attachmentHandle : mesh.socketAttachments | std::views::values)
             {
                 addHandle(attachmentHandle);
@@ -2042,6 +2046,10 @@ namespace ignite
         registry->view<StaticMeshComponent>().each([&](entt::entity, const StaticMeshComponent &mesh)
         {
             addHandle(mesh.handle);
+            for (AssetHandle matOverride : mesh.materialOverrides)
+            {
+                addHandle(matOverride);
+            }
         });
 
         registry->view<AudioSourceComponent>().each([&](entt::entity, const AudioSourceComponent &audio)

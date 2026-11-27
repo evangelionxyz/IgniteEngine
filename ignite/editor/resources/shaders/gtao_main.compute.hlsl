@@ -140,10 +140,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
         viewNormal = -viewNormal;
     }
 
-    // Small view/normal bias prevents depth quantization & facet self-occlusion on flat surfaces
+    float NdotV = saturate(dot(viewNormal, viewVec));
+    float grazing = 1.0f - NdotV;
+
+    // Small view/normal bias prevents depth quantization & facet self-occlusion on flat and grazing curved surfaces
     float3 biasedViewPos = viewPos
         + viewVec * max(0.003f * centerZ, 0.004f)
-        + viewNormal * max(0.0015f * centerZ, 0.002f);
+        + viewNormal * max((0.0015f + 0.006f * grazing) * centerZ, 0.002f + 0.006f * grazing);
 
     float worldRadius = max(effectRadius * radiusMultiplier, 0.05f);
     float screenspaceRadius = ((flags & 2u) != 0u)
@@ -168,7 +171,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     int sliceCnt = clamp(int(sliceCount), 1, 4);
     int stepCnt = clamp(int(stepsPerSlice), 1, 6);
-    const float kHorizonBias = 0.03f;
+    float kHorizonBias = 0.03f + 0.10f * grazing * grazing;
 
     float visibility = 0.0f;
 

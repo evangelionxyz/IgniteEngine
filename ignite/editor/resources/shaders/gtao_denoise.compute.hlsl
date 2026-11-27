@@ -155,8 +155,26 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
         else
         {
-            int2 fallbackPx = clamp(int2(round(halfPos)), int2(0, 0), maxHalf);
-            u_DstAO[DTid.xy] = t_SrcAO.Load(int3(fallbackPx, 0)).r;
+            int2 baseHalf = int2(floor(halfPos));
+            float bestDiff = 1e9f;
+            float bestAO = 1.0f;
+            [unroll]
+            for (int dy = 0; dy <= 1; ++dy)
+            {
+                [unroll]
+                for (int dx = 0; dx <= 1; ++dx)
+                {
+                    int2 shPx = clamp(baseHalf + int2(dx, dy), int2(0, 0), maxHalf);
+                    float sz = t_Depth.Load(int3(shPx, 0)).r;
+                    float diff = abs(sz - centerZ);
+                    if (sz < maxValidZ && sz > 1e-4f && diff < bestDiff)
+                    {
+                        bestDiff = diff;
+                        bestAO = t_SrcAO.Load(int3(shPx, 0)).r;
+                    }
+                }
+            }
+            u_DstAO[DTid.xy] = (bestDiff < max(centerZ * 0.15f, 0.05f)) ? bestAO : 1.0f;
         }
         return;
     }

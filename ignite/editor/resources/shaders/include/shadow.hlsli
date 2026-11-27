@@ -108,9 +108,9 @@ static float SampleCascadePCF(CascadesShadows csm, Texture2DArray shadowMap, Sam
     float worldTexelSize = (2.0f / invHalfExtentX) * ts;
 
     // Slope-scaled normal offset + physical meter depth bias (capped per cascade texel)
-    // eliminates shadow acne with double-sided CSM casters without 25m+ Peter-Panning cutouts.
+    // eliminates shadow acne with double-sided CSM casters without visible cascade boundary jumps.
     float cosTheta = saturate(dot(normal, lightDirection));
-    float3 shadowWorldPos = worldPos + normal * (worldTexelSize * (1.25f * (1.0f - cosTheta)));
+    float3 shadowWorldPos = worldPos + normal * (worldTexelSize * (1.0f * (1.0f - cosTheta)));
 
     float4 lightSpace = mul(lightVP, float4(shadowWorldPos, 1.0f));
     float3 ndc = lightSpace.xyz / lightSpace.w;
@@ -130,28 +130,35 @@ static float SampleCascadePCF(CascadesShadows csm, Texture2DArray shadowMap, Sam
     float loBias = min(csm.minBias, csm.maxBias);
     float hiBias = max(csm.minBias, csm.maxBias);
     float baseBias = lerp(hiBias, loBias, cosTheta);
-    float biasMeters = clamp(baseBias * 20.0f, worldTexelSize * 0.5f, worldTexelSize * 4.0f);
+    float biasMeters = clamp(baseBias * 20.0f, worldTexelSize * 0.5f, worldTexelSize * 2.0f);
     float bias = biasMeters * ndcPerMeter;
     float compareDepth = shadowDepth - bias;
 
-    if (csm.softShadows == 0 || isBlendTap || cascadeIdx >= 2)
+    if (csm.softShadows == 0 || cascadeIdx >= 3)
     {
         float visibility = SampleCascadeBilinearPCF(shadowMap, shadowSampler, shadowUV, cascadeIdx, compareDepth, ts);
         return saturate(lerp(1.0f, visibility, csm.shadowStrength));
     }
 
     // Do not inflate filter radius on far cascades where world-space texels are already large.
-    float cascadeScale = 1.0f / (1.0f + float(cascadeIdx) * 0.35f);
-    float filterRadius = clamp(csm.pcfRadius, 0.5f, 4.0f) * cascadeScale;
+    float cascadeScale = 1.0f / (1.0f + float(cascadeIdx) * 0.45f);
+    float filterRadius = clamp(csm.pcfRadius, 0.5f, 8.0f) * cascadeScale;
 
-    // Deterministic 2x2 bilinear PCF tent (16 continuous depth comparisons, zero IGN dithering noise)
-    float2 offsetStep = float2(ts, ts) * (filterRadius * 0.65f);
+    // 8-tap IGN-rotated Poisson bilinear PCF (32 continuous depth comparisons per pixel)
+    float angle = InterleavedGradientNoise(screenPos) * 6.2831853f;
+    float s = sin(angle);
+    float c = cos(angle);
+    float2 radiusUV = float2(ts, ts) * filterRadius;
+
     float visibility = 0.0f;
-    visibility += SampleCascadeBilinearPCF(shadowMap, shadowSampler, saturate(shadowUV + float2(-offsetStep.x, -offsetStep.y)), cascadeIdx, compareDepth, ts);
-    visibility += SampleCascadeBilinearPCF(shadowMap, shadowSampler, saturate(shadowUV + float2( offsetStep.x, -offsetStep.y)), cascadeIdx, compareDepth, ts);
-    visibility += SampleCascadeBilinearPCF(shadowMap, shadowSampler, saturate(shadowUV + float2(-offsetStep.x,  offsetStep.y)), cascadeIdx, compareDepth, ts);
-    visibility += SampleCascadeBilinearPCF(shadowMap, shadowSampler, saturate(shadowUV + float2( offsetStep.x,  offsetStep.y)), cascadeIdx, compareDepth, ts);
-    visibility *= 0.25f;
+    [unroll]
+    for (int i = 0; i < 8; ++i)
+    {
+        float2 p = k_PoissonDisk[i * 2];
+        float2 rot = float2(p.x * c - p.y * s, p.x * s + p.y * c) * radiusUV;
+        visibility += SampleCascadeBilinearPCF(shadowMap, shadowSampler, saturate(shadowUV + rot), cascadeIdx, compareDepth, ts);
+    }
+    visibility *= 0.125f;
 
     return saturate(lerp(1.0f, visibility, csm.shadowStrength));
 }
@@ -173,12 +180,12 @@ static float SampleShadow(CascadesShadows csm, Texture2DArray shadowMap, Sampler
     {
         float splitFar = (cascadeIdx == 0) ? csm.cascadeSplits.x : ((cascadeIdx == 1) ? csm.cascadeSplits.y : csm.cascadeSplits.z);
         float splitNear = (cascadeIdx == 0) ? 0.0f : ((cascadeIdx == 1) ? csm.cascadeSplits.x : csm.cascadeSplits.y);
-        float blendZone = max((splitFar - splitNear) * 0.1f, 0.5f);
+        float blendZone = max((splitFar - splitNear) * 0.20f, 1.0f);
         float blendStart = splitFar - blendZone;
         if (viewDepth > blendStart)
         {
             float nextVis = SampleCascadePCF(csm, shadowMap, shadowSampler, cascadeIdx + 1, worldPos, normal, lightDirection, screenPos, true);
-            float t = saturate((viewDepth - blendStart) / max(blendZone, 1e-4f));
+            float t = smoothstep(0.0f, 1.0f, (viewDepth - blendStart) / max(blendZone, 1e-4f));
             shadowVis = lerp(shadowVis, nextVis, t);
         }
     }
@@ -222,7 +229,19 @@ static float SampleLocalPointOrSpotShadow(
     float pcfRadius = shadowParams.z;
     float strength = saturate(shadowParams.w);
 
-    float3 toWorld = worldPos - lightPos;
+    float3 rawToWorld = worldPos - lightPos;
+    float rawDist = length(rawToWorld);
+    if (rawDist >= lightRange || rawDist <= 1e-4f)
+    {
+        return 1.0f;
+    }
+
+    float3 rawDir = rawToWorld / rawDist;
+    float ndl = saturate(dot(N, -rawDir));
+    float worldTexel = (2.0f * rawDist) / 1024.0f;
+    float3 shadowWorldPos = worldPos + N * (worldTexel * (0.75f + 1.25f * (1.0f - ndl)));
+
+    float3 toWorld = shadowWorldPos - lightPos;
     float dist = length(toWorld);
     if (dist >= lightRange || dist <= 1e-4f)
     {
@@ -230,8 +249,7 @@ static float SampleLocalPointOrSpotShadow(
     }
 
     float3 dir = toWorld / dist;
-    float ndl = saturate(dot(N, -dir));
-    float bias = baseBias * (0.35f + 1.25f * (1.0f - ndl));
+    float bias = max(baseBias * (0.25f + 0.75f * (1.0f - ndl)), 0.0005f);
     float normDist = dist / lightRange;
 
     const bool hasStaticCube = (staticCubeArrayIdx >= 0);
@@ -251,19 +269,23 @@ static float SampleLocalPointOrSpotShadow(
     {
         float3 T, B;
         BuildOrthonormalBasis(dir, T, B);
-        float tapScale = 0.75f * pcfRadius;
+        float tapScale = clamp(pcfRadius, 0.0015f, 0.035f) * 0.45f;
+        float angle = InterleavedGradientNoise(screenPos) * 6.2831853f;
+        float s = sin(angle);
+        float c = cos(angle);
 
         float accum = 0.0f;
         [unroll]
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 16; ++i)
         {
-            float2 off = k_LocalShadowDisk4[i] * tapScale;
-            float3 sampleDir = normalize(dir + T * off.x + B * off.y);
+            float2 p = k_PoissonDisk[i];
+            float2 rot = float2(p.x * c - p.y * s, p.x * s + p.y * c) * tapScale;
+            float3 sampleDir = normalize(dir + T * rot.x + B * rot.y);
             float tapNormDist = normDist;
             float tapNdl = dot(N, -sampleDir);
             if (ndl > 1e-4f && tapNdl > ndl)
             {
-                // Intersect sampleDir with receiver tangent plane through worldPos:
+                // Intersect sampleDir with receiver tangent plane through shadowWorldPos:
                 // t_plane = dist * (N . -dir) / (N . -sampleDir).
                 // Only shrink (tapNdl > ndl) so outward taps on curved/grazing surfaces never overshoot.
                 tapNormDist = normDist * clamp(ndl / tapNdl, 0.2f, 1.0f);
@@ -273,7 +295,7 @@ static float SampleLocalPointOrSpotShadow(
             float dVis = (sVis > 0.5f && hasDynamicCube) ? ((compareDist <= dynamicCubes.SampleLevel(samp, float4(sampleDir, sliceF), 0.0f).r) ? 1.0f : 0.0f) : 1.0f;
             accum += min(sVis, dVis);
         }
-        vis = accum * 0.25f;
+        vis = accum * 0.0625f;
     }
 
     return saturate(lerp(1.0f, vis, strength));

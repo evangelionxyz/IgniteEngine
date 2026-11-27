@@ -2524,68 +2524,8 @@ namespace ignite
                     break;
             }
 
-            // Clamp shadow distance and active cascade count to actual scene shadow-receiver depth
-            if (camera)
-            {
-                bool hasReceiver = false;
-                AABB receiverBounds(glm::vec3(0.0f), glm::vec3(0.0f));
-                auto expandReceiver = [&](const AABB &b)
-                {
-                    if (!hasReceiver)
-                    {
-                        receiverBounds = b;
-                        hasReceiver = true;
-                    }
-                    else
-                    {
-                        receiverBounds.min = glm::min(receiverBounds.min, b.min);
-                        receiverBounds.max = glm::max(receiverBounds.max, b.max);
-                    }
-                };
-                for (size_t i = 0; i < m_FramePacket.staticMeshes.size(); ++i)
-                {
-                    if (m_FramePacket.staticMeshes[i].receiveShadow)
-                        expandReceiver(m_FramePacket.staticMeshAABBs[i]);
-                }
-                for (size_t i = 0; i < m_FramePacket.skeletalMeshes.size(); ++i)
-                {
-                    if (m_FramePacket.skeletalMeshes[i].receiveShadow)
-                        expandReceiver(m_FramePacket.skeletalMeshAABBs[i]);
-                }
-                for (const TerrainPacketItem &tItem : m_FramePacket.terrains)
-                {
-                    if (tItem.receiveShadow && tItem.component)
-                    {
-                        for (const auto &chunk : tItem.component->chunks)
-                            expandReceiver(chunk.bounds.Transform(tItem.worldMatrix));
-                    }
-                }
-                if (hasReceiver)
-                {
-                    const glm::mat4 &viewMat = camera->GetView();
-                    const glm::vec3 bMin = receiverBounds.min;
-                    const glm::vec3 bMax = receiverBounds.max;
-                    float maxReceiverDepth = 0.0f;
-                    for (int corner = 0; corner < 8; ++corner)
-                    {
-                        const glm::vec3 p(
-                            (corner & 1) ? bMax.x : bMin.x,
-                            (corner & 2) ? bMax.y : bMin.y,
-                            (corner & 4) ? bMax.z : bMin.z);
-                        const glm::vec4 vs = viewMat * glm::vec4(p, 1.0f);
-                        maxReceiverDepth = std::max(maxReceiverDepth, -vs.z);
-                    }
-                    if (maxReceiverDepth > 0.0f)
-                    {
-                        effectiveShadowDist = std::min(effectiveShadowDist, std::max(maxReceiverDepth + 4.0f, 12.0f));
-                    }
-                }
-            }
-            if (effectiveShadowDist <= 45.0f)
-                activeCascades = std::min(activeCascades, 2);
-            else if (effectiveShadowDist <= 95.0f)
-                activeCascades = std::min(activeCascades, 3);
-
+            // Clamp cascade splits stably by shadowQuality and m_FramePacket.shadowDistance
+            // (avoid camera-view-space receiver depth clamping or far-cascade staggering that causes 1-frame flicker on camera movement).
             Ref<Texture> depthTex = m_CascadedShadowMap->GetDepthTexture(frameContext->frameIndexInFlight);
             const bool qualityOrSceneChanged = (m_CSMLastQuality != m_CascadedShadowMap->GetQuality())
                 || (m_CSMLastScene != m_Scene.get())
@@ -2671,42 +2611,19 @@ namespace ignite
             }
             else
             {
-                const bool onlyCameraMoved = m_CSMShadowCacheValid && (csmHash != m_CSMShadowStateHash);
                 ++m_CSMUpdateCounter;
 
                 // Share cascade data with the main scene pass (cascadeIndex is unused there).
-                // For staggered far cascades (i >= 2) that reuse last frame's depth slice, keep their
-                // previously rendered lightViewProj matrix so projected shadows remain locked without swimming.
                 CSM_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
                 sceneCascadeData.cascadeIndex = -1;
-
-                bool allCascadesRendered = true;
-                std::array<bool, NUM_CASCADES> renderCascade{};
-                for (int i = 0; i < activeCascades; ++i)
-                {
-                    const bool canStagger = (i >= 2) && onlyCameraMoved && m_CSMCascadeInitialized[i];
-                    const bool shouldRender = !canStagger || ((m_CSMUpdateCounter & 1u) == static_cast<uint32_t>(i & 1));
-                    renderCascade[i] = shouldRender;
-                    if (!shouldRender)
-                    {
-                        allCascadesRendered = false;
-                        sceneCascadeData.lightViewProj[i] = m_CSMCachedLightViewProj[i];
-                    }
-                    else
-                    {
-                        m_CSMCachedLightViewProj[i] = sceneCascadeData.lightViewProj[i];
-                    }
-                }
 
                 // Write the cascade data to the frame context buffer for use in the main scene pass
                 frameContext->csmBuffer.SetData(&sceneCascadeData, sizeof(sceneCascadeData));
 
                 for (int i = 0; i < activeCascades; ++i)
                 {
-                    if (!renderCascade[i])
-                        continue;
                     m_CSMCascadeInitialized[i] = true;
-                IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
+                    IGN_PROFILE_SCOPE("Prefetch per-cascaded GPU data");
 
                 CSM_GPUData cascadeGpuData = sceneCascadeData;
                 cascadeGpuData.cascadeIndex = i;
@@ -2910,8 +2827,9 @@ namespace ignite
                 }
                 }
 
+                m_CascadedShadowMap->EnsureShaderResourceLayout(cmd, 0);
                 m_CSMShadowStateHash = csmHash;
-                m_CSMShadowCacheValid = allCascadesRendered;
+                m_CSMShadowCacheValid = true;
             }
         }
 
@@ -2965,7 +2883,7 @@ namespace ignite
                 cubeInfo.arraySize = kMaxLocalShadowLights * 6;
                 cubeInfo.sampleCount = 1;
                 cubeInfo.dimension = nri::TextureType::TEXTURE_2D;
-                cubeInfo.format = nri::Format::R32_SFLOAT;
+                cubeInfo.format = nri::Format::R16_UNORM;
                 cubeInfo.isCubeMap = true;
                 cubeInfo.isRenderTarget = true;
                 cubeInfo.isUAV = false;
@@ -3010,7 +2928,7 @@ namespace ignite
                     rtInfo.height = kLocalShadowResolution;
                     rtInfo.sampleCount = 1;
                     rtInfo.attachments = {
-                        FramebufferAttachments{ "LocalShadowDist", nri::Format::R32_SFLOAT, nri::Layout::COLOR_ATTACHMENT, 0, slice, 1 },
+                        FramebufferAttachments{ "LocalShadowDist", nri::Format::R16_UNORM, nri::Layout::COLOR_ATTACHMENT, 0, slice, 1 },
                         FramebufferAttachments{ "LocalShadowDepth", nri::Format::D32_SFLOAT, nri::Layout::DEPTH_STENCIL_ATTACHMENT, 0, 0, 1 }
                     };
                     rtInfo.colorAttachmentOverrides = { outCubeArray };
@@ -3765,7 +3683,8 @@ namespace ignite
                             continue;
                     }
 
-                    Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
+                    const AssetHandle matHandle = item.component->ResolveMaterialHandle(idx, meshInstance->GetMaterialAssetHandle());
+                    Ref<Material> material = ResolveMeshMaterial(matHandle);
                     if (material && material->GetType() == MaterialType::Transparent)
                         continue;
                     if (material)
@@ -3903,7 +3822,8 @@ namespace ignite
                     if (!primitive || !primitive->vertexBuffer || !primitive->indexBuffer)
                         continue;
 
-                    Ref<Material> material = ResolveMeshMaterial(instances[idx]->GetMaterialAssetHandle());
+                    const AssetHandle matHandle = item.component->ResolveMaterialHandle(idx, instances[idx]->GetMaterialAssetHandle());
+                    Ref<Material> material = ResolveMeshMaterial(matHandle);
                     if (material && material->GetType() == MaterialType::Transparent)
                         continue;
                     if (material)
@@ -4054,7 +3974,8 @@ namespace ignite
 
                         const uint32_t objectIndex = m_FramePacket.staticMeshObjectIndices[item.firstObjectIndexOffset + idx];
 
-                        Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
+                        const AssetHandle matHandle = item.component->ResolveMaterialHandle(idx, meshInstance->GetMaterialAssetHandle());
+                    Ref<Material> material = ResolveMeshMaterial(matHandle);
                         if (material)
                         {
                             if (uploadedMaterialsThisPass.insert(material.get()).second)
@@ -4232,7 +4153,7 @@ namespace ignite
 
                     DrawMesh(cmd, frameContext, framebuffer, skeletalMesh, item.worldMatrix, item.normalMatrix, item.objectID,
                         item.component->finalBoneTransforms, item.component->cachedInstanceTransforms,
-                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity);
+                        camera, animatedPSO, transparentDrawCalls, uploadedMaterialsThisPass, item.entity, "", &item.component->materialOverrides);
                     Renderer::Stats.skeletalMeshCount++;
 
                     // --- SOCKET SYSTEM: Render attached meshes ---
@@ -6078,7 +5999,8 @@ namespace ignite
                 // Pre-allocate instance index BEFORE setting graphics state to avoid buffer write inside render pass
                 uint32_t baseOffset = frameContext->instanceIndexAllocator.Allocate(cmd, &objectIndex, 1);
 
-                Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
+                const AssetHandle matHandle = smc.ResolveMaterialHandle(idx, meshInstance->GetMaterialAssetHandle());
+                Ref<Material> material = ResolveMeshMaterial(matHandle);
                 if (material && uploadedMaterialsThisPass.insert(material.get()).second)
                 {
                     material->UploadToGpu(cmd);
@@ -6156,7 +6078,8 @@ namespace ignite
 
                 const uint32_t objectIndex = cacheIt->second[idx];
 
-                Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
+                const AssetHandle matHandle = smc.ResolveMaterialHandle(idx, meshInstance->GetMaterialAssetHandle());
+                Ref<Material> material = ResolveMeshMaterial(matHandle);
                 if (material && uploadedMaterialsThisPass.insert(material.get()).second)
                 {
                     material->UploadToGpu(cmd);
@@ -7279,7 +7202,7 @@ namespace ignite
         const std::vector<glm::mat4> &boneTransforms,
         const std::vector<Mesh_GPUData> &cachedInstanceTransforms, ICamera *camera, Ref<GraphicsPipeline> opaquePSO,
         std::vector<TransparentDrawCall> &transparentDrawCalls, std::unordered_set<Material *> &uploadedMaterialsThisPass,
-        entt::entity entity, const std::string &socketName)
+        entt::entity entity, const std::string &socketName, const std::vector<AssetHandle> *materialOverrides)
     {
         (void)opaquePSO;
         if (!framebuffer)
@@ -7385,7 +7308,12 @@ namespace ignite
 
             auto &primitive = meshInstance->GetPrimitive();
 
-            Ref<Material> material = ResolveMeshMaterial(meshInstance->GetMaterialAssetHandle());
+            AssetHandle matHandle = meshInstance->GetMaterialAssetHandle();
+            if (materialOverrides && idx < materialOverrides->size() && (*materialOverrides)[idx] != AssetHandle(0))
+            {
+                matHandle = (*materialOverrides)[idx];
+            }
+            Ref<Material> material = ResolveMeshMaterial(matHandle);
 
             const Ref<BindingSet> materialBindingSet = (material && material->GetBindingSet())
                 ? material->GetBindingSet()
@@ -7644,12 +7572,12 @@ namespace ignite
     template void SceneRenderer::DrawMesh<StaticMesh>(
         nri::CommandBuffer *, FrameContext *, RenderTarget *, const Ref<StaticMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
         const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
-        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &);
+        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &, const std::vector<AssetHandle> *);
 
     template void SceneRenderer::DrawMesh<SkeletalMesh>(
         nri::CommandBuffer *, FrameContext *, RenderTarget *, const Ref<SkeletalMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
         const std::vector<glm::mat4> &, const std::vector<Mesh_GPUData> &,
-        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &);
+        ICamera *, Ref<GraphicsPipeline>, std::vector<TransparentDrawCall> &, std::unordered_set<Material *> &, entt::entity, const std::string &, const std::vector<AssetHandle> *);
 
     template void SceneRenderer::DrawMeshShadow<StaticMesh>(
         nri::CommandBuffer *, FrameContext *, RenderTarget *, const Ref<StaticMesh> &, const glm::mat4 &, const glm::mat4 &, uint32_t,
